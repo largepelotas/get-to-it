@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { LocalStorageRepository } from '@/data/localStorage';
 import type { Repository } from '@/data/repository';
 import { SqliteRepository, type SqlExecutor } from '@/data/sqlite';
+import { isSafeUrl } from '@/lib/links';
 import { BrowserScheduler, type ScheduledReminder } from './browserScheduler';
 
 export type { ScheduledReminder };
@@ -95,6 +96,19 @@ export async function notify(title: string, body: string): Promise<void> {
   if (!isTauri) return showBrowserNotification(title, body);
   const { sendNotification } = await import('@tauri-apps/plugin-notification');
   sendNotification({ title, body });
+}
+
+// Links
+
+/** Opens a web or email link in the default browser or mail app. Other links are ignored. */
+export async function openUrl(url: string): Promise<void> {
+  if (!isSafeUrl(url)) return;
+  if (isTauri) {
+    const opener = await import('@tauri-apps/plugin-opener');
+    await opener.openUrl(url);
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }
 
 // App lifecycle

@@ -4,15 +4,15 @@ import { restore, unarchive } from '@/commands';
 import { GroceryList } from '@/components/grocery/GroceryList';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { TodoList } from '@/components/items/TodoList';
+import { RichTextField } from '@/components/editor/RichTextField';
 import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
-import { RichTextPreview } from '@/components/RichTextPreview';
 import { Button, IconButton, Menu } from '@/components/ui';
 import type { List } from '@/data/types';
-import { isDocEmpty, parseDoc } from '@/lib/richText';
 import { renameList } from '@/store/actions/lists';
+import { setNoteContent } from '@/store/actions/notes';
 import { useData } from '@/store/data';
-import { EmptyState, ViewHeader } from './ViewHeader';
+import { ViewHeader } from './ViewHeader';
 
 function TitleField({
   list,
@@ -65,21 +65,24 @@ function Banner({
   );
 }
 
-/** The body of a list. Notes are read-only until the editor arrives (M6). */
+function NoteBody({ list }: { list: List }) {
+  const content = useData((s) => s.tables.notes[list.id]?.content ?? null);
+  return (
+    <RichTextField
+      key={list.id}
+      variant="note"
+      label="Note"
+      placeholder="Start writing…"
+      content={content}
+      readOnly={!!(list.deletedAt || list.archivedAt)}
+      onChange={(doc) => setNoteContent(list.id, doc)}
+      className="max-w-3xl px-8"
+    />
+  );
+}
+
 function ListBody({ list }: { list: List }) {
-  const note = useData((s) => (list.type === 'note' ? s.tables.notes[list.id] : undefined));
-  if (list.type === 'note') {
-    const doc = parseDoc(note?.content);
-    return doc && !isDocEmpty(doc) ? (
-      <div className="max-w-3xl px-8 pb-10">
-        <RichTextPreview doc={doc} />
-      </div>
-    ) : (
-      <EmptyState icon={<ListIcon type="note" className="size-8" />} title="This note is empty">
-        The note editor is coming soon.
-      </EmptyState>
-    );
-  }
+  if (list.type === 'note') return <NoteBody list={list} />;
   if (list.type === 'grocery') return <GroceryList list={list} />;
   return <TodoList list={list} />;
 }

@@ -12,3 +12,18 @@ if (typeof Element !== 'undefined' && !Element.prototype.setPointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
   Element.prototype.hasPointerCapture = () => false;
 }
+
+// ProseMirror (the notes editor) measures the selection to scroll it into view. jsdom
+// does no layout, so these return empty boxes.
+if (typeof Element !== 'undefined') {
+  const emptyRects = () => {
+    const list: DOMRect[] = [];
+    return Object.assign(list, { item: (i: number) => list[i] ?? null }) as unknown as DOMRectList;
+  };
+  if (!Element.prototype.getClientRects) Element.prototype.getClientRects = emptyRects;
+  if (!Range.prototype.getClientRects) Range.prototype.getClientRects = emptyRects;
+  if (!Range.prototype.getBoundingClientRect) {
+    Range.prototype.getBoundingClientRect = () => new DOMRect();
+  }
+  if (!document.elementFromPoint) document.elementFromPoint = () => null;
+}

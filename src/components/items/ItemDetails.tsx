@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { CalendarDays, ChevronUp, Flag, Plus, Repeat, Trash, X } from 'lucide-react';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { toggleItem, trashItems } from '@/commands';
+import { RichTextField } from '@/components/editor/RichTextField';
 import { Button, IconButton, Popover } from '@/components/ui';
 import type { Item } from '@/data/types';
 import { formatDue, formatShortDate, formatTimestamp, isOverdue } from '@/lib/dates';
@@ -10,7 +11,6 @@ import { colorVar } from '@/lib/theme';
 import {
   clearDue,
   createItemFromText,
-  itemNotesText,
   setItemNotes,
   setItemText,
   setPriority,
@@ -72,20 +72,14 @@ function TitleField({ item, readOnly }: { item: Item; readOnly: boolean }) {
 }
 
 function NotesField({ item, readOnly }: { item: Item; readOnly: boolean }) {
-  const stored = useMemo(() => itemNotesText(item), [item]);
-  const notes = useDraft(stored);
   return (
-    <textarea
-      aria-label="Notes"
+    <RichTextField
+      variant="compact"
+      label="Notes"
       placeholder="Add notes"
-      value={notes.value}
+      content={item.details}
       readOnly={readOnly}
-      onChange={(e) => {
-        notes.set(e.target.value);
-        setItemNotes(item.id, e.target.value);
-      }}
-      onBlur={notes.reset}
-      className={clsx(fieldClass, 'field-sizing-content min-h-24 px-2 py-1.5 text-sm')}
+      onChange={(doc) => setItemNotes(item.id, doc)}
     />
   );
 }

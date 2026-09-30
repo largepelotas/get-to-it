@@ -5,16 +5,17 @@ happens one milestone per chat; update this file at the end of each one.
 
 ## Status
 
-| #     | Milestone     | State                                                                  |
-| ----- | ------------- | ---------------------------------------------------------------------- |
-| M0    | Project setup | **Done**                                                               |
-| M1    | App frame     | **Done**                                                               |
-| M2    | To-do lists   | **Done**                                                               |
-| M3    | Due dates     | **Done**                                                               |
-| M4    | Reminders     | **Done**                                                               |
-| M5    | Grocery lists | **Done**                                                               |
-| M6    | Notes         | Next (see the end of this file).                                       |
-| M7–M8 |               | Not started. Several pure helpers they need already exist (see below). |
+| #   | Milestone     | State                            |
+| --- | ------------- | -------------------------------- |
+| M0  | Project setup | **Done**                         |
+| M1  | App frame     | **Done**                         |
+| M2  | To-do lists   | **Done**                         |
+| M3  | Due dates     | **Done**                         |
+| M4  | Reminders     | **Done**                         |
+| M5  | Grocery lists | **Done**                         |
+| M6  | Notes         | **Done**                         |
+| M7  | Search, etc.  | Next (see the end of this file). |
+| M8  |               | Not started.                     |
 
 ## How to run
 
@@ -85,7 +86,9 @@ and uploads them as workflow artifacts.
   `setWindowTheme`, and since M4 `setReminderSchedule`, `onReminderFired`,
   `requestNotificationPermission`, `notify`, `setCloseToTray`,
   `getLaunchAtLogin` (null in the browser), `setLaunchAtLogin`,
-  `onQuitRequested`, `quitApp` and `setTrayTooltip`. Native events go
+  `onQuitRequested`, `quitApp` and `setTrayTooltip`, and since M6
+  `openUrl` (only `isSafeUrl` links: the opener plugin in the app, a new
+  tab in the browser). Native events go
   through `listenNative`, which returns an unsubscribe function right away.
   Put every other native call here too, with a browser fallback.
   - `browserScheduler.ts`: the browser preview's copy of the native
@@ -118,13 +121,18 @@ and uploads them as workflow artifacts.
   - `trash.ts`: `deleteListForever` and `emptyTrash`, the only hard deletes.
     Emptying removes trashed lists with their items, reminders, completions
     and note, plus deleted items and deleted folders everywhere.
+  - `notes.ts`: `setNoteContent(listId, doc)` stores the TipTap JSON and its
+    `plainText` (for search), coalesced per note (`note:<id>`), so undo steps
+    back one burst of typing. Unchanged content commits nothing; a missing
+    `notes` row is created (not for a missing list).
   - `items.ts`: `insertItem`/`createItem` (placement via `parentId` and
     `after`: an id, `null` for first, left out for last; grocery items also
     pass `quantity` and `category`),
     `createItemFromText` (runs `parseQuickAdd` when `settings.parseDates`;
     an optional `defaultDue` is used when the text has no date),
     `setItemText` and `setItemNotes` (coalesced per item; blank text is
-    ignored), `setChecked` (checking a parent checks its open subtasks;
+    ignored; notes take a doc or plain text, and a doc `isDocEmpty` calls
+    empty is stored as null), `setChecked` (checking a parent checks its open subtasks;
     reopening a subtask reopens finished parents; `completedAt` is set;
     checking a **repeating** task instead writes a `completions` row, moves
     `dueDate` with `nextDueDate`, reopens its subtasks, leaves it unchecked
@@ -246,6 +254,9 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
 history)`, which only returns categories that still exist.
   - `richText.ts`: TipTap JSON to plain text and Markdown, `docFromText`,
     `isDocEmpty`.
+  - `links.ts`: `isSafeUrl` (http, https, mailto) and `normalizeUrl` for
+    typed addresses ("example.com" → https, "sam@example.com" → mailto;
+    null for anything else).
   - `order.ts`: fractional sort keys. `id.ts`: ULIDs.
   - `shortcuts.ts`: `matchesShortcut(event, 'Mod+Shift+Z', isMac)`,
     `formatShortcut` (⌘⇧Z vs Ctrl+Shift+Z) and `isEditableTarget`.
@@ -273,6 +284,10 @@ history)`, which only returns categories that still exist.
   `text-accent-fg`, `bg-accent-soft`, `text-danger`, `bg-danger-soft`,
   `bg-overlay`, `shadow-popover`. Use these, not raw colors.
 - The 10 list colors are `--list-<name>`; use `colorVar(name)` in a style.
+- Rich text (the editor, task notes and `RichTextPreview`) renders the
+  same HTML under `.rich-text`, styled in `index.css` (Tailwind's reset
+  strips list markers and heading sizes). `.rich-text-compact` is the
+  smaller scale for task notes.
 - Prettier's Tailwind plugin reads `styles/index.css`
   (`tailwindStylesheet`), so custom classes sort correctly.
 
@@ -280,7 +295,8 @@ history)`, which only returns categories that still exist.
 
 `Button` (primary, secondary, ghost, danger, danger-secondary), `IconButton`
 (label doubles as tooltip), `Input`, `Select` (native), `Label`, `Dialog`,
-`Menu` and `ContextMenu`, `Popover`, `Tooltip` (+ `TooltipProvider` in
+`Menu` and `ContextMenu`, `Popover` (`onCloseAutoFocus` to send focus
+somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
 `App`), `Kbd`, `Swatch`, `Toaster` (sonner).
 
 - Menus take entries as data (`MenuEntry`: item, separator, label, sub), so
@@ -304,8 +320,8 @@ history)`, which only returns categories that still exist.
   use Rename).
 - `components/views/`: `ListView` (editable title, "…" menu, banners for
   archived or trashed lists; a to-do list gets `TodoList` and the details
-  panel; a grocery list gets `GroceryList`; notes show a read-only
-  `RichTextPreview`), `SmartViews` (`TodayView`: Overdue with "Move to
+  panel; a grocery list gets `GroceryList`; a note gets the editor, keyed
+  by list and read-only when archived or trashed), `SmartViews` (`TodayView`: Overdue with "Move to
   today", then Today; `UpcomingView`: a section per day. Both have a
   quick-add into `settings.defaultListId`, falling back to any live to-do
   list, with a default due date of today or tomorrow, and the details
@@ -345,8 +361,8 @@ history)`, which only returns categories that still exist.
   - `QuickAdd`: "Add a task" field with chips for what `parseQuickAdd`
     read. New tasks go to the end of the list.
   - `ItemDetails`: the side panel (title, due date button opening the
-    `DuePicker` popover plus a clear button, priority, plain-text notes
-    stored as a TipTap doc, subtasks with "Add subtask", completion
+    `DuePicker` popover plus a clear button, priority, rich-text notes
+    (the compact editor), subtasks with "Add subtask", completion
     history for repeating tasks (newest first, five then "Show all"), a
     link up to the parent, created/completed time, Delete).
   - `ReminderField` (in `ItemDetails`, under Due): the task's reminders
@@ -370,6 +386,31 @@ history)`, which only returns categories that still exist.
     moves. Rows render with x fixed at 0 in their own style, not with a
     dnd-kit modifier, because modifiers also zero the `delta.x` that
     `projectDrop` needs.
+- `components/editor/` (notes and task notes):
+  - `RichTextField`: what views use. Lazy-loads `RichTextEditor` (TipTap
+    is its own ~400 kB chunk) and shows `RichTextPreview` meanwhile.
+  - `RichTextEditor`: StarterKit (headings 1–3, bold, italic, underline,
+    strike, code, lists, quotes, code blocks, dividers, links, its own
+    undo), task lists (nested) and a placeholder. The `note` variant has
+    the full toolbar, sticky above the text; `compact` (task notes) has
+    Bold, Italic, Bulleted list, Checklist and Link below the field, shown
+    on hover or focus. Markdown-style input rules come with the
+    extensions (`# `, `- `, `1. `, `[ ] `, `> `, three backticks, `---`,
+    `**bold**`, `` `code` ``). It keeps the content it last saved or loaded
+    in a ref; when the stored content changes to something else (the app's
+    undo, another edit) it replaces the doc without emitting or adding to
+    its own history. An empty doc and null (task notes) count as equal.
+  - Links: autolinked as you type and on paste. Clicks never navigate the
+    webview (`openClickedLink`); Mod+click opens the link, and a plain click
+    does when read-only.
+  - `EditorToolbar`: `role=toolbar` with one tab stop (arrows, Home, End),
+    `aria-pressed` from `useEditorState`, and buttons that don't take focus
+    from the text. The link button opens a popover: address field (Enter
+    applies, blank removes, anything `normalizeUrl` rejects shows an
+    error), Open and Remove. With no selection it inserts the address as
+    linked text. Closing it puts focus back in the editor.
+- `RichTextPreview` renders a doc read-only with the same elements TipTap
+  does. Links in it open with a plain click.
 - `components/grocery/` (grocery lists, no details panel):
   - `GroceryList`: `GroceryQuickAdd`, a section per category (`role=list`
     named after it), "Everything’s in the cart." when only the cart is
@@ -412,7 +453,11 @@ history)`, which only returns categories that still exist.
 - Component tests use Testing Library (`App.test.tsx` covers the frame end to
   end). `test/setup.ts` cleans up between tests and stubs pointer capture,
   which jsdom lacks and sonner's toasts call (without it Vitest reported an
-  unhandled error and exited non-zero, even with every test passing).
+  unhandled error and exited non-zero, even with every test passing). It
+  also stubs `getClientRects`, `Range.getBoundingClientRect` and
+  `elementFromPoint` for ProseMirror. With those, `user.type` and
+  `user.keyboard` work in the editor, input rules included. Find it with
+  `findByRole` (it's lazy-loaded), and in `user.keyboard` type `[` as `[[`.
 - Date-dependent unit tests fake only `Date`
   (`vi.useFakeTimers({ toFake: ['Date'] })`); component tests use dates
   relative to the real today instead, since user-event needs real timers.
@@ -434,8 +479,6 @@ history)`, which only returns categories that still exist.
   only trashed lists.
 - Quick-add puts new tasks at the end of the list rather than after the
   selected task; Enter on a task adds after that task instead.
-- Task notes are plain text for now (stored as a TipTap doc, so M6 can
-  swap in the rich editor without a migration).
 - Outdenting follows Todoist: the task moves to just after its old parent,
   and the siblings below it stay where they were.
 - Today counts a task as overdue only from the day after it's due; a task
@@ -466,8 +509,34 @@ history)`, which only returns categories that still exist.
 - Quantities are always read from grocery quick-add; the "Read dates in
   new tasks" setting doesn't turn that off.
 - The cart lists items most recently checked first.
+- The editor has its own undo while it has focus (the app's ⌘Z is ignored
+  in text fields). The app's undo still covers note edits from outside,
+  one burst of typing per step.
+- Task notes get the same editor with a smaller toolbar (every Markdown
+  shortcut still works there).
+- Links have no keyboard shortcut: ⌘K is kept for the command palette
+  (M7). Use the toolbar, paste a link over selected text, or type the
+  address.
+- The Welcome note mentions the note shortcuts.
 
 ## Known gaps
+
+From M6:
+
+- The editor's own undo history doesn't know about outside changes (the
+  app's undo while the editor isn't focused). Pressing ⌘Z in the editor
+  afterwards undoes its own earlier steps mapped over that change, which
+  can be surprising.
+- No images, tables, text colour or highlight (images are out of scope for
+  v1). Underline has no Markdown form, so Markdown export drops it.
+- Links show no hover preview; the toolbar's link popover has Open and
+  Remove. Opening links in the desktop app was checked in code only (the
+  opener plugin's default scope allows http, https and mailto). Check it
+  in `npm run app:dev`.
+- Every keystroke writes the whole note (JSON and plain text) through the
+  150 ms save debounce. Fine for notes of normal size; revisit if large
+  notes feel slow.
+- Enter in a note's title doesn't move focus into the note.
 
 From M5:
 
@@ -497,8 +566,9 @@ From M2:
   a toolbar button, click the row again.
 - The production bundle went over Vite's 500 kB warning in M2 (476 kB
   before), mostly chrono-node, which quick-add now pulls in. After M3 the
-  main chunk is 614 kB, with the due-date picker split out (54 kB). TipTap
-  will add more in M6. Consider more code-splitting in M8.
+  main chunk is 614 kB, with the due-date picker split out (54 kB). After
+  M6 it's 657 kB; TipTap loads separately (404 kB) the first time a note
+  or task notes are shown. Consider more code-splitting in M8.
 
 From M4:
 
@@ -531,29 +601,33 @@ From M1:
 - The native window theme and macOS drag strip were checked in code only;
   the browser preview can't show them. Check them in `npm run app:dev`.
 
-## Next: M6 (rich-text notes)
+## Next: M7 (search, command palette, shortcuts, export)
 
-The TipTap packages are installed (`@tiptap/react`, `starter-kit`,
-`extension-list`, `extensions`). Note lists already get a `notes` row when
-created (`insertList`) and duplicated, and `ListView` shows it read-only
-with `RichTextPreview`. `lib/richText.ts` has the doc helpers
-(`parseDoc`, `docToPlainText`, `docToMarkdown`, `docFromText`,
-`isDocEmpty`). Task notes (`Item.details`) are TipTap docs too, edited as
-plain text in `ItemDetails` for now.
+From the plan: a ⌘/Ctrl+K command palette that also searches every list,
+item and note; keyboard shortcuts for everything common; copy any list or
+note as Markdown; JSON export and import, Markdown export, and automatic
+daily backups.
 
-1. A `setNoteContent(listId, doc)` action: stores the JSON and
-   `plainText` (for search in M7), coalesced per note so typing is one
-   undo step at a time.
-2. `NoteEditor`: TipTap with StarterKit (headings, bold, italic, strike,
-   code, lists, quotes, code blocks, dividers), underline, task lists and
-   links, Markdown-style input rules, and a toolbar. Read-only for
-   archived or trashed lists. Lazy-load it like `DuePicker`, since TipTap
-   is large.
-3. Links open in the default browser (`@tauri-apps/plugin-opener` in
-   the app; a new tab in the browser preview), through `platform`.
-4. Swap the plain-text notes field in `ItemDetails` for a compact version
-   of the editor (no migration needed).
-5. Tests: the action (coalescing, plain text), and a component test that
-   types into a note and checks what's stored. TipTap needs a few DOM APIs
-   jsdom lacks (e.g. `getClientRects`, `elementFromPoint`); stub them in
-   `test/setup.ts` if needed.
+What's already there:
+
+- Search data: everything is in memory (`useData`). Notes have
+  `notes[listId].plainText`, kept up to date by `setNoteContent`; task
+  notes are docs in `Item.details` (`itemNotesText` gives their text).
+  Search in memory rather than SQLite FTS (see Deviations).
+- `cmdk` is installed. ⌘K is free: the editor doesn't bind it. Global
+  shortcuts go in `useAppShortcuts`, which ignores text fields, so a
+  palette shortcut that should also work while typing needs its own check.
+- Markdown: `docToMarkdown` covers notes and task notes. To-do and grocery
+  lists need small helpers (`- [ ] task` with indented subtasks, due date
+  and priority as text; grocery items by category).
+- Clipboard: `@tauri-apps/plugin-clipboard-manager` is installed with
+  `allow-write-text`. Add a `copyText` to `platform` with a
+  `navigator.clipboard` fallback.
+- Files: `files.rs` has `write_text_file`, `read_text_file`, `write_files`,
+  `write_backup(name, contents, keep)` and `open_backups_folder`, and the
+  dialog plugin allows open and save. `Snapshot` in `data/types.ts` is the
+  export format. Import should validate, write through the `Repository`,
+  reload the store and clear undo history.
+- Shortcuts still missing (see Known gaps): open the due-date picker from a
+  task, and a way to reach a folder's menu without right-clicking (M8 may
+  cover the latter).

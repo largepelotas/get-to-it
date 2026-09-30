@@ -88,6 +88,23 @@ describe('editing', () => {
     setItemNotes(a, '');
     expect(item(a).details).toBeNull();
   });
+
+  it('stores rich notes and clears them when nothing is left', () => {
+    const a = add('A');
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Call', marks: [{ type: 'bold' }] }] },
+      ],
+    };
+    setItemNotes(a, doc);
+    expect(JSON.parse(item(a).details!)).toEqual(doc);
+    const steps = useData.getState().past.length;
+    setItemNotes(a, doc);
+    expect(useData.getState().past.length).toBe(steps);
+    setItemNotes(a, { type: 'doc', content: [{ type: 'bulletList', content: [] }] });
+    expect(item(a).details).toBeNull();
+  });
 });
 
 describe('checking', () => {

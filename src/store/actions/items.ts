@@ -4,7 +4,7 @@ import { newId } from '@/lib/id';
 import { keyBetween } from '@/lib/order';
 import { parseQuickAdd } from '@/lib/quickAdd';
 import { firstOccurrence, nextDueDate, sanitizeRecurrence } from '@/lib/recurrence';
-import { docFromText, docToPlainText, parseDoc } from '@/lib/richText';
+import { docFromText, docToPlainText, isDocEmpty, parseDoc, type RichNode } from '@/lib/richText';
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
 import { depthOf, descendantIds, MAX_DEPTH, subtreeHeight } from '../tree';
@@ -123,8 +123,11 @@ export function setItemText(id: string, text: string): void {
 }
 
 /** Stores plain-text notes as a rich-text doc (the rich editor comes in M6). */
-export function setItemNotes(id: string, notes: string): void {
-  const details = notes.trim() ? JSON.stringify(docFromText(notes)) : null;
+/** Saves a task's notes. Text or a rich-text doc; an empty one clears them. */
+export function setItemNotes(id: string, notes: string | RichNode | null): void {
+  const doc = typeof notes === 'string' ? docFromText(notes) : notes;
+  const details = doc && !isDocEmpty(doc) ? JSON.stringify(doc) : null;
+  if (useData.getState().tables.items[id]?.details === details) return;
   commit('Edit notes', (tx) => void tx.update('items', id, { details }), {
     coalesce: `item-notes:${id}`,
   });

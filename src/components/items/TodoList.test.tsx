@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '@/App';
 import { MemoryRepository } from '@/data/memory';
+import { docFromText, parseDoc } from '@/lib/richText';
 import { createItem } from '@/store/actions/items';
 import { createList } from '@/store/actions/lists';
 import { resetForTests, useData } from '@/store/data';
@@ -129,13 +130,13 @@ describe('TodoList', () => {
     await user.click(within(row('Report')).getByRole('button', { name: 'Open details' }));
     const panel = within(screen.getByRole('complementary', { name: 'Task details' }));
 
-    await user.type(panel.getByRole('textbox', { name: 'Notes' }), 'Numbers from finance');
+    await user.type(await panel.findByRole('textbox', { name: 'Notes' }), 'Numbers from finance');
     await user.click(panel.getByRole('button', { name: 'Priority 2' }));
     await user.type(panel.getByRole('textbox', { name: 'Add subtask' }), 'Charts{Enter}');
 
     const report = Object.values(useData.getState().tables.items).find((i) => i.text === 'Report')!;
     expect(report.priority).toBe(2);
-    expect(report.details).toContain('Numbers from finance');
+    expect(parseDoc(report.details)).toEqual(docFromText('Numbers from finance'));
     expect(open()).toEqual(['Report@0', 'Charts@1']);
     expect(panel.getByRole('button', { name: 'Charts' })).toBeInTheDocument();
 

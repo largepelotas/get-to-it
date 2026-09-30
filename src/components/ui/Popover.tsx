@@ -10,6 +10,8 @@ export interface PopoverProps {
   align?: 'start' | 'center' | 'end';
   side?: 'top' | 'right' | 'bottom' | 'left';
   className?: string;
+  /** Runs as it closes; `preventDefault()` stops focus going back to the trigger. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function Popover({
@@ -20,6 +22,7 @@ export function Popover({
   align = 'start',
   side,
   className,
+  onCloseAutoFocus,
 }: PopoverProps) {
   return (
     <P.Root open={open} onOpenChange={onOpenChange}>
@@ -29,6 +32,7 @@ export function Popover({
           align={align}
           side={side}
           sideOffset={6}
+          onCloseAutoFocus={onCloseAutoFocus}
           className={clsx(
             'z-50 rounded-lg border border-line bg-elevated p-3 text-sm shadow-popover outline-none',
             className,
