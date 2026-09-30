@@ -173,11 +173,9 @@ pub fn run() {
         // frontend a chance to save first.
         RunEvent::ExitRequested {
             code: None, api, ..
-        } => {
-            if !app.state::<AppState>().quitting.load(Ordering::SeqCst) {
-                api.prevent_exit();
-                request_quit(app);
-            }
+        } if !app.state::<AppState>().quitting.load(Ordering::SeqCst) => {
+            api.prevent_exit();
+            request_quit(app);
         }
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => show_main_window(app),
