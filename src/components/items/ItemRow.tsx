@@ -74,6 +74,8 @@ function ItemText({
       <input
         aria-label="Task"
         value={value}
+        // The hidden copy sets the width; without this the browser's default input width wins.
+        size={1}
         readOnly={readOnly}
         spellCheck
         onChange={(e) => {

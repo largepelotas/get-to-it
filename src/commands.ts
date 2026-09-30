@@ -10,6 +10,7 @@ import {
 import { formatDateKey, formatTimestamp } from './lib/dates';
 import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
 import { notify, requestNotificationPermission } from './platform';
+import { clearChecked, uncheckAll } from './store/actions/grocery';
 import { deleteItems, setChecked } from './store/actions/items';
 import {
   addReminder,
@@ -153,6 +154,20 @@ export function trashItems(ids: string[]): void {
   toastWithUndo(
     live.length === 1 ? `Deleted ${quote(items[live[0]].text)}` : `Deleted ${live.length} tasks`,
   );
+}
+
+const itemCount = (n: number) => (n === 1 ? '1 item' : `${n} items`);
+
+/** Grocery "Uncheck all": everything in the cart goes back on the list. */
+export function uncheckCart(listId: string): void {
+  const count = uncheckAll(listId);
+  if (count) toastWithUndo(`Put ${itemCount(count)} back on the list`);
+}
+
+/** Grocery "Clear checked": removes what's in the cart, with Undo. */
+export function clearCart(listId: string): void {
+  const count = clearChecked(listId);
+  if (count) toastWithUndo(`Cleared ${itemCount(count)} from the cart`);
 }
 
 /** "tomorrow", "on Friday", "on Fri, Oct 9". */

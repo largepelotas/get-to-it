@@ -1,6 +1,7 @@
 import { Archive, Ellipsis, Pin, Trash } from 'lucide-react';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { restore, unarchive } from '@/commands';
+import { GroceryList } from '@/components/grocery/GroceryList';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { TodoList } from '@/components/items/TodoList';
 import { ListIcon } from '@/components/ListIcon';
@@ -64,7 +65,7 @@ function Banner({
   );
 }
 
-/** Placeholder bodies until the grocery (M5) and note (M6) editors arrive. */
+/** The body of a list. Notes are read-only until the editor arrives (M6). */
 function ListBody({ list }: { list: List }) {
   const note = useData((s) => (list.type === 'note' ? s.tables.notes[list.id] : undefined));
   if (list.type === 'note') {
@@ -79,12 +80,8 @@ function ListBody({ list }: { list: List }) {
       </EmptyState>
     );
   }
-  if (list.type === 'todo') return <TodoList list={list} />;
-  return (
-    <EmptyState icon={<ListIcon type={list.type} className="size-8" />} title="No groceries yet">
-      Adding items is coming soon.
-    </EmptyState>
-  );
+  if (list.type === 'grocery') return <GroceryList list={list} />;
+  return <TodoList list={list} />;
 }
 
 export function ListView({ listId }: { listId: string }) {

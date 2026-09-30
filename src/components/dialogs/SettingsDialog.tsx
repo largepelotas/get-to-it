@@ -5,6 +5,7 @@ import { isTimeString } from '@/lib/dates';
 import { getLaunchAtLogin, isTauri, setLaunchAtLogin } from '@/platform';
 import { setSetting, useData } from '@/store/data';
 import { closeDialog } from '@/store/ui';
+import { GroceryCategoriesEditor } from './GroceryCategoriesEditor';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -142,7 +143,7 @@ export function SettingsDialog() {
         </Button>
       }
     >
-      <div className="space-y-6">
+      <div className="-mx-5 max-h-[min(560px,calc(100vh-180px))] space-y-6 overflow-y-auto px-5">
         <Section title="General">
           <Row label="Theme" htmlFor="settings-theme">
             <Select
@@ -186,6 +187,10 @@ export function SettingsDialog() {
             onChange={set('closeToTray')}
           />
           <LaunchAtLogin />
+        </Section>
+
+        <Section title="Grocery categories">
+          <GroceryCategoriesEditor />
         </Section>
       </div>
     </Dialog>

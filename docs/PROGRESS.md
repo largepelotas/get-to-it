@@ -12,8 +12,9 @@ happens one milestone per chat; update this file at the end of each one.
 | M2    | To-do lists   | **Done**                                                               |
 | M3    | Due dates     | **Done**                                                               |
 | M4    | Reminders     | **Done**                                                               |
-| M5    | Grocery lists | Next (see the end of this file).                                       |
-| M6–M8 |               | Not started. Several pure helpers they need already exist (see below). |
+| M5    | Grocery lists | **Done**                                                               |
+| M6    | Notes         | Next (see the end of this file).                                       |
+| M7–M8 |               | Not started. Several pure helpers they need already exist (see below). |
 
 ## How to run
 
@@ -118,7 +119,8 @@ and uploads them as workflow artifacts.
     Emptying removes trashed lists with their items, reminders, completions
     and note, plus deleted items and deleted folders everywhere.
   - `items.ts`: `insertItem`/`createItem` (placement via `parentId` and
-    `after`: an id, `null` for first, left out for last),
+    `after`: an id, `null` for first, left out for last; grocery items also
+    pass `quantity` and `category`),
     `createItemFromText` (runs `parseQuickAdd` when `settings.parseDates`;
     an optional `defaultDue` is used when the text has no date),
     `setItemText` and `setItemNotes` (coalesced per item; blank text is
@@ -147,6 +149,14 @@ and uploads them as workflow artifacts.
 itemId)` runs from every due-date change in `items.ts` (set, clear,
     time, move, repeat, completing an occurrence), so an old snooze can't
     hold back the reminder for a new date.
+  - `grocery.ts`: `createGroceryItem(listId, raw)` (reads the quantity
+    with `parseGroceryText`, then files it with `guessCategory` using
+    `categoryHistory`), `setQuantity` (coalesced; blank clears),
+    `setCategory(id, categoryId | null)` (lands at the end of that category),
+    `moveGroceryItem(id, groupId, { after } | { before })` (drag and
+    Alt+↑/↓; a different group changes the category, `other` meaning none),
+    `uncheckAll(listId)` and `clearChecked(listId)` (soft delete), both
+    returning how many items they touched. `groceryListIds(tables)`.
   - `helpers.ts`: `keyAt`, `siblings`, `listItems`.
 - `commit`, `undo` and `redo` queue their save **before** updating the
   store. Store listeners may commit in response (the reminder scheduler
@@ -155,6 +165,14 @@ itemId)` runs from every due-date change in `items.ts` (set, clear,
 - `store/data.ts` also prunes history: a non-undoable commit that removes
   rows drops every undo/redo step touching them, so undo can't bring back
   half a list after the Trash is emptied.
+- `store/grocery.ts`: `groceryModel(items, listId, categories)` gives
+  `groups` (categories with open items, in settings order, then `OTHER_CATEGORY`
+  for items with no category or a removed one), `cart` (checked items,
+  newest first) and `open` (the grouped items in display order). Grocery
+  items are flat; a `parentId` is ignored. `groupOf(item, categories)` and
+  `categoryHistory(items, groceryListIds)`: the last category each
+  normalised name was filed under in any grocery list, deleted items
+  included (cleared items are the best record).
 - `store/smart.ts`: `dueRows(items, lists)` gives open, dated tasks from
   live to-do lists as `DueRow`s (a flat `FlatRow` plus `list` and `parent`),
   sorted by date, then timed before untimed, then priority, then list and
@@ -194,6 +212,7 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
   and `toggleItem(id, checked, { announce })`, which every checkbox uses: a
   repeating task gets a "next due on Friday" toast with Undo, and
   `announce` (Today/Upcoming) confirms ordinary completions the same way.
+  Groceries: `uncheckCart` and `clearCart`, each with an Undo toast.
   Reminders: `remind` (adds, and asks for notification permission),
   `snooze` (toast with the new time), `dismiss`, `completeFromReminder`
   (dismisses, then `toggleItem` with `announce`) and `announceMissed`.
@@ -217,6 +236,14 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
     `formatOffset` and `snoozeUntil`.
   - `quickAdd.ts`: `parseQuickAdd`, which reads date, time, repeat and
     priority, and returns preview chips.
+  - `grocery.ts`: `parseGroceryText` (a leading or trailing quantity:
+    "2 lemons", "2x lemons", "500g flour", "½ lemon", "milk 1 l",
+    "lemons x2"; units from a fixed list; text that's only numbers stays the
+    name), `normalizeName` (lower case, no accents or punctuation, a simple
+    English singular per word), `keywordCategory` (a keyword table per
+    default category id: longest phrase wins, then the last word, and
+    "frozen" beats everything) and `guessCategory(name, categories,
+history)`, which only returns categories that still exist.
   - `richText.ts`: TipTap JSON to plain text and Markdown, `docFromText`,
     `isDocEmpty`.
   - `order.ts`: fractional sort keys. `id.ts`: ULIDs.
@@ -264,7 +291,8 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
   runs after the menu closes and the menu doesn't refocus its trigger.
   Without this, the menu's focus trap steals focus from the new field.
 - `components/menus.tsx` builds the list and folder menus (different
-  entries for archived and trashed lists).
+  entries for archived and trashed lists; grocery lists also get Uncheck
+  all and Clear checked, disabled while the cart is empty).
 
 ### Screens
 
@@ -276,7 +304,7 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
   use Rename).
 - `components/views/`: `ListView` (editable title, "…" menu, banners for
   archived or trashed lists; a to-do list gets `TodoList` and the details
-  panel; groceries are still a placeholder; notes show a read-only
+  panel; a grocery list gets `GroceryList`; notes show a read-only
   `RichTextPreview`), `SmartViews` (`TodayView`: Overdue with "Move to
   today", then Today; `UpcomingView`: a section per day. Both have a
   quick-add into `settings.defaultListId`, falling back to any live to-do
@@ -342,11 +370,33 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
     moves. Rows render with x fixed at 0 in their own style, not with a
     dnd-kit modifier, because modifiers also zero the `delta.x` that
     `projectDrop` needs.
+- `components/grocery/` (grocery lists, no details panel):
+  - `GroceryList`: `GroceryQuickAdd`, a section per category (`role=list`
+    named after it), "Everything’s in the cart." when only the cart is
+    left, and the collapsible "In cart" section (uses `list.showCompleted`)
+    with Uncheck all and Clear checked buttons. One dnd-kit
+    `SortableContext` spans every category, so dropping an item among
+    another category's items files it there. Keys, like `TodoList`: row
+    mode ↑/↓, Enter (edit the name), Space or Mod+Enter (to the cart; focus
+    stays in the section), Backspace/Delete (Undo toast), Alt+↑/↓ (within
+    the category), Escape; in the name field Tab goes to the quantity,
+    Enter/Escape go back to the row, and Backspace in an empty name deletes.
+    The fields are out of the Tab order, so Tab from a row leaves the list.
+  - `GroceryRow`: grip, `Checkbox`, the name and the quantity (a pill; an
+    empty one shows a "Qty" placeholder on hover or when selected), the
+    category name for items in the cart, and a Category menu button.
+    Right-click: Category, Add/Edit quantity, Move up/down, Delete.
+  - `GroceryQuickAdd`: "Add an item" with chips for the quantity and the
+    category it will use.
+  - `groceryMenu.tsx`: `categoryEntries` and `groceryMenuEntries`.
 - `components/dialogs/Dialogs.tsx`: New list (type, name, folder) and the
   confirmation dialog, driven by `useUI.dialog`. `SettingsDialog.tsx`:
   theme, week start, reading dates in new tasks, the all-day reminder
-  time, close to tray, and open at login (read from and written to the
-  autostart plugin, not stored in settings; disabled in the browser).
+  time, close to tray, open at login (read from and written to the
+  autostart plugin, not stored in settings; disabled in the browser) and
+  the grocery categories (`GroceryCategoriesEditor`: rename, reorder with
+  arrow buttons, remove (not the last one), add, and Restore defaults).
+  The dialog body scrolls.
 - `MainPane` switches on the view and goes to `homeView()` if the open list
   stops existing.
 
@@ -407,8 +457,36 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
 - Settings are a dialog (⌘,/Ctrl+,) rather than only the sidebar menu.
 - Duplicating a list doesn't copy reminders, so the copy doesn't notify
   twice.
+- Grocery items have no details panel; the quantity and category are
+  edited on the row.
+- Dragging a grocery item into another category's items changes its
+  category (the plan only asked for reordering within a category).
+- Uncheck all and Clear checked sit on the "In cart" header and in the
+  list's "…" menu, and only when something is in the cart.
+- Quantities are always read from grocery quick-add; the "Read dates in
+  new tasks" setting doesn't turn that off.
+- The cart lists items most recently checked first.
 
 ## Known gaps
+
+From M5:
+
+- A drag from above can't make an item the first of the next category
+  (dropping on that first item puts it after it, as dnd-kit's sortable
+  does). Use Alt+↑ afterwards. Categories with no open items aren't
+  shown, so they can't be dropped into; use the Category menu.
+- Adding a name that's already on the list adds a second item rather than
+  merging or unchecking the first.
+- The keyword table is English only. Quick-add learns from what the user
+  files items under, which covers other languages over time.
+- Settings aren't in undo history, so removing a category can't be undone.
+  Its items move to Other and stay filed under the old id, so Restore
+  defaults puts them back for the default categories.
+- The main chunk is now 656 kB.
+- Fixed in passing: task text fields were never narrower than the
+  browser's default input width (about 170 px), so clicking just right of a
+  short task started editing instead of selecting the row. They now size
+  to their text (`size={1}`).
 
 From M2:
 
@@ -453,30 +531,29 @@ From M1:
 - The native window theme and macOS drag strip were checked in code only;
   the browser preview can't show them. Check them in `npm run app:dev`.
 
-## Next: M5 (grocery lists)
+## Next: M6 (rich-text notes)
 
-The data model is ready: `Item.quantity` and `Item.category` exist, and
-`settings.groceryCategories` holds the default categories. `ListView`
-shows a placeholder for grocery lists.
+The TipTap packages are installed (`@tiptap/react`, `starter-kit`,
+`extension-list`, `extensions`). Note lists already get a `notes` row when
+created (`insertList`) and duplicated, and `ListView` shows it read-only
+with `RichTextPreview`. `lib/richText.ts` has the doc helpers
+(`parseDoc`, `docToPlainText`, `docToMarkdown`, `docFromText`,
+`isDocEmpty`). Task notes (`Item.details`) are TipTap docs too, edited as
+plain text in `ItemDetails` for now.
 
-1. A pure `store/grocery.ts`: split a grocery list's live items into
-   category groups (in `settings.groceryCategories` order, then
-   "Other" for missing or unknown categories) plus an "In cart" section
-   for checked items. Grocery items are flat (no subtasks).
-2. Actions in `store/actions/items.ts` (or a new `grocery.ts`):
-   `setQuantity`, `setCategory`, `uncheckAll(listId)` and
-   `clearChecked(listId)` (soft delete, with an Undo toast via
-   `commands.ts`).
-3. Quick-add for groceries: read a leading or trailing quantity ("2 lemons",
-   "milk 1 l"), and guess the category from the item name (a small keyword
-   table per default category, plus what the same name was filed under
-   before in any grocery list).
-4. `GroceryList` component: quick-add, category sections with rows
-   (checkbox, name, quantity, category menu), the collapsible "In cart"
-   section, and header actions for Uncheck all and Clear checked. Reuse
-   `Checkbox`, the row keyboard handling ideas from `TodoList`, and
-   dnd-kit to reorder within a category.
-5. An editor for categories (rename, add, remove, reorder) in the
-   Settings dialog.
-6. Tests: the grouping model, quantity parsing, the actions, and a
-   component test for adding, checking into the cart and clearing.
+1. A `setNoteContent(listId, doc)` action: stores the JSON and
+   `plainText` (for search in M7), coalesced per note so typing is one
+   undo step at a time.
+2. `NoteEditor`: TipTap with StarterKit (headings, bold, italic, strike,
+   code, lists, quotes, code blocks, dividers), underline, task lists and
+   links, Markdown-style input rules, and a toolbar. Read-only for
+   archived or trashed lists. Lazy-load it like `DuePicker`, since TipTap
+   is large.
+3. Links open in the default browser (`@tauri-apps/plugin-opener` in
+   the app; a new tab in the browser preview), through `platform`.
+4. Swap the plain-text notes field in `ItemDetails` for a compact version
+   of the editor (no migration needed).
+5. Tests: the action (coalescing, plain text), and a component test that
+   types into a note and checks what's stored. TipTap needs a few DOM APIs
+   jsdom lacks (e.g. `getClientRects`, `elementFromPoint`); stub them in
+   `test/setup.ts` if needed.

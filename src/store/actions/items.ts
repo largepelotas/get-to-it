@@ -23,6 +23,9 @@ export interface NewItem {
   dueDate?: string | null;
   dueTime?: string | null;
   recurrence?: Recurrence | null;
+  /** Grocery items. */
+  quantity?: string | null;
+  category?: string | null;
 }
 
 /** A sort key for a new position among `parentId`'s children (see `NewItem.after`). */
@@ -66,8 +69,8 @@ export function insertItem(tx: Tx, listId: string, input: NewItem): string {
     dueTime: input.dueDate ? (input.dueTime ?? null) : null,
     priority: input.priority ?? 0,
     recurrence: input.recurrence ?? null,
-    quantity: null,
-    category: null,
+    quantity: input.quantity ?? null,
+    category: input.category ?? null,
     createdAt: tx.now,
     updatedAt: tx.now,
     deletedAt: null,

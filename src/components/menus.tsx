@@ -1,6 +1,7 @@
 import {
   Archive,
   ArchiveRestore,
+  BrushCleaning,
   Copy,
   FolderInput,
   Palette,
@@ -10,18 +11,21 @@ import {
   Plus,
   RotateCcw,
   Trash,
+  Undo2,
 } from 'lucide-react';
 import { COLOR_NAMES, type ColorName, type Folder, type List } from '@/data/types';
 import { bySortKey } from '@/lib/order';
 import { COLOR_LABEL } from '@/lib/theme';
 import {
   archive,
+  clearCart,
   deleteForever,
   duplicate,
   removeFolder,
   restore,
   trashList,
   unarchive,
+  uncheckCart,
 } from '@/commands';
 import { setFolderColor } from '@/store/actions/folders';
 import { moveListToFolder, setListColor, setPinned } from '@/store/actions/lists';
@@ -84,10 +88,27 @@ export function listMenuEntries(list: List, { onRename }: ListMenuOptions = {}):
     ];
   }
 
-  const folders = Object.values(useData.getState().tables.folders)
+  const { tables } = useData.getState();
+  const folders = Object.values(tables.folders)
     .filter((f) => !f.deletedAt)
     .sort(bySortKey);
+  const inCart =
+    list.type === 'grocery' &&
+    Object.values(tables.items).some((i) => i.listId === list.id && i.checked && !i.deletedAt);
   return [
+    list.type === 'grocery' && {
+      label: 'Uncheck all',
+      icon: <Undo2 className={icon} />,
+      disabled: !inCart,
+      onSelect: () => uncheckCart(list.id),
+    },
+    list.type === 'grocery' && {
+      label: 'Clear checked',
+      icon: <BrushCleaning className={icon} />,
+      disabled: !inCart,
+      onSelect: () => clearCart(list.id),
+    },
+    { kind: 'separator' },
     onRename && {
       label: 'Rename',
       icon: <Pencil className={icon} />,
