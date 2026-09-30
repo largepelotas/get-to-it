@@ -30,6 +30,8 @@ interface UIState {
   view: View;
   /** The selected item in the current list (details panel, keyboard actions). */
   selectedItemId: string | null;
+  /** Show the details panel for the selected item. */
+  detailsOpen: boolean;
   dialog: DialogState | null;
   /** The sidebar row showing an inline rename field. */
   renaming: Renaming | null;
@@ -38,6 +40,7 @@ interface UIState {
 export const useUI = create<UIState>(() => ({
   view: { kind: 'today' },
   selectedItemId: null,
+  detailsOpen: false,
   dialog: null,
   renaming: null,
 }));
@@ -48,13 +51,22 @@ export function sameView(a: View, b: View): boolean {
 
 export function navigate(view: View): void {
   if (sameView(useUI.getState().view, view)) return;
-  useUI.setState({ view, selectedItemId: null });
+  useUI.setState({ view, selectedItemId: null, detailsOpen: false });
 }
 
 export const openList = (listId: string) => navigate({ kind: 'list', listId });
 
 export function selectItem(id: string | null): void {
-  useUI.setState({ selectedItemId: id });
+  if (useUI.getState().selectedItemId !== id) useUI.setState({ selectedItemId: id });
+}
+
+/** Selects an item and shows its details. */
+export function openDetails(id: string): void {
+  useUI.setState({ selectedItemId: id, detailsOpen: true });
+}
+
+export function closeDetails(): void {
+  useUI.setState({ detailsOpen: false });
 }
 
 export function openDialog(dialog: DialogState): void {

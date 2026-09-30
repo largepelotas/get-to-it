@@ -88,6 +88,8 @@ export interface DropTarget {
   parentId: string | null;
   /** Index among the new parent's children, not counting the dragged item. */
   index: number;
+  /** The sibling it lands after, or null when it becomes the first child. */
+  afterId: string | null;
   depth: number;
 }
 
@@ -147,12 +149,16 @@ export function projectDrop(
   // Count earlier siblings under that parent to get the index. A row's parent
   // is the last row seen one level up.
   let index = 0;
+  let afterId: string | null = null;
   const lastAtDepth: string[] = [];
   for (let i = 0; i < insertAt; i++) {
     const row = others[i];
     lastAtDepth[row.depth] = row.item.id;
     const rowParent = row.depth > 0 ? (lastAtDepth[row.depth - 1] ?? null) : null;
-    if (row.depth === depth && rowParent === parentId) index++;
+    if (row.depth === depth && rowParent === parentId) {
+      index++;
+      afterId = row.item.id;
+    }
   }
-  return { parentId, index, depth };
+  return { parentId, index, afterId, depth };
 }

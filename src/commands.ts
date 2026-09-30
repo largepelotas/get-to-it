@@ -7,6 +7,7 @@ import {
   unarchiveList,
   restoreList,
 } from './store/actions/lists';
+import { deleteItems } from './store/actions/items';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import { lastEntryId, redo, undo, undoEntry, useData } from './store/data';
 import { confirmAction, navigate, openList, startRename, useUI, type View } from './store/ui';
@@ -132,6 +133,17 @@ export function confirmEmptyTrash(): void {
       toast.dismiss();
     },
   });
+}
+
+/** Deletes tasks (with their subtasks) and offers Undo. */
+export function trashItems(ids: string[]): void {
+  const { items } = useData.getState().tables;
+  const live = ids.filter((id) => items[id] && !items[id].deletedAt);
+  if (!live.length) return;
+  deleteItems(live);
+  toastWithUndo(
+    live.length === 1 ? `Deleted ${quote(items[live[0]].text)}` : `Deleted ${live.length} tasks`,
+  );
 }
 
 export function undoCommand(): void {

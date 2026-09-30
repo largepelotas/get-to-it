@@ -20,6 +20,9 @@ export function welcomeDoc(): RichNode {
         type: 'bulletList',
         content: [
           bullet('Make a new list with the + button next to Lists, or group lists into folders.'),
+          bullet(
+            'In a to-do list, type “Send report friday 3pm p1” to add a task with a date and priority. Press Enter on a task to add one below it, and Tab to make it a subtask.',
+          ),
           bullet('Right-click a list or folder to rename it, colour it, pin it or move it.'),
           bullet('Drag lists in the sidebar to reorder them or move them between folders.'),
           bullet('Deleted lists go to the Trash, where you can restore them.'),

@@ -1,0 +1,237 @@
+import clsx from 'clsx';
+import { ChevronRight, Flag, GripVertical, NotebookText, PanelRight, Repeat } from 'lucide-react';
+import { useState, type CSSProperties, type KeyboardEvent, type Ref } from 'react';
+import { ContextMenu, IconButton, type MenuEntries } from '@/components/ui';
+import { formatDue, isOverdue } from '@/lib/dates';
+import { colorVar } from '@/lib/theme';
+import { setChecked, setItemCollapsed, setItemText } from '@/store/actions/items';
+import type { FlatRow } from '@/store/tree';
+import { Checkbox } from './Checkbox';
+import { PRIORITY_COLOR, PRIORITY_LABEL } from './priority';
+
+/** Horizontal step per subtask level, in px. Also the drag distance per level. */
+export const INDENT = 24;
+
+export type RowKeyMode = 'row' | 'text';
+
+export interface DragBits {
+  ref: (el: HTMLElement | null) => void;
+  style: CSSProperties;
+  dragging: boolean;
+  handle: Record<string, unknown>;
+}
+
+export interface ItemRowProps {
+  row: FlatRow;
+  selected: boolean;
+  /** Takes part in keyboard focus (the selected row, or the first row). */
+  tabbable: boolean;
+  readOnly: boolean;
+  /** Depth to show while dragging, when it differs from the row's own. */
+  depth?: number;
+  drag?: DragBits;
+  menu: () => MenuEntries;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>, mode: RowKeyMode) => void;
+  onSelect: () => void;
+  onOpenDetails: () => void;
+}
+
+/**
+ * The task text, edited in place. Changes save as you type. The field is as
+ * wide as its text (a hidden copy sizes it), so clicking the empty part of
+ * the row selects the row instead of starting to type.
+ */
+function ItemText({
+  id,
+  text,
+  checked,
+  readOnly,
+}: {
+  id: string;
+  text: string;
+  checked: boolean;
+  readOnly: boolean;
+}) {
+  // Holds what's typed while it's blank or has extra spaces the store trims away.
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? text;
+  return (
+    <span className="grid min-w-0 text-sm">
+      <span aria-hidden className="invisible col-start-1 row-start-1 truncate pr-1 whitespace-pre">
+        {value || ' '}
+      </span>
+      <input
+        aria-label="Task"
+        value={value}
+        readOnly={readOnly}
+        spellCheck
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setItemText(id, e.target.value);
+        }}
+        onBlur={() => setDraft(null)}
+        className={clsx(
+          'col-start-1 row-start-1 w-full min-w-8 truncate bg-transparent py-0.5 outline-none',
+          checked ? 'text-fg-subtle line-through' : 'text-fg',
+        )}
+      />
+    </span>
+  );
+}
+
+export function ItemRow({
+  row,
+  selected,
+  tabbable,
+  readOnly,
+  depth = row.depth,
+  drag,
+  menu,
+  onKeyDown,
+  onSelect,
+  onOpenDetails,
+}: ItemRowProps) {
+  const { item, childCount, doneCount } = row;
+  const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
+  const hasNotes = !!item.details;
+
+  return (
+    <ContextMenu entries={menu}>
+      <div
+        ref={drag?.ref}
+        style={{ ...drag?.style, paddingLeft: depth * INDENT }}
+        role="listitem"
+        data-item-id={item.id}
+        tabIndex={tabbable ? 0 : -1}
+        aria-label={item.text}
+        aria-current={selected ? 'true' : undefined}
+        onFocus={onSelect}
+        onClick={(e) => {
+          onSelect();
+          // Clicks outside the text (including the checkbox) leave the row focused for keys.
+          if (!(e.target as HTMLElement).closest('input')) e.currentTarget.focus();
+        }}
+        onDoubleClick={(e) => {
+          if (!(e.target as HTMLElement).closest('input, button')) onOpenDetails();
+        }}
+        onKeyDown={(e) =>
+          onKeyDown(e, (e.target as HTMLElement).tagName === 'INPUT' ? 'text' : 'row')
+        }
+        className={clsx(
+          'group relative flex h-8 items-center gap-1.5 rounded-md pr-1 outline-none',
+          'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+          selected ? 'bg-selected' : 'hover:bg-hover',
+          drag?.dragging && 'z-10 bg-elevated shadow-popover',
+        )}
+      >
+        {drag && !readOnly ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label="Drag to move"
+            {...drag.handle}
+            className="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-fg-subtle opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+          >
+            <GripVertical aria-hidden className="size-3.5" />
+          </button>
+        ) : (
+          <span className="w-4 shrink-0" />
+        )}
+        {childCount > 0 ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={item.collapsed ? 'Show subtasks' : 'Hide subtasks'}
+            aria-expanded={!item.collapsed}
+            onClick={() => setItemCollapsed(item.id, !item.collapsed)}
+            className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-fg-subtle hover:text-fg"
+          >
+            <ChevronRight
+              aria-hidden
+              className={clsx('size-3.5 transition-transform', !item.collapsed && 'rotate-90')}
+            />
+          </button>
+        ) : (
+          <span className="-ml-1 w-4 shrink-0" />
+        )}
+        <Checkbox
+          checked={item.checked}
+          priority={item.priority}
+          disabled={readOnly}
+          label={item.text}
+          onChange={(checked) => setChecked(item.id, checked)}
+        />
+        <ItemText id={item.id} text={item.text} checked={item.checked} readOnly={readOnly} />
+        <span className="min-w-0 flex-1 self-stretch" />
+        <span className="flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle">
+          {childCount > 0 && (
+            <span
+              className="tabular-nums"
+              aria-label={`${doneCount} of ${childCount} subtasks done`}
+            >
+              {doneCount}/{childCount}
+            </span>
+          )}
+          {hasNotes && <NotebookText aria-label="Has notes" className="size-3.5" />}
+          {item.dueDate && (
+            <span className={clsx('flex items-center gap-1', overdue && 'text-danger')}>
+              {item.recurrence && <Repeat aria-label="Repeats" className="size-3" />}
+              {formatDue(item.dueDate, item.dueTime)}
+            </span>
+          )}
+          {item.priority > 0 && (
+            <Flag
+              aria-label={PRIORITY_LABEL[item.priority]}
+              className="size-3.5"
+              style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }}
+            />
+          )}
+        </span>
+        <IconButton
+          size="sm"
+          label="Open details"
+          tabIndex={-1}
+          tooltip={false}
+          icon={<PanelRight className="size-3.5" />}
+          onClick={onOpenDetails}
+          className={clsx(!selected && 'opacity-0 group-hover:opacity-100')}
+        />
+      </div>
+    </ContextMenu>
+  );
+}
+
+/** The inline field for a new task, opened with Enter from a row. */
+export interface DraftRowProps {
+  depth: number;
+  inputRef: Ref<HTMLInputElement>;
+  value: string;
+  onChange: (value: string) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
+  onBlur: () => void;
+}
+
+export function DraftRow({ depth, inputRef, value, onChange, onKeyDown, onBlur }: DraftRowProps) {
+  return (
+    <div
+      role="listitem"
+      data-draft
+      style={{ paddingLeft: depth * INDENT }}
+      className="flex h-8 items-center gap-1.5 rounded-md bg-hover pr-1"
+    >
+      <span className="w-4 shrink-0" />
+      <span className="-ml-1 w-4 shrink-0" />
+      <span className="size-4 shrink-0 rounded-full border-[1.5px] border-dashed border-line-strong" />
+      <input
+        ref={inputRef}
+        aria-label="New task"
+        placeholder="New task"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
+        className="min-w-0 flex-1 bg-transparent py-0.5 text-sm text-fg outline-none placeholder:text-fg-subtle"
+      />
+    </div>
+  );
+}

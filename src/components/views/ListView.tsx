@@ -1,6 +1,8 @@
 import { Archive, Ellipsis, Pin, Trash } from 'lucide-react';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { restore, unarchive } from '@/commands';
+import { ItemDetails } from '@/components/items/ItemDetails';
+import { TodoList } from '@/components/items/TodoList';
 import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
 import { RichTextPreview } from '@/components/RichTextPreview';
@@ -9,6 +11,7 @@ import type { List } from '@/data/types';
 import { isDocEmpty, parseDoc } from '@/lib/richText';
 import { renameList } from '@/store/actions/lists';
 import { useData } from '@/store/data';
+import { useUI } from '@/store/ui';
 import { EmptyState, ViewHeader } from './ViewHeader';
 
 function TitleField({
@@ -62,7 +65,7 @@ function Banner({
   );
 }
 
-/** Placeholder bodies until the list editors arrive (M2 to-dos, M5 groceries, M6 notes). */
+/** Placeholder bodies until the grocery (M5) and note (M6) editors arrive. */
 function ListBody({ list }: { list: List }) {
   const note = useData((s) => (list.type === 'note' ? s.tables.notes[list.id] : undefined));
   if (list.type === 'note') {
@@ -77,14 +80,21 @@ function ListBody({ list }: { list: List }) {
       </EmptyState>
     );
   }
+  if (list.type === 'todo') return <TodoList list={list} />;
   return (
-    <EmptyState
-      icon={<ListIcon type={list.type} className="size-8" />}
-      title={list.type === 'todo' ? 'No tasks yet' : 'No groceries yet'}
-    >
-      Adding {list.type === 'todo' ? 'tasks' : 'items'} is coming soon.
+    <EmptyState icon={<ListIcon type={list.type} className="size-8" />} title="No groceries yet">
+      Adding items is coming soon.
     </EmptyState>
   );
+}
+
+/** The selected task's details, when the panel is open and the task belongs to this list. */
+function DetailsPanel({ list }: { list: List }) {
+  const detailsOpen = useUI((s) => s.detailsOpen);
+  const selectedId = useUI((s) => s.selectedItemId);
+  const item = useData((s) => (selectedId ? s.tables.items[selectedId] : undefined));
+  if (!detailsOpen || !item || item.listId !== list.id || item.deletedAt) return null;
+  return <ItemDetails item={item} readOnly={!!(list.deletedAt || list.archivedAt)} />;
 }
 
 export function ListView({ listId }: { listId: string }) {
@@ -98,47 +108,50 @@ export function ListView({ listId }: { listId: string }) {
   };
 
   return (
-    <>
-      <ViewHeader
-        icon={<ListIcon type={list.type} color={list.color} className="size-6" />}
-        title={<TitleField key={list.id} list={list} inputRef={titleRef} />}
-        actions={
-          <>
-            {list.pinned && <Pin aria-label="Pinned" className="mr-1 size-4 text-fg-subtle" />}
-            <Menu
-              align="end"
-              entries={() => listMenuEntries(list, { onRename: rename })}
-              trigger={<IconButton label="List actions" icon={<Ellipsis className="size-4" />} />}
-            />
-          </>
-        }
-      />
-      {list.deletedAt ? (
-        <Banner
-          icon={<Trash className="size-4" />}
-          action={
-            <Button size="sm" onClick={() => restore(list.id)}>
-              Restore
-            </Button>
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ViewHeader
+          icon={<ListIcon type={list.type} color={list.color} className="size-6" />}
+          title={<TitleField key={list.id} list={list} inputRef={titleRef} />}
+          actions={
+            <>
+              {list.pinned && <Pin aria-label="Pinned" className="mr-1 size-4 text-fg-subtle" />}
+              <Menu
+                align="end"
+                entries={() => listMenuEntries(list, { onRename: rename })}
+                trigger={<IconButton label="List actions" icon={<Ellipsis className="size-4" />} />}
+              />
+            </>
           }
-        >
-          This list is in the Trash.
-        </Banner>
-      ) : list.archivedAt ? (
-        <Banner
-          icon={<Archive className="size-4" />}
-          action={
-            <Button size="sm" onClick={() => unarchive(list.id)}>
-              Unarchive
-            </Button>
-          }
-        >
-          This list is archived.
-        </Banner>
-      ) : null}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <ListBody list={list} />
+        />
+        {list.deletedAt ? (
+          <Banner
+            icon={<Trash className="size-4" />}
+            action={
+              <Button size="sm" onClick={() => restore(list.id)}>
+                Restore
+              </Button>
+            }
+          >
+            This list is in the Trash.
+          </Banner>
+        ) : list.archivedAt ? (
+          <Banner
+            icon={<Archive className="size-4" />}
+            action={
+              <Button size="sm" onClick={() => unarchive(list.id)}>
+                Unarchive
+              </Button>
+            }
+          >
+            This list is archived.
+          </Banner>
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ListBody list={list} />
+        </div>
       </div>
-    </>
+      {list.type === 'todo' && <DetailsPanel list={list} />}
+    </div>
   );
 }

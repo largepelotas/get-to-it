@@ -59,16 +59,41 @@ describe('tree', () => {
 
 describe('projectDrop', () => {
   it('reorders at the same level', () => {
-    expect(projectDrop(rows, 'C', 'B', 0, 24)).toEqual({ parentId: null, index: 1, depth: 0 });
+    expect(projectDrop(rows, 'C', 'B', 0, 24)).toEqual({
+      parentId: null,
+      index: 1,
+      afterId: 'A',
+      depth: 0,
+    });
   });
 
   it('nests when dragged right under a row', () => {
-    expect(projectDrop(rows, 'C', 'B', 30, 24)).toEqual({ parentId: 'A', index: 2, depth: 1 });
+    expect(projectDrop(rows, 'C', 'B', 30, 24)).toEqual({
+      parentId: 'A',
+      index: 2,
+      afterId: 'A2',
+      depth: 1,
+    });
   });
 
   it('keeps a row inside a group when it lands between siblings', () => {
     // B dropped onto A2 (moving up) sits between A1 and A2.
-    expect(projectDrop(rows, 'B', 'A2', 0, 24)).toEqual({ parentId: 'A', index: 1, depth: 1 });
+    expect(projectDrop(rows, 'B', 'A2', 0, 24)).toEqual({
+      parentId: 'A',
+      index: 1,
+      afterId: 'A1',
+      depth: 1,
+    });
+  });
+
+  it('lands as the first child with no sibling before it', () => {
+    // C dropped onto A1 (moving up) and dragged right sits under A, before A1.
+    expect(projectDrop(rows, 'C', 'A1', 24, 24)).toEqual({
+      parentId: 'A',
+      index: 0,
+      afterId: null,
+      depth: 1,
+    });
   });
 
   it('refuses to drop a row into its own subtree', () => {
@@ -76,6 +101,11 @@ describe('projectDrop', () => {
   });
 
   it('moves a whole group down', () => {
-    expect(projectDrop(rows, 'A', 'C', 0, 24)).toEqual({ parentId: null, index: 2, depth: 0 });
+    expect(projectDrop(rows, 'A', 'C', 0, 24)).toEqual({
+      parentId: null,
+      index: 2,
+      afterId: 'C',
+      depth: 0,
+    });
   });
 });

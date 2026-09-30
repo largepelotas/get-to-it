@@ -9,8 +9,9 @@ happens one milestone per chat; update this file at the end of each one.
 | ----- | ------------- | ---------------------------------------------------------------------- |
 | M0    | Project setup | **Done**                                                               |
 | M1    | App frame     | **Done**                                                               |
-| M2    | To-do lists   | Next (see the end of this file).                                       |
-| M3–M8 |               | Not started. Several pure helpers they need already exist (see below). |
+| M2    | To-do lists   | **Done**                                                               |
+| M3    | Due dates     | Next (see the end of this file).                                       |
+| M4–M8 |               | Not started. Several pure helpers they need already exist (see below). |
 
 ## How to run
 
@@ -89,8 +90,13 @@ and uploads them as workflow artifacts.
   `updatedAt`, and `remove`), `applyChanges`, `mergeEntries`.
 - `store/tree.ts`: `childrenIndex`, `buildTree`, `flatten`,
   `descendantIds`, `subtreeHeight`, `depthOf`, `MAX_DEPTH = 3`, and
-  `projectDrop`, which decides where a drag lands in the subtask tree,
-  following dnd-kit's tree example.
+  `projectDrop`, which decides where a drag lands in the subtask tree
+  (parent, index and the sibling it lands after), following dnd-kit's tree
+  example.
+- `store/todo.ts`: `todoModel(items, listId)` splits a to-do list into
+  `open` rows and `done` rows (finished top-level tasks with their subtasks,
+  newest first). Finished subtasks of open tasks stay in place.
+  `endOfSubtree(rows, i)`.
 - `store/actions/`
   - `folders.ts`: create (`insertFolder` inside a transaction), rename,
     color, collapse, move, delete. Deleting a folder moves its lists to the
@@ -101,14 +107,29 @@ and uploads them as workflow artifacts.
   - `trash.ts`: `deleteListForever` and `emptyTrash`, the only hard deletes.
     Emptying removes trashed lists with their items, reminders, completions
     and note, plus deleted items and deleted folders everywhere.
+  - `items.ts`: `insertItem`/`createItem` (placement via `parentId` and
+    `after`: an id, `null` for first, left out for last),
+    `createItemFromText` (runs `parseQuickAdd` when `settings.parseDates`),
+    `setItemText` and `setItemNotes` (coalesced per item; blank text is
+    ignored), `setChecked` (checking a parent checks its open subtasks;
+    reopening a subtask reopens finished parents; `completedAt` is set),
+    `deleteItems` (soft, with subtasks), `indentItem`/`outdentItem` (respect
+    `MAX_DEPTH`; outdent lands right after the old parent), `moveItemBy`
+    (Alt+↑/↓), `moveItem` (drag), `setPriority`, `clearDue`,
+    `setItemCollapsed` (not undoable). `shownSiblings` treats finished and
+    open top-level tasks as separate groups, since they're shown in
+    separate sections. An open task never sits under a finished one: adding,
+    moving or reopening a subtask reopens its ancestors.
   - `helpers.ts`: `keyAt`, `siblings`, `listItems`.
 - `store/data.ts` also prunes history: a non-undoable commit that removes
   rows drops every undo/redo step touching them, so undo can't bring back
   half a list after the Trash is emptied.
 - `store/ui.ts`: `useUI` with `view` (today, upcoming, list, archive,
-  trash), `selectedItemId`, `dialog` (new list or a confirmation) and
-  `renaming` (the sidebar row with an inline rename field). Helpers:
-  `navigate`, `openList`, `openDialog`, `confirmAction`, `startRename`.
+  trash), `selectedItemId`, `detailsOpen`, `dialog` (new list or a
+  confirmation) and `renaming` (the sidebar row with an inline rename
+  field). Helpers: `navigate` (clears the selection and closes details),
+  `openList`, `selectItem`, `openDetails`, `closeDetails`, `openDialog`,
+  `confirmAction`, `startRename`.
 - `store/sidebar.ts`: `sidebarModel` (pinned, unfiled, folders, archived,
   trashed), `openCounts`, `sidebarRows` (the flat draggable rows) and
   `resolveSidebarDrop`, which turns a dnd-kit drop into a `moveList` or
@@ -119,8 +140,9 @@ and uploads them as workflow artifacts.
 - `commands.ts`: user-facing commands that wrap store actions with
   navigation and toasts: trash/archive with an Undo toast (`undoEntry`),
   restore, duplicate, new folder (then inline rename), delete forever and
-  empty Trash behind a confirmation, undo/redo. `homeView()` is where to go
-  when the open list disappears (the default list, else Today).
+  empty Trash behind a confirmation, `trashItems` (Undo toast), undo/redo.
+  `homeView()` is where to go when the open list disappears (the default
+  list, else Today).
 - `lib/`
   - `dates.ts`: date keys (`YYYY-MM-DD`, local), formatting, `isOverdue`.
   - `recurrence.ts`: `nextDueDate`, `firstOccurrence`,
@@ -179,9 +201,42 @@ and uploads them as workflow artifacts.
   hides its lists), `SidebarItem`, `RenameField` (double-click a list or
   use Rename).
 - `components/views/`: `ListView` (editable title, "…" menu, banners for
-  archived or trashed lists, placeholder bodies; notes show a read-only
+  archived or trashed lists; a to-do list gets `TodoList` and the details
+  panel; groceries are still a placeholder; notes show a read-only
   `RichTextPreview`), `TodayView` and `UpcomingView` placeholders,
   `ArchiveView` and `TrashView`.
+- `components/items/` (to-do lists):
+  - `TodoList`: quick-add, open rows (dnd-kit sortable), the inline
+    new-task field ("draft"), and the collapsible Completed section
+    (`list.showCompleted`). It owns keyboard handling and focus: actions
+    ask for focus with `setFocus({ target, mode })`, applied in a layout
+    effect after the next render.
+  - `ItemRow`: grip (drag handle, shown on hover), collapse chevron,
+    `Checkbox` (priority-coloured ring), the text field (as wide as its
+    text, so clicking the rest of the row selects the row), then progress
+    (`2/5`), a notes icon, the due date (read-only until M3) and a priority
+    flag, and an "Open details" button. Right-click opens `itemMenu.tsx`.
+    `DraftRow` is the new-task field.
+  - `QuickAdd`: "Add a task" field with chips for what `parseQuickAdd`
+    read. New tasks go to the end of the list.
+  - `ItemDetails`: the side panel (title, due date with a clear button,
+    priority, plain-text notes stored as a TipTap doc, subtasks with "Add
+    subtask", a link up to the parent, created/completed time, Delete).
+  - Two keyboard modes. **Text mode** (focus in a task's text): Enter opens
+    the new-task field below, Backspace in an empty task without subtasks
+    deletes it, ↑/↓ go to the row above/below, Mod+Enter toggles, Escape
+    switches to row mode. **Row mode** (the row itself focused, e.g. after
+    clicking beside the text): ↑/↓ select, Enter edits, Space or Mod+Enter
+    toggles, Backspace/Delete deletes with an Undo toast, Escape closes
+    details and then clears the selection. Both: Tab/Shift+Tab indent and
+    outdent, Alt+↑/↓ move, Mod+I toggles details. In the new-task field:
+    Enter adds and opens another below, Tab/Shift+Tab change its level,
+    Escape or Backspace (empty) leave it; clicking away keeps what was typed.
+  - Dragging: horizontal distance picks the depth (`INDENT` = 24 px per
+    level) and the dragged row shows it; its subtasks are hidden while it
+    moves. Rows render with x fixed at 0 in their own style, not with a
+    dnd-kit modifier, because modifiers also zero the `delta.x` that
+    `projectDrop` needs.
 - `components/dialogs/Dialogs.tsx`: New list (type, name, folder) and the
   confirmation dialog, driven by `useUI.dialog`.
 - `MainPane` switches on the view and goes to `homeView()` if the open list
@@ -212,29 +267,50 @@ and uploads them as workflow artifacts.
 - Pinned lists appear in the Pinned section and also stay in their folder.
 - Emptying the Trash also purges deleted folders and deleted items, not
   only trashed lists.
+- Quick-add puts new tasks at the end of the list rather than after the
+  selected task; Enter on a task adds after that task instead.
+- Task notes are plain text for now (stored as a TipTap doc, so M6 can
+  swap in the rich editor without a migration).
+- Outdenting follows Todoist: the task moves to just after its old parent,
+  and the siblings below it stay where they were.
 
-## Known gaps from M1
+## Known gaps
+
+From M2:
+
+- Tab inside a list indents, so keyboard users leave the list by pressing
+  Escape until the selection clears (focus goes to the list container),
+  then Tab. Revisit in M8.
+- Row-mode Space/Delete only work while the row has focus; after clicking
+  a toolbar button, click the row again.
+- Recurring tasks are just checked for now; M3 makes checking one move it
+  to the next date.
+- The production bundle went over Vite's 500 kB warning in M2 (476 kB
+  before), mostly chrono-node, which quick-add now pulls in. TipTap will
+  add more in M6. Consider code-splitting in M8.
+
+From M1:
 
 - Folders have no "…" button, so their menu is right-click only (lists have
   one in the header). Revisit in the M8 accessibility pass.
 - The native window theme and macOS drag strip were checked in code only;
   the browser preview can't show them. Check them in `npm run app:dev`.
 
-## Next: M2 (to-do lists)
+## Next: M3 (due dates, Today, Upcoming, recurring tasks)
 
-1. Item actions in `store/actions/items.ts`: create (from quick-add text,
-   after the selected item), edit text (coalesce per item), check/uncheck
-   (checking a parent checks its subtasks; set `completedAt`), delete
-   (soft, with its subtasks; Undo toast like `trashList`), indent/outdent
-   (`MAX_DEPTH`, `subtreeHeight`), move up/down, drag moves via
-   `projectDrop` in `store/tree.ts`, priority.
-2. Replace the to-do placeholder in `ListView` (`ListBody`) with the item
-   list: quick-add field at the top, rows built from `buildTree`/`flatten`,
-   a collapsible "Completed" section driven by `list.showCompleted`.
-3. Keyboard: Enter adds below, Tab/Shift+Tab indent, Alt+↑/↓ moves,
-   Backspace on an empty item deletes it, Space toggles the selected item.
-   Use `matchesShortcut` and `isEditableTarget`.
-4. Details panel for `useUI.selectedItemId`: title, notes (TipTap can wait
-   for M6; plain text is fine), priority, subtasks. Due dates, repeat and
-   reminders come in M3/M4.
-5. Undo covers all of it through `commit`.
+1. Date actions in `store/actions/items.ts`: `setDue(id, date, time)`,
+   `setRecurrence(id, rule)` (use `sanitizeRecurrence`), plus the recurring
+   check: in `setChecked`, when the item has a `recurrence`, write a
+   `completions` row, move `dueDate` with `nextDueDate`, reset its subtasks,
+   and leave it unchecked. `clearDue` already exists.
+2. A due-date picker (react-day-picker in a `Popover`) with quick choices
+   (Today, Tomorrow, Next week, No date), a time field and a repeat
+   editor. Put it in the details panel (which shows due dates read-only
+   now) and in the row menu.
+3. `TodayView` and `UpcomingView`: tasks from every live to-do list, via a
+   pure model like `todoModel` (overdue + today; future grouped by day).
+   Reuse `ItemRow` (it needs `list` context for read-only and the list
+   name as a label) and a quick-add that writes to `settings.defaultListId`.
+4. Rows already show `formatDue` with overdue in red, and quick-add
+   already stores parsed dates and repeats.
+5. Completion history in the details panel for recurring tasks.
