@@ -132,3 +132,64 @@
     outline-offset: -2px;
   }
 }
+
+/*
+ * react-day-picker (in DuePicker), restyled with the design tokens. Scoped
+ * under .due-picker so these win over the library's own stylesheet.
+ */
+.due-picker .rdp-root {
+  --rdp-accent-color: var(--accent);
+  --rdp-accent-background-color: var(--accent-soft);
+  --rdp-day-height: 32px;
+  --rdp-day-width: 34px;
+  --rdp-day_button-height: 30px;
+  --rdp-day_button-width: 30px;
+  --rdp-day_button-border: 0;
+  --rdp-selected-border: 0;
+  --rdp-nav-height: 2rem;
+  --rdp-nav_button-height: 1.75rem;
+  --rdp-nav_button-width: 1.75rem;
+  --rdp-outside-opacity: 0.45;
+  --rdp-weekday-opacity: 1;
+  --rdp-weekday-padding: 0.25rem 0;
+  font-size: 13px;
+}
+.due-picker .rdp-caption_label {
+  padding-left: 0.375rem;
+  font-size: 13px;
+  font-weight: 600;
+}
+.due-picker .rdp-weekday {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-subtle);
+}
+.due-picker .rdp-chevron {
+  width: 14px;
+  height: 14px;
+  fill: var(--fg-muted);
+}
+.due-picker .rdp-button_previous,
+.due-picker .rdp-button_next {
+  border-radius: 6px;
+}
+.due-picker .rdp-button_previous:hover,
+.due-picker .rdp-button_next:hover,
+.due-picker .rdp-day_button:hover {
+  background: var(--hover);
+}
+.due-picker .rdp-today:not(.rdp-outside) {
+  font-weight: 600;
+}
+.due-picker .rdp-selected {
+  font-size: inherit;
+}
+.due-picker .rdp-selected .rdp-day_button,
+.due-picker .rdp-selected .rdp-day_button:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.due-picker .rdp-day_button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

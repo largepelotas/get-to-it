@@ -32,6 +32,8 @@ interface UIState {
   selectedItemId: string | null;
   /** Show the details panel for the selected item. */
   detailsOpen: boolean;
+  /** The item whose due-date picker is open in the details panel. */
+  duePickerFor: string | null;
   dialog: DialogState | null;
   /** The sidebar row showing an inline rename field. */
   renaming: Renaming | null;
@@ -41,6 +43,7 @@ export const useUI = create<UIState>(() => ({
   view: { kind: 'today' },
   selectedItemId: null,
   detailsOpen: false,
+  duePickerFor: null,
   dialog: null,
   renaming: null,
 }));
@@ -51,7 +54,7 @@ export function sameView(a: View, b: View): boolean {
 
 export function navigate(view: View): void {
   if (sameView(useUI.getState().view, view)) return;
-  useUI.setState({ view, selectedItemId: null, detailsOpen: false });
+  useUI.setState({ view, selectedItemId: null, detailsOpen: false, duePickerFor: null });
 }
 
 export const openList = (listId: string) => navigate({ kind: 'list', listId });
@@ -66,7 +69,16 @@ export function openDetails(id: string): void {
 }
 
 export function closeDetails(): void {
-  useUI.setState({ detailsOpen: false });
+  useUI.setState({ detailsOpen: false, duePickerFor: null });
+}
+
+/** Opens the details panel with the due-date picker showing. */
+export function pickDueDate(id: string): void {
+  useUI.setState({ selectedItemId: id, detailsOpen: true, duePickerFor: id });
+}
+
+export function setDuePickerFor(id: string | null): void {
+  useUI.setState({ duePickerFor: id });
 }
 
 export function openDialog(dialog: DialogState): void {

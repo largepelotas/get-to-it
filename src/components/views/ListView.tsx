@@ -1,7 +1,7 @@
 import { Archive, Ellipsis, Pin, Trash } from 'lucide-react';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { restore, unarchive } from '@/commands';
-import { ItemDetails } from '@/components/items/ItemDetails';
+import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { TodoList } from '@/components/items/TodoList';
 import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
@@ -11,7 +11,6 @@ import type { List } from '@/data/types';
 import { isDocEmpty, parseDoc } from '@/lib/richText';
 import { renameList } from '@/store/actions/lists';
 import { useData } from '@/store/data';
-import { useUI } from '@/store/ui';
 import { EmptyState, ViewHeader } from './ViewHeader';
 
 function TitleField({
@@ -88,15 +87,6 @@ function ListBody({ list }: { list: List }) {
   );
 }
 
-/** The selected task's details, when the panel is open and the task belongs to this list. */
-function DetailsPanel({ list }: { list: List }) {
-  const detailsOpen = useUI((s) => s.detailsOpen);
-  const selectedId = useUI((s) => s.selectedItemId);
-  const item = useData((s) => (selectedId ? s.tables.items[selectedId] : undefined));
-  if (!detailsOpen || !item || item.listId !== list.id || item.deletedAt) return null;
-  return <ItemDetails item={item} readOnly={!!(list.deletedAt || list.archivedAt)} />;
-}
-
 export function ListView({ listId }: { listId: string }) {
   const list = useData((s) => s.tables.lists[listId]);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -151,7 +141,7 @@ export function ListView({ listId }: { listId: string }) {
           <ListBody list={list} />
         </div>
       </div>
-      {list.type === 'todo' && <DetailsPanel list={list} />}
+      {list.type === 'todo' && <DetailsPanel listId={list.id} />}
     </div>
   );
 }

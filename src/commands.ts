@@ -7,7 +7,8 @@ import {
   unarchiveList,
   restoreList,
 } from './store/actions/lists';
-import { deleteItems } from './store/actions/items';
+import { formatDateKey } from './lib/dates';
+import { deleteItems, setChecked } from './store/actions/items';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import { lastEntryId, redo, undo, undoEntry, useData } from './store/data';
 import { confirmAction, navigate, openList, startRename, useUI, type View } from './store/ui';
@@ -144,6 +145,25 @@ export function trashItems(ids: string[]): void {
   toastWithUndo(
     live.length === 1 ? `Deleted ${quote(items[live[0]].text)}` : `Deleted ${live.length} tasks`,
   );
+}
+
+/** "tomorrow", "on Friday", "on Fri, Oct 9". */
+function dueOn(date: string): string {
+  const label = formatDateKey(date);
+  return label === 'Today' || label === 'Tomorrow' ? label.toLowerCase() : `on ${label}`;
+}
+
+/**
+ * Checks or unchecks a task. A repeating task moves to its next date, which
+ * a toast announces. `announce` also confirms ordinary completions, for views
+ * the task disappears from (Today, Upcoming).
+ */
+export function toggleItem(id: string, checked: boolean, { announce = false } = {}): void {
+  const item = useData.getState().tables.items[id];
+  if (!item) return;
+  const next = setChecked(id, checked);
+  if (next) toastWithUndo(`${quote(item.text)} is next due ${dueOn(next)}`);
+  else if (checked && announce) toastWithUndo(`Completed ${quote(item.text)}`);
 }
 
 export function undoCommand(): void {

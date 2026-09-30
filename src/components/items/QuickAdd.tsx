@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { useMemo, useState, type KeyboardEvent, type Ref } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { parseQuickAdd } from '@/lib/quickAdd';
 import { createItemFromText } from '@/store/actions/items';
 import { useData } from '@/store/data';
@@ -9,13 +9,25 @@ export interface QuickAddProps {
   inputRef?: Ref<HTMLInputElement>;
   /** ArrowDown moves on into the list. */
   onArrowDown?: () => void;
+  /** Due date for tasks whose text doesn't give one. */
+  defaultDue?: string | null;
+  placeholder?: string;
+  /** Shown at the end of the field, e.g. which list new tasks go to. */
+  hint?: ReactNode;
 }
 
 /**
  * The "Add a task" field at the top of a to-do list. New tasks go to the end
  * of the list. A preview shows the dates, repeats and priority it read.
  */
-export function QuickAdd({ listId, inputRef, onArrowDown }: QuickAddProps) {
+export function QuickAdd({
+  listId,
+  inputRef,
+  onArrowDown,
+  defaultDue = null,
+  placeholder = 'Add a task',
+  hint,
+}: QuickAddProps) {
   const [text, setText] = useState('');
   const parseDates = useData((s) => s.settings.parseDates);
   const chips = useMemo(
@@ -27,7 +39,7 @@ export function QuickAdd({ listId, inputRef, onArrowDown }: QuickAddProps) {
     if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (createItemFromText(listId, text)) setText('');
+      if (createItemFromText(listId, text, {}, defaultDue)) setText('');
     } else if (e.key === 'Escape') {
       if (text) setText('');
       else e.currentTarget.blur();
@@ -44,12 +56,13 @@ export function QuickAdd({ listId, inputRef, onArrowDown }: QuickAddProps) {
         <input
           ref={inputRef}
           aria-label="Add a task"
-          placeholder="Add a task"
+          placeholder={placeholder}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
         />
+        {hint && <span className="shrink-0 text-xs text-fg-subtle">{hint}</span>}
       </label>
       {chips.length > 0 && (
         <div aria-live="polite" className="mt-1.5 flex flex-wrap gap-1.5 px-1">

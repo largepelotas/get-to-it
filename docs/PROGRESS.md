@@ -10,8 +10,9 @@ happens one milestone per chat; update this file at the end of each one.
 | M0    | Project setup | **Done**                                                               |
 | M1    | App frame     | **Done**                                                               |
 | M2    | To-do lists   | **Done**                                                               |
-| M3    | Due dates     | Next (see the end of this file).                                       |
-| M4–M8 |               | Not started. Several pure helpers they need already exist (see below). |
+| M3    | Due dates     | **Done**                                                               |
+| M4    | Reminders     | Next (see the end of this file).                                       |
+| M5–M8 |               | Not started. Several pure helpers they need already exist (see below). |
 
 ## How to run
 
@@ -109,14 +110,23 @@ and uploads them as workflow artifacts.
     and note, plus deleted items and deleted folders everywhere.
   - `items.ts`: `insertItem`/`createItem` (placement via `parentId` and
     `after`: an id, `null` for first, left out for last),
-    `createItemFromText` (runs `parseQuickAdd` when `settings.parseDates`),
+    `createItemFromText` (runs `parseQuickAdd` when `settings.parseDates`;
+    an optional `defaultDue` is used when the text has no date),
     `setItemText` and `setItemNotes` (coalesced per item; blank text is
     ignored), `setChecked` (checking a parent checks its open subtasks;
-    reopening a subtask reopens finished parents; `completedAt` is set),
+    reopening a subtask reopens finished parents; `completedAt` is set;
+    checking a **repeating** task instead writes a `completions` row, moves
+    `dueDate` with `nextDueDate`, reopens its subtasks, leaves it unchecked
+    and returns the new date; a repeating subtask checked along with its
+    parent is simply checked),
     `deleteItems` (soft, with subtasks), `indentItem`/`outdentItem` (respect
     `MAX_DEPTH`; outdent lands right after the old parent), `moveItemBy`
-    (Alt+↑/↓), `moveItem` (drag), `setPriority`, `clearDue`,
-    `setItemCollapsed` (not undoable). `shownSiblings` treats finished and
+    (Alt+↑/↓), `moveItem` (drag), `setPriority`, `clearDue` (also clears
+    time and repeat), `setDue(id, date, time)` (an invalid or null date
+    clears), `setDueTime` (coalesced; adds today if undated), `moveDueDates`
+    (Today's "Move to today"), `setRecurrence` (sanitised; adds a date if
+    missing and moves a weekly rule's date onto one of its days with
+    `firstOccurrence`), `repeatsOnCheck`, `setItemCollapsed` (not undoable). `shownSiblings` treats finished and
     open top-level tasks as separate groups, since they're shown in
     separate sections. An open task never sits under a finished one: adding,
     moving or reopening a subtask reopens its ancestors.
@@ -124,8 +134,15 @@ and uploads them as workflow artifacts.
 - `store/data.ts` also prunes history: a non-undoable commit that removes
   rows drops every undo/redo step touching them, so undo can't bring back
   half a list after the Trash is emptied.
+- `store/smart.ts`: `dueRows(items, lists)` gives open, dated tasks from
+  live to-do lists as `DueRow`s (a flat `FlatRow` plus `list` and `parent`),
+  sorted by date, then timed before untimed, then priority, then list and
+  position. `todayModel` (overdue, today), `upcomingModel` (groups by day,
+  after today only) and `todayCount` (the sidebar badge).
 - `store/ui.ts`: `useUI` with `view` (today, upcoming, list, archive,
-  trash), `selectedItemId`, `detailsOpen`, `dialog` (new list or a
+  trash), `selectedItemId`, `detailsOpen`, `duePickerFor` (the item whose
+  due-date popover is open in the details panel; `pickDueDate(id)` opens
+  the panel with it), `dialog` (new list or a
   confirmation) and `renaming` (the sidebar row with an inline rename
   field). Helpers: `navigate` (clears the selection and closes details),
   `openList`, `selectItem`, `openDetails`, `closeDetails`, `openDialog`,
@@ -140,11 +157,17 @@ and uploads them as workflow artifacts.
 - `commands.ts`: user-facing commands that wrap store actions with
   navigation and toasts: trash/archive with an Undo toast (`undoEntry`),
   restore, duplicate, new folder (then inline rename), delete forever and
-  empty Trash behind a confirmation, `trashItems` (Undo toast), undo/redo.
+  empty Trash behind a confirmation, `trashItems` (Undo toast), undo/redo,
+  and `toggleItem(id, checked, { announce })`, which every checkbox uses: a
+  repeating task gets a "next due on Friday" toast with Undo, and
+  `announce` (Today/Upcoming) confirms ordinary completions the same way.
   `homeView()` is where to go when the open list disappears (the default
   list, else Today).
 - `lib/`
-  - `dates.ts`: date keys (`YYYY-MM-DD`, local), formatting, `isOverdue`.
+  - `dates.ts`: date keys (`YYYY-MM-DD`, local), formatting (`formatDue`,
+    `formatDateKey` relative labels, `formatLongDate`, `formatShortDate`),
+    `isOverdue`, `nextWeekKey` (follows `settings.weekStartsOn`),
+    `msUntilTomorrow`.
   - `recurrence.ts`: `nextDueDate`, `firstOccurrence`,
     `describeRecurrence`, `sanitizeRecurrence`.
   - `quickAdd.ts`: `parseQuickAdd`, which reads date, time, repeat and
@@ -156,7 +179,8 @@ and uploads them as workflow artifacts.
     `formatShortcut` (⌘⇧Z vs Ctrl+Shift+Z) and `isEditableTarget`.
   - `theme.ts`: resolve and apply the theme, `colorVar(color)` for list
     colors, `COLOR_LABEL`.
-- `hooks/`: `useApplyTheme`/`useResolvedTheme`, and `useAppShortcuts`
+- `hooks/`: `useApplyTheme`/`useResolvedTheme`, `useToday` (today's date
+  key; re-renders at midnight and on window focus), and `useAppShortcuts`
   (undo ⌘Z/Ctrl+Z, redo ⌘⇧Z/Ctrl+Shift+Z/Ctrl+Y, ignored in text fields).
   Add new global shortcuts there.
 
@@ -203,8 +227,11 @@ and uploads them as workflow artifacts.
 - `components/views/`: `ListView` (editable title, "…" menu, banners for
   archived or trashed lists; a to-do list gets `TodoList` and the details
   panel; groceries are still a placeholder; notes show a read-only
-  `RichTextPreview`), `TodayView` and `UpcomingView` placeholders,
-  `ArchiveView` and `TrashView`.
+  `RichTextPreview`), `SmartViews` (`TodayView`: Overdue with "Move to
+  today", then Today; `UpcomingView`: a section per day. Both have a
+  quick-add into `settings.defaultListId`, falling back to any live to-do
+  list, with a default due date of today or tomorrow, and the details
+  panel), `ArchiveView` and `TrashView`.
 - `components/items/` (to-do lists):
   - `TodoList`: quick-add, open rows (dnd-kit sortable), the inline
     new-task field ("draft"), and the collapsible Completed section
@@ -214,14 +241,33 @@ and uploads them as workflow artifacts.
   - `ItemRow`: grip (drag handle, shown on hover), collapse chevron,
     `Checkbox` (priority-coloured ring), the text field (as wide as its
     text, so clicking the rest of the row selects the row), then progress
-    (`2/5`), a notes icon, the due date (read-only until M3) and a priority
-    flag, and an "Open details" button. Right-click opens `itemMenu.tsx`.
-    `DraftRow` is the new-task field.
+    (`2/5`), a notes icon, the due date (red when overdue, with a repeat
+    icon) and a priority flag, and an "Open details" button. Right-click
+    opens `itemMenu.tsx` (with a Due date submenu: Today, Tomorrow, Next
+    week, Pick a date…, No date). With `origin` (Today/Upcoming) it drops
+    the tree controls and shows "List › Parent" with the list colour;
+    `timeOnly` shows just the time under a day heading; `onToggle`
+    overrides the check action. `DraftRow` is the new-task field.
+  - `SmartList`: the rows of Today and Upcoming in titled sections. Rows
+    can be edited, checked (focus moves to the next row) and deleted, not
+    nested or reordered. Keys: ↑/↓, Enter (edit/leave), Space or Mod+Enter,
+    Backspace/Delete, Escape, Mod+I. The menu adds "Go to list".
+  - `DuePicker`: quick choices, a react-day-picker calendar (styled by
+    `.due-picker` rules in `index.css`, over the library's stylesheet), a
+    time field and the repeat editor (presets named with
+    `describeRecurrence`, or Custom: every N days/weeks/months/years,
+    weekday toggles and "On a schedule"/"After I finish it"). Choosing a
+    day closes the popover; time and repeat changes keep it open.
+    `ItemDetails` lazy-loads it, since the calendar is only needed there.
+  - `DetailsPanel`: the selected task's `ItemDetails`, optionally limited to
+    one list (list views) or from any list (Today, Upcoming).
   - `QuickAdd`: "Add a task" field with chips for what `parseQuickAdd`
     read. New tasks go to the end of the list.
-  - `ItemDetails`: the side panel (title, due date with a clear button,
-    priority, plain-text notes stored as a TipTap doc, subtasks with "Add
-    subtask", a link up to the parent, created/completed time, Delete).
+  - `ItemDetails`: the side panel (title, due date button opening the
+    `DuePicker` popover plus a clear button, priority, plain-text notes
+    stored as a TipTap doc, subtasks with "Add subtask", completion
+    history for repeating tasks (newest first, five then "Show all"), a
+    link up to the parent, created/completed time, Delete).
   - Two keyboard modes. **Text mode** (focus in a task's text): Enter opens
     the new-task field below, Backspace in an empty task without subtasks
     deletes it, ↑/↓ go to the row above/below, Mod+Enter toggles, Escape
@@ -252,7 +298,14 @@ and uploads them as workflow artifacts.
 - Tests sit next to their code as `*.test.ts(x)`. `tsconfig.test.json` adds Node
   types, which the SQLite test needs because it uses `node:sqlite`.
 - Component tests use Testing Library (`App.test.tsx` covers the frame end to
-  end). `test/setup.ts` cleans up between tests.
+  end). `test/setup.ts` cleans up between tests and stubs pointer capture,
+  which jsdom lacks and sonner's toasts call (without it Vitest reported an
+  unhandled error and exited non-zero, even with every test passing).
+- Date-dependent unit tests fake only `Date`
+  (`vi.useFakeTimers({ toFake: ['Date'] })`); component tests use dates
+  relative to the real today instead, since user-event needs real timers.
+- Radix submenus open reliably in jsdom with the keyboard (ArrowRight,
+  Enter), not with clicks.
 - UI text uses British spelling ("colour", "Grey"), matching the history
   labels.
 
@@ -273,6 +326,12 @@ and uploads them as workflow artifacts.
   swap in the rich editor without a migration).
 - Outdenting follows Todoist: the task moves to just after its old parent,
   and the siblings below it stay where they were.
+- Today counts a task as overdue only from the day after it's due; a task
+  due earlier today with a passed time stays under Today, shown in red.
+  Upcoming shows only days with tasks, not empty days.
+- Clearing a due date also removes the repeat, since a repeat counts from
+  the due date.
+- Today has a "Move to today" button for overdue tasks (not in the plan).
 
 ## Known gaps
 
@@ -283,11 +342,20 @@ From M2:
   then Tab. Revisit in M8.
 - Row-mode Space/Delete only work while the row has focus; after clicking
   a toolbar button, click the row again.
-- Recurring tasks are just checked for now; M3 makes checking one move it
-  to the next date.
 - The production bundle went over Vite's 500 kB warning in M2 (476 kB
-  before), mostly chrono-node, which quick-add now pulls in. TipTap will
-  add more in M6. Consider code-splitting in M8.
+  before), mostly chrono-node, which quick-add now pulls in. After M3 the
+  main chunk is 614 kB, with the due-date picker split out (54 kB). TipTap
+  will add more in M6. Consider more code-splitting in M8.
+
+From M3:
+
+- There's no "skip this occurrence" for repeating tasks; set the next date
+  in the picker instead.
+- The due date on a row isn't clickable; change it from the row menu or
+  the details panel.
+- Today/Upcoming order tasks from different lists by list `sortKey`, which
+  only matches the sidebar within one folder.
+- No keyboard shortcut opens the due-date picker yet (M7).
 
 From M1:
 
@@ -296,21 +364,32 @@ From M1:
 - The native window theme and macOS drag strip were checked in code only;
   the browser preview can't show them. Check them in `npm run app:dev`.
 
-## Next: M3 (due dates, Today, Upcoming, recurring tasks)
+## Next: M4 (reminders, tray, launch at login, missed reminders, snooze)
 
-1. Date actions in `store/actions/items.ts`: `setDue(id, date, time)`,
-   `setRecurrence(id, rule)` (use `sanitizeRecurrence`), plus the recurring
-   check: in `setChecked`, when the item has a `recurrence`, write a
-   `completions` row, move `dueDate` with `nextDueDate`, reset its subtasks,
-   and leave it unchecked. `clearDue` already exists.
-2. A due-date picker (react-day-picker in a `Popover`) with quick choices
-   (Today, Tomorrow, Next week, No date), a time field and a repeat
-   editor. Put it in the details panel (which shows due dates read-only
-   now) and in the row menu.
-3. `TodayView` and `UpcomingView`: tasks from every live to-do list, via a
-   pure model like `todoModel` (overdue + today; future grouped by day).
-   Reuse `ItemRow` (it needs `list` context for read-only and the list
-   name as a label) and a quick-add that writes to `settings.defaultListId`.
-4. Rows already show `formatDue` with overdue in red, and quick-add
-   already stores parsed dates and repeats.
-5. Completion history in the details panel for recurring tasks.
+The native side is ready (`reminders.rs`, `tray.rs`, the autostart plugin,
+close-to-tray); M4 is mostly frontend.
+
+1. A pure `lib/reminders.ts`: the fire time of a `Reminder` for its item.
+   Relative: the due moment (`dueTime`, or `settings.allDayReminderTime`
+   for all-day tasks) minus `offsetMinutes`; absolute: `at`;
+   `snoozedUntil` wins while it's later. No fire time for undated,
+   checked, deleted or archived/trashed tasks. Because a repeating task's
+   `dueDate` moves when it's checked, the fire time moves with it, and
+   `firedFor`/`dismissedFor` (stored per fire time) reset by themselves.
+2. `store/actions/reminders.ts`: add a preset (at due time, 5/15/30 min,
+   1 hour, 1 day before) or a custom moment, remove, snooze (10 min,
+   1 hour, tomorrow at the all-day time), dismiss, mark fired. Reminders are
+   rows in `tables.reminders`; trash purging already removes them.
+3. A scheduler hook in `App`: whenever items, reminders or settings change,
+   send the future fire times to `set_reminder_schedule` (add a `platform`
+   wrapper; in the browser, fall back to `setTimeout` + the Notification
+   API). Listen for `reminder://fired` and set `firedFor`.
+4. Missed reminders: at launch, fire times in the past that were never
+   delivered get a summary (toast or dialog) and go to the inbox.
+5. An in-app inbox of fired, undismissed reminders (a sidebar entry with a
+   count, or a popover) with Snooze, Complete (`toggleItem`) and Dismiss.
+6. A Reminders section in `ItemDetails` (under Due) and settings for close
+   to tray, launch at login and the all-day reminder time.
+7. The quit listener: on `app://quit-requested`, `flushWrites()` then
+   `quit_app`. Optionally set the tray tooltip (`set_tray_tooltip`) to
+   what's due today, using `todayCount`.

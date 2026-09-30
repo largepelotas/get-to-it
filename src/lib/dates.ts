@@ -107,3 +107,22 @@ export function isOverdue(
   if (dueDate > today || !dueTime) return false;
   return toTimestamp(dueDate, dueTime) < now.getTime();
 }
+
+/** The first day of next week (Monday or Sunday, following the setting). */
+export function nextWeekKey(today: DateKey, weekStartsOn: 0 | 1): DateKey {
+  const weekday = fromDateKey(today).getDay();
+  const daysLeft = (7 - weekday + weekStartsOn) % 7 || 7;
+  return addDaysKey(today, daysLeft);
+}
+
+/** Milliseconds until the next local midnight. */
+export function msUntilTomorrow(now: Date = new Date()): number {
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return midnight.getTime() - now.getTime();
+}
+
+/** "Sep 29", with the year when it isn't this year. */
+export function formatShortDate(key: DateKey, now: Date = new Date()): string {
+  const date = fromDateKey(key);
+  return format(date, date.getFullYear() === now.getFullYear() ? 'MMM d' : 'MMM d, yyyy');
+}

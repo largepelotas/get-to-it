@@ -17,11 +17,13 @@ import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
 import { Button, ContextMenu, IconButton, Menu, Tooltip, type MenuEntries } from '@/components/ui';
 import type { Settings } from '@/data/types';
+import { useToday } from '@/hooks/useToday';
 import { colorVar } from '@/lib/theme';
 import { isMac } from '@/platform';
 import { renameList } from '@/store/actions/lists';
 import { setSetting, useData } from '@/store/data';
 import { openCounts, sidebarModel } from '@/store/sidebar';
+import { dueRows, todayCount } from '@/store/smart';
 import { navigate, openDialog, openList, startRename, stopRename, useUI } from '@/store/ui';
 import { ListTree } from './ListTree';
 import { RenameField } from './RenameField';
@@ -58,6 +60,8 @@ export function Sidebar() {
 
   const model = useMemo(() => sidebarModel({ lists, folders }), [lists, folders]);
   const counts = useMemo(() => openCounts(items), [items]);
+  const today = useToday();
+  const dueToday = useMemo(() => todayCount(dueRows(items, lists), today), [items, lists, today]);
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar">
@@ -68,6 +72,7 @@ export function Sidebar() {
         <SidebarItem
           icon={<Sun className={navIcon} style={{ color: colorVar('amber') }} />}
           label="Today"
+          count={dueToday}
           active={view.kind === 'today'}
           onClick={() => navigate({ kind: 'today' })}
         />

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRepository } from '@/data/memory';
 import { setSetting, resetForTests, undo, useData } from '../data';
 import { todoModel } from '../todo';
@@ -13,8 +13,11 @@ import {
   moveItemBy,
   outdentItem,
   setChecked,
+  setDue,
+  setDueTime,
   setItemNotes,
   setItemText,
+  setRecurrence,
 } from './items';
 
 let list: string;
@@ -207,5 +210,117 @@ describe('moving', () => {
     setChecked(a1, true);
     moveItem(b, a1, null);
     expect(item(a1).checked).toBe(false);
+  });
+});
+
+describe('due dates', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // Wednesday, 30 September 2026, 10:00 local time.
+    vi.setSystemTime(new Date(2026, 8, 30, 10, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('sets and clears the date and time', () => {
+    const a = add('A');
+    setDue(a, '2026-10-02', '15:30');
+    expect(item(a)).toMatchObject({ dueDate: '2026-10-02', dueTime: '15:30' });
+    setDue(a, '2026-10-03');
+    expect(item(a)).toMatchObject({ dueDate: '2026-10-03', dueTime: null });
+    setDue(a, 'not a date', '15:30');
+    expect(item(a)).toMatchObject({ dueDate: null, dueTime: null });
+  });
+
+  it('adds today when a time is set on an undated task, and merges time edits', () => {
+    const a = add('A');
+    setDueTime(a, '09:00');
+    setDueTime(a, '09:30');
+    expect(item(a)).toMatchObject({ dueDate: '2026-09-30', dueTime: '09:30' });
+    undo();
+    expect(item(a)).toMatchObject({ dueDate: null, dueTime: null });
+  });
+
+  it('gives a repeating task a date on one of its days, and clearing the date stops it', () => {
+    const a = add('A');
+    // Mondays and Fridays; the next is Friday 2 October.
+    setRecurrence(a, { freq: 'weekly', interval: 1, weekdays: [1, 5], mode: 'schedule' });
+    expect(item(a).dueDate).toBe('2026-10-02');
+    setRecurrence(a, null);
+    expect(item(a)).toMatchObject({ recurrence: null, dueDate: '2026-10-02' });
+    setRecurrence(a, { freq: 'daily', interval: 0, mode: 'schedule' });
+    expect(item(a).recurrence).toEqual({ freq: 'daily', interval: 1, mode: 'schedule' });
+    setDue(a, null);
+    expect(item(a).recurrence).toBeNull();
+  });
+});
+
+describe('repeating tasks', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 30, 10, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const completions = () => Object.values(useData.getState().tables.completions);
+
+  it('moves to the next date, records the completion and reopens its subtasks', () => {
+    const a = createItem(list, {
+      text: 'Standup',
+      dueDate: '2026-09-30',
+      dueTime: '09:30',
+      recurrence: { freq: 'weekly', interval: 1, weekdays: [1, 2, 3, 4, 5], mode: 'schedule' },
+    })!;
+    const a1 = add('Notes', { parentId: a });
+    setChecked(a1, true);
+    expect(setChecked(a, true)).toBe('2026-10-01');
+    expect(item(a)).toMatchObject({ checked: false, dueDate: '2026-10-01', dueTime: '09:30' });
+    expect(item(a1).checked).toBe(false);
+    expect(completions()).toMatchObject([{ itemId: a, dueDate: '2026-09-30' }]);
+  });
+
+  it('skips past today when a late task is finished', () => {
+    const a = createItem(list, {
+      text: 'Water plants',
+      dueDate: '2026-09-20',
+      recurrence: { freq: 'daily', interval: 3, mode: 'schedule' },
+    })!;
+    // 20, 23, 26, 29, then 2 October.
+    setChecked(a, true);
+    expect(item(a).dueDate).toBe('2026-10-02');
+  });
+
+  it('counts from today for "after completion" rules', () => {
+    const a = createItem(list, {
+      text: 'Haircut',
+      dueDate: '2026-09-01',
+      recurrence: { freq: 'weekly', interval: 6, mode: 'completion' },
+    })!;
+    setChecked(a, true);
+    expect(item(a).dueDate).toBe('2026-11-11');
+  });
+
+  it('undoes a completion in one step', () => {
+    const a = createItem(list, {
+      text: 'Standup',
+      dueDate: '2026-09-30',
+      recurrence: { freq: 'daily', interval: 1, mode: 'schedule' },
+    })!;
+    setChecked(a, true);
+    undo();
+    expect(item(a).dueDate).toBe('2026-09-30');
+    expect(completions()).toHaveLength(0);
+  });
+
+  it('is finished along with its parent', () => {
+    const a = add('Project');
+    const a1 = createItem(list, {
+      text: 'Weekly check-in',
+      parentId: a,
+      dueDate: '2026-09-30',
+      recurrence: { freq: 'weekly', interval: 1, mode: 'schedule' },
+    })!;
+    setChecked(a, true);
+    expect(item(a1)).toMatchObject({ checked: true, dueDate: '2026-09-30' });
+    expect(completions()).toHaveLength(0);
   });
 });

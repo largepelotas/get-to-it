@@ -1,26 +1,28 @@
 import clsx from 'clsx';
 import { CalendarDays, ChevronUp, Flag, Plus, Repeat, Trash, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { trashItems } from '@/commands';
-import { Button, IconButton } from '@/components/ui';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { toggleItem, trashItems } from '@/commands';
+import { Button, IconButton, Popover } from '@/components/ui';
 import type { Item } from '@/data/types';
-import { formatDue, formatTimestamp, isOverdue } from '@/lib/dates';
+import { formatDue, formatShortDate, formatTimestamp, isOverdue } from '@/lib/dates';
 import { describeRecurrence } from '@/lib/recurrence';
 import { colorVar } from '@/lib/theme';
 import {
   clearDue,
   createItemFromText,
   itemNotesText,
-  setChecked,
   setItemNotes,
   setItemText,
   setPriority,
 } from '@/store/actions/items';
 import { useData } from '@/store/data';
 import { childrenIndex, depthOf, MAX_DEPTH } from '@/store/tree';
-import { closeDetails, openDetails } from '@/store/ui';
+import { closeDetails, openDetails, setDuePickerFor, useUI } from '@/store/ui';
 import { Checkbox } from './Checkbox';
 import { PRIORITIES, PRIORITY_COLOR, PRIORITY_LABEL } from './priority';
+
+// The calendar is only needed once the picker opens, so it loads separately.
+const DuePicker = lazy(() => import('./DuePicker').then((m) => ({ default: m.DuePicker })));
 
 const fieldClass =
   'w-full resize-none rounded-md bg-transparent outline-none placeholder:text-fg-subtle focus:bg-hover';
@@ -113,6 +115,111 @@ function AddSubtask({ parent }: { parent: Item }) {
   );
 }
 
+/** The due date, time and repeat, with a picker in a popover. */
+function DueField({ item, readOnly }: { item: Item; readOnly: boolean }) {
+  const open = useUI((s) => s.duePickerFor === item.id);
+  const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
+  const summary = (
+    <>
+      <CalendarDays aria-hidden className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1 text-left">
+        {item.dueDate ? formatDue(item.dueDate, item.dueTime) : 'Add due date'}
+        {item.recurrence && (
+          <span className="flex items-center gap-1 text-xs text-fg-subtle">
+            <Repeat aria-hidden className="size-3" />
+            {describeRecurrence(item.recurrence, item.dueDate)}
+          </span>
+        )}
+      </span>
+    </>
+  );
+  const boxClass = clsx(
+    'flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-sm',
+    overdue ? 'text-danger' : item.dueDate ? 'text-fg' : 'text-fg-subtle',
+  );
+
+  if (readOnly) {
+    return item.dueDate ? <div className={clsx(boxClass, 'bg-sidebar')}>{summary}</div> : null;
+  }
+  return (
+    <div className="flex items-center gap-1 rounded-md bg-sidebar pr-1">
+      <Popover
+        open={open}
+        onOpenChange={(next) => setDuePickerFor(next ? item.id : null)}
+        align="start"
+        className="p-2"
+        trigger={
+          <button
+            type="button"
+            aria-label={
+              item.dueDate ? `Due ${formatDue(item.dueDate, item.dueTime)}, change` : 'Add due date'
+            }
+            className={clsx(boxClass, 'hover:bg-hover')}
+          >
+            {summary}
+          </button>
+        }
+      >
+        <Suspense fallback={<div className="h-[440px] w-[252px]" />}>
+          <DuePicker item={item} onPicked={() => setDuePickerFor(null)} />
+        </Suspense>
+      </Popover>
+      {item.dueDate && (
+        <IconButton
+          size="sm"
+          label="Clear due date"
+          icon={<X className="size-3.5" />}
+          onClick={() => clearDue(item.id)}
+        />
+      )}
+    </div>
+  );
+}
+
+const HISTORY_SHOWN = 5;
+
+/** Past completions of a repeating task, newest first. */
+function CompletionHistory({ item }: { item: Item }) {
+  const all = useData((s) => s.tables.completions);
+  const [expanded, setExpanded] = useState(false);
+  const entries = useMemo(
+    () =>
+      Object.values(all)
+        .filter((c) => c.itemId === item.id)
+        .sort((a, b) => b.completedAt - a.completedAt),
+    [all, item.id],
+  );
+  if (!entries.length) return null;
+  const shown = expanded ? entries : entries.slice(0, HISTORY_SHOWN);
+  return (
+    <div>
+      <h3 className="mb-1.5 flex text-xs font-medium text-fg-muted">
+        <span className="flex-1">Completed</span>
+        <span className="font-normal text-fg-subtle tabular-nums">
+          {entries.length === 1 ? '1 time' : `${entries.length} times`}
+        </span>
+      </h3>
+      <ul aria-label="Completion history" className="space-y-1 text-xs">
+        {shown.map((c) => (
+          <li key={c.id} className="flex gap-2 px-1">
+            <span className="flex-1 text-fg">{formatTimestamp(c.completedAt)}</span>
+            {c.dueDate && <span className="text-fg-subtle">due {formatShortDate(c.dueDate)}</span>}
+          </li>
+        ))}
+      </ul>
+      {entries.length > HISTORY_SHOWN && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1 rounded px-1 text-xs text-accent hover:underline"
+        >
+          {expanded ? 'Show fewer' : `Show all ${entries.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export interface ItemDetailsProps {
   item: Item;
   readOnly: boolean;
@@ -130,7 +237,6 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
       depth: depthOf(byId, item),
     };
   }, [items, item]);
-  const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
   const doneCount = subtasks.filter((s) => s.checked).length;
 
   return (
@@ -169,38 +275,12 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
             priority={item.priority}
             disabled={readOnly}
             label={item.checked ? 'Mark as not done' : 'Mark as done'}
-            onChange={(checked) => setChecked(item.id, checked)}
+            onChange={(checked) => toggleItem(item.id, checked)}
           />
           <TitleField key={item.id} item={item} readOnly={readOnly} />
         </div>
 
-        {item.dueDate && (
-          <div
-            className={clsx(
-              'flex items-center gap-2 rounded-md bg-sidebar px-2.5 py-1.5 text-sm',
-              overdue ? 'text-danger' : 'text-fg-muted',
-            )}
-          >
-            <CalendarDays aria-hidden className="size-4 shrink-0" />
-            <span className="min-w-0 flex-1">
-              {formatDue(item.dueDate, item.dueTime)}
-              {item.recurrence && (
-                <span className="flex items-center gap-1 text-xs text-fg-subtle">
-                  <Repeat aria-hidden className="size-3" />
-                  {describeRecurrence(item.recurrence, item.dueDate)}
-                </span>
-              )}
-            </span>
-            {!readOnly && (
-              <IconButton
-                size="sm"
-                label="Clear due date"
-                icon={<X className="size-3.5" />}
-                onClick={() => clearDue(item.id)}
-              />
-            )}
-          </div>
-        )}
+        <DueField item={item} readOnly={readOnly} />
 
         <div>
           <SectionLabel>Priority</SectionLabel>
@@ -263,7 +343,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
                     priority={sub.priority}
                     disabled={readOnly}
                     label={sub.text}
-                    onChange={(checked) => setChecked(sub.id, checked)}
+                    onChange={(checked) => toggleItem(sub.id, checked)}
                   />
                   <button
                     type="button"
@@ -281,6 +361,8 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
             {!readOnly && depth < MAX_DEPTH && <AddSubtask parent={item} />}
           </div>
         )}
+
+        <CompletionHistory item={item} />
       </div>
 
       <div className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-2.5 text-xs text-fg-subtle">

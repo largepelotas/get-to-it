@@ -2,9 +2,11 @@ import clsx from 'clsx';
 import { ChevronRight, Flag, GripVertical, NotebookText, PanelRight, Repeat } from 'lucide-react';
 import { useState, type CSSProperties, type KeyboardEvent, type Ref } from 'react';
 import { ContextMenu, IconButton, type MenuEntries } from '@/components/ui';
-import { formatDue, isOverdue } from '@/lib/dates';
+import { toggleItem } from '@/commands';
+import type { List } from '@/data/types';
+import { formatDue, formatTime, isOverdue } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
-import { setChecked, setItemCollapsed, setItemText } from '@/store/actions/items';
+import { setItemCollapsed, setItemText } from '@/store/actions/items';
 import type { FlatRow } from '@/store/tree';
 import { Checkbox } from './Checkbox';
 import { PRIORITY_COLOR, PRIORITY_LABEL } from './priority';
@@ -30,6 +32,15 @@ export interface ItemRowProps {
   /** Depth to show while dragging, when it differs from the row's own. */
   depth?: number;
   drag?: DragBits;
+  /**
+   * For rows outside their list (Today, Upcoming): no tree controls, and the
+   * list (and parent task) shown on the right.
+   */
+  origin?: { list: List; parentText?: string };
+  /** Show only the time of the due date (the view's heading already says the day). */
+  timeOnly?: boolean;
+  /** Replaces the default check action (e.g. to confirm completions with a toast). */
+  onToggle?: (checked: boolean) => void;
   menu: () => MenuEntries;
   onKeyDown: (event: KeyboardEvent<HTMLElement>, mode: RowKeyMode) => void;
   onSelect: () => void;
@@ -79,6 +90,9 @@ function ItemText({
   );
 }
 
+const originTitle = (origin: NonNullable<ItemRowProps['origin']>) =>
+  origin.parentText ? `${origin.list.title} › ${origin.parentText}` : origin.list.title;
+
 export function ItemRow({
   row,
   selected,
@@ -86,6 +100,9 @@ export function ItemRow({
   readOnly,
   depth = row.depth,
   drag,
+  origin,
+  timeOnly = false,
+  onToggle,
   menu,
   onKeyDown,
   onSelect,
@@ -124,42 +141,48 @@ export function ItemRow({
           drag?.dragging && 'z-10 bg-elevated shadow-popover',
         )}
       >
-        {drag && !readOnly ? (
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label="Drag to move"
-            {...drag.handle}
-            className="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-fg-subtle opacity-0 group-hover:opacity-100 active:cursor-grabbing"
-          >
-            <GripVertical aria-hidden className="size-3.5" />
-          </button>
+        {origin ? (
+          <span className="w-1 shrink-0" />
         ) : (
-          <span className="w-4 shrink-0" />
-        )}
-        {childCount > 0 ? (
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={item.collapsed ? 'Show subtasks' : 'Hide subtasks'}
-            aria-expanded={!item.collapsed}
-            onClick={() => setItemCollapsed(item.id, !item.collapsed)}
-            className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-fg-subtle hover:text-fg"
-          >
-            <ChevronRight
-              aria-hidden
-              className={clsx('size-3.5 transition-transform', !item.collapsed && 'rotate-90')}
-            />
-          </button>
-        ) : (
-          <span className="-ml-1 w-4 shrink-0" />
+          <>
+            {drag && !readOnly ? (
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label="Drag to move"
+                {...drag.handle}
+                className="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-fg-subtle opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+              >
+                <GripVertical aria-hidden className="size-3.5" />
+              </button>
+            ) : (
+              <span className="w-4 shrink-0" />
+            )}
+            {childCount > 0 ? (
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={item.collapsed ? 'Show subtasks' : 'Hide subtasks'}
+                aria-expanded={!item.collapsed}
+                onClick={() => setItemCollapsed(item.id, !item.collapsed)}
+                className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-fg-subtle hover:text-fg"
+              >
+                <ChevronRight
+                  aria-hidden
+                  className={clsx('size-3.5 transition-transform', !item.collapsed && 'rotate-90')}
+                />
+              </button>
+            ) : (
+              <span className="-ml-1 w-4 shrink-0" />
+            )}
+          </>
         )}
         <Checkbox
           checked={item.checked}
           priority={item.priority}
           disabled={readOnly}
           label={item.text}
-          onChange={(checked) => setChecked(item.id, checked)}
+          onChange={(checked) => (onToggle ? onToggle(checked) : toggleItem(item.id, checked))}
         />
         <ItemText id={item.id} text={item.text} checked={item.checked} readOnly={readOnly} />
         <span className="min-w-0 flex-1 self-stretch" />
@@ -173,10 +196,12 @@ export function ItemRow({
             </span>
           )}
           {hasNotes && <NotebookText aria-label="Has notes" className="size-3.5" />}
-          {item.dueDate && (
+          {item.dueDate && (!timeOnly || item.dueTime || item.recurrence) && (
             <span className={clsx('flex items-center gap-1', overdue && 'text-danger')}>
               {item.recurrence && <Repeat aria-label="Repeats" className="size-3" />}
-              {formatDue(item.dueDate, item.dueTime)}
+              {timeOnly
+                ? item.dueTime && formatTime(item.dueTime)
+                : formatDue(item.dueDate, item.dueTime)}
             </span>
           )}
           {item.priority > 0 && (
@@ -185,6 +210,19 @@ export function ItemRow({
               className="size-3.5"
               style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }}
             />
+          )}
+          {origin && (
+            <span
+              className="flex max-w-48 min-w-0 items-center gap-1.5"
+              title={originTitle(origin)}
+            >
+              <span className="truncate">{originTitle(origin)}</span>
+              <span
+                aria-hidden
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: colorVar(origin.list.color) ?? 'var(--line-strong)' }}
+              />
+            </span>
           )}
         </span>
         <IconButton

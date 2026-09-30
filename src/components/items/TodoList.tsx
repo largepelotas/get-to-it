@@ -18,7 +18,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { trashItems } from '@/commands';
+import { toggleItem, trashItems } from '@/commands';
 import { ListIcon } from '@/components/ListIcon';
 import type { MenuEntries } from '@/components/ui';
 import { EmptyState } from '@/components/views/ViewHeader';
@@ -32,7 +32,7 @@ import {
   moveItem,
   moveItemBy,
   outdentItem,
-  setChecked,
+  repeatsOnCheck,
   setItemCollapsed,
 } from '@/store/actions/items';
 import { setShowCompleted } from '@/store/actions/lists';
@@ -233,9 +233,11 @@ export function TodoList({ list }: { list: List }) {
   // Row actions.
   const toggle = (index: number) => {
     const row = visible[index];
-    setChecked(row.item.id, !row.item.checked);
+    const repeats = repeatsOnCheck(row.item);
+    toggleItem(row.item.id, !row.item.checked);
     // A top-level task changes sections, so keep the keyboard where it was.
-    if (row.depth !== 0) return;
+    // A repeating one stays put with its next date.
+    if (row.depth !== 0 || repeats) return;
     const end = endOfSubtree(visible, index);
     const next =
       end < visible.length && inDone(end) === inDone(index)

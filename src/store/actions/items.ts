@@ -1,7 +1,9 @@
 import type { Item, Priority, Recurrence } from '@/data/types';
+import { isDateKey, isTimeString, todayKey } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { keyBetween } from '@/lib/order';
 import { parseQuickAdd } from '@/lib/quickAdd';
+import { firstOccurrence, nextDueDate, sanitizeRecurrence } from '@/lib/recurrence';
 import { docFromText, docToPlainText, parseDoc } from '@/lib/richText';
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
@@ -90,11 +92,22 @@ export function createItemFromText(
   listId: string,
   raw: string,
   place: Pick<NewItem, 'parentId' | 'after'> = {},
+  /** The due date to use when the text doesn't give one (e.g. today, in the Today view). */
+  defaultDue: string | null = null,
 ): string | null {
   if (!raw.trim()) return null;
-  if (!useData.getState().settings.parseDates) return createItem(listId, { text: raw, ...place });
+  if (!useData.getState().settings.parseDates) {
+    return createItem(listId, { text: raw, dueDate: defaultDue, ...place });
+  }
   const { text, dueDate, dueTime, recurrence, priority } = parseQuickAdd(raw);
-  return createItem(listId, { text, dueDate, dueTime, recurrence, priority, ...place });
+  return createItem(listId, {
+    text,
+    dueDate: dueDate ?? defaultDue,
+    dueTime,
+    recurrence,
+    priority,
+    ...place,
+  });
 }
 
 export function setItemText(id: string, text: string): void {
@@ -128,6 +141,91 @@ export function clearDue(id: string): void {
   );
 }
 
+/**
+ * Sets the due date and time. A time needs a date; clearing the date also
+ * clears the time and the repeat, since a repeat counts from the due date.
+ */
+export function setDue(id: string, dueDate: string | null, dueTime: string | null = null): void {
+  if (!dueDate || !isDateKey(dueDate)) return clearDue(id);
+  commit(
+    'Due date',
+    (tx) =>
+      void tx.update('items', id, {
+        dueDate,
+        dueTime: isTimeString(dueTime) ? dueTime : null,
+      }),
+  );
+}
+
+/** Moves tasks to a new day, keeping their times (Today's "Reschedule" for overdue tasks). */
+export function moveDueDates(ids: string[], dueDate: string): void {
+  if (!isDateKey(dueDate)) return;
+  commit(ids.length === 1 ? 'Due date' : 'Reschedule tasks', (tx) => {
+    for (const id of ids) {
+      if (tx.get('items', id)?.dueDate) tx.update('items', id, { dueDate });
+    }
+  });
+}
+
+/** Sets only the time, keeping the date (today if there isn't one). */
+export function setDueTime(id: string, dueTime: string | null): void {
+  commit(
+    'Due time',
+    (tx) => {
+      const item = tx.get('items', id);
+      if (!item) return;
+      const time = isTimeString(dueTime) ? dueTime : null;
+      if (!item.dueDate && !time) return;
+      tx.update('items', id, {
+        dueDate: item.dueDate ?? todayKey(new Date(tx.now)),
+        dueTime: time,
+      });
+    },
+    // Typing in a time field sends a change per keystroke.
+    { coalesce: `item-time:${id}` },
+  );
+}
+
+/**
+ * Sets or clears the repeat rule. A repeating task needs a due date, so one
+ * is added if missing, and a weekly rule moves the date onto one of its days.
+ */
+export function setRecurrence(id: string, rule: Recurrence | null): void {
+  const clean = rule ? sanitizeRecurrence(rule) : null;
+  commit(clean ? 'Repeat' : 'Stop repeating', (tx) => {
+    const item = tx.get('items', id);
+    if (!item) return;
+    if (!clean) return void tx.update('items', id, { recurrence: null });
+    const from = item.dueDate ?? todayKey(new Date(tx.now));
+    tx.update('items', id, { recurrence: clean, dueDate: firstOccurrence(clean, from) });
+  });
+}
+
+/** Whether checking the item moves it to its next date instead of finishing it. */
+export const repeatsOnCheck = (item: Item) => !!item.recurrence && !item.checked;
+
+/**
+ * Finishes one occurrence of a repeating task: records it, moves the due
+ * date to the next occurrence and reopens the subtasks. Returns the new date.
+ */
+function completeOccurrence(tx: Tx, item: Item): string {
+  const today = todayKey(new Date(tx.now));
+  const next = nextDueDate(item.recurrence!, item.dueDate, today);
+  tx.put('completions', {
+    id: newId(),
+    itemId: item.id,
+    dueDate: item.dueDate,
+    completedAt: tx.now,
+  });
+  tx.update('items', item.id, { dueDate: next });
+  for (const childId of descendantIds(itemIndex(tx, item.listId), item.id)) {
+    if (tx.get('items', childId)?.checked) {
+      tx.update('items', childId, { checked: false, completedAt: null });
+    }
+  }
+  return next;
+}
+
 export function setItemCollapsed(id: string, collapsed: boolean): void {
   commit('Collapse task', (tx) => void tx.update('items', id, { collapsed }), {
     undoable: false,
@@ -136,12 +234,14 @@ export function setItemCollapsed(id: string, collapsed: boolean): void {
 
 /**
  * Checks or unchecks an item. Checking a parent also checks its open
- * subtasks; unchecking a subtask reopens its finished parents.
+ * subtasks; unchecking a subtask reopens its finished parents. Checking a
+ * repeating task moves it to its next date instead, and returns that date.
  */
-export function setChecked(id: string, checked: boolean): void {
-  commit(checked ? 'Complete task' : 'Reopen task', (tx) => {
+export function setChecked(id: string, checked: boolean): string | null {
+  return commit(checked ? 'Complete task' : 'Reopen task', (tx) => {
     const item = tx.get('items', id);
-    if (!item || item.checked === checked) return;
+    if (!item || item.checked === checked) return null;
+    if (checked && item.recurrence) return completeOccurrence(tx, item);
     if (checked) {
       tx.update('items', id, { checked: true, completedAt: tx.now });
       for (const childId of descendantIds(itemIndex(tx, item.listId), id)) {
@@ -153,6 +253,7 @@ export function setChecked(id: string, checked: boolean): void {
       tx.update('items', id, { checked: false, completedAt: null });
       reopenAncestors(tx, item);
     }
+    return null;
   });
 }
 
