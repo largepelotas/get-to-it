@@ -1,10 +1,11 @@
 import clsx from 'clsx';
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { toggleItem, trashItems } from '@/commands';
+import { SHORTCUTS } from '@/lib/keymap';
 import { matchesShortcut } from '@/lib/shortcuts';
 import { isMac } from '@/platform';
 import type { DueRow } from '@/store/smart';
-import { closeDetails, openDetails, openList, selectItem, useUI } from '@/store/ui';
+import { closeDetails, openDetails, openList, pickDueDate, selectItem, useUI } from '@/store/ui';
 import { itemMenuEntries } from './itemMenu';
 import { ItemRow, type RowKeyMode } from './ItemRow';
 
@@ -75,7 +76,10 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
     const id = row.item.id;
     const is = (shortcut: string) => matchesShortcut(e, shortcut, isMac);
 
-    if (is('Mod+I')) {
+    if (is(SHORTCUTS.dueDate)) {
+      e.preventDefault();
+      pickDueDate(id);
+    } else if (is(SHORTCUTS.details)) {
       e.preventDefault();
       const { detailsOpen, selectedItemId } = useUI.getState();
       if (detailsOpen && selectedItemId === id) closeDetails();

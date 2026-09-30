@@ -15,6 +15,11 @@ export class MemoryRepository implements Repository {
     return structuredClone({ tables: this.tables, settings: this.settings });
   }
 
+  async replaceAll(data: LoadResult): Promise<void> {
+    this.tables = { ...emptyTables(), ...structuredClone(data.tables) };
+    this.settings = structuredClone(data.settings);
+  }
+
   async write(ops: WriteOp[]): Promise<void> {
     for (const op of ops) {
       if (op.kind === 'setting') {

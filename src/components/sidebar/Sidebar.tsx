@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Ellipsis,
   FolderPlus,
+  Keyboard,
   Monitor,
   Moon,
   Plus,
@@ -19,7 +20,7 @@ import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
 import { Button, ContextMenu, IconButton, Menu, Tooltip, type MenuEntries } from '@/components/ui';
 import type { Settings } from '@/data/types';
-import { SETTINGS_SHORTCUT } from '@/hooks/useAppShortcuts';
+import { SHORTCUTS } from '@/lib/keymap';
 import { useReminderEntries } from '@/hooks/useReminders';
 import { useToday } from '@/hooks/useToday';
 import { colorVar } from '@/lib/theme';
@@ -54,8 +55,14 @@ function settingsEntries(theme: Settings['theme']): MenuEntries {
     {
       label: 'Settings…',
       icon: <SettingsIcon className="size-3.5" />,
-      shortcut: SETTINGS_SHORTCUT,
+      shortcut: SHORTCUTS.settings,
       onSelect: () => openDialog({ kind: 'settings' }),
+    },
+    {
+      label: 'Keyboard shortcuts',
+      icon: <Keyboard className="size-3.5" />,
+      shortcut: SHORTCUTS.help,
+      onSelect: () => openDialog({ kind: 'shortcuts' }),
     },
   ];
 }

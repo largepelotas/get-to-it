@@ -53,6 +53,7 @@ export function GroceryQuickAdd({ listId, inputRef, onArrowDown }: GroceryQuickA
         <input
           ref={inputRef}
           aria-label="Add an item"
+          data-quick-add
           placeholder="Add an item, like “2 lemons” or “milk 1 l”"
           value={text}
           onChange={(e) => setText(e.target.value)}

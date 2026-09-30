@@ -23,6 +23,7 @@ import { ListIcon } from '@/components/ListIcon';
 import type { MenuEntries } from '@/components/ui';
 import { EmptyState } from '@/components/views/ViewHeader';
 import type { List } from '@/data/types';
+import { SHORTCUTS } from '@/lib/keymap';
 import { matchesShortcut } from '@/lib/shortcuts';
 import { isMac } from '@/platform';
 import {
@@ -39,7 +40,7 @@ import { setShowCompleted } from '@/store/actions/lists';
 import { useData } from '@/store/data';
 import { endOfSubtree, todoModel } from '@/store/todo';
 import { MAX_DEPTH, projectDrop, type FlatRow } from '@/store/tree';
-import { closeDetails, openDetails, selectItem, useUI } from '@/store/ui';
+import { clearReveal, closeDetails, openDetails, pickDueDate, selectItem, useUI } from '@/store/ui';
 import { itemMenuEntries } from './itemMenu';
 import { DraftRow, INDENT, ItemRow, type DragBits, type RowKeyMode } from './ItemRow';
 import { QuickAdd } from './QuickAdd';
@@ -112,6 +113,7 @@ export function TodoList({ list }: { list: List }) {
   const items = useData((s) => s.tables.items);
   const model = useMemo(() => todoModel(items, list.id), [items, list.id]);
   const selectedId = useUI((s) => s.selectedItemId);
+  const reveal = useUI((s) => s.reveal);
   const readOnly = !!(list.deletedAt || list.archivedAt);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -147,6 +149,13 @@ export function TodoList({ list }: { list: List }) {
     input.focus();
     if (focus.caretAtEnd) input.setSelectionRange(input.value.length, input.value.length);
   }, [focus]);
+
+  // An item opened from search: bring its row into view with focus.
+  useLayoutEffect(() => {
+    if (!reveal) return;
+    containerRef.current?.querySelector<HTMLElement>(`[data-item-id="${reveal}"]`)?.focus();
+    clearReveal();
+  }, [reveal]);
 
   const focusRow = (id: string, mode: RowKeyMode = 'row', caretAtEnd = false) => {
     selectItem(id);
@@ -279,7 +288,10 @@ export function TodoList({ list }: { list: List }) {
     const id = row.item.id;
     const is = (shortcut: string) => matchesShortcut(e, shortcut, isMac);
 
-    if (is('Mod+I')) {
+    if (is(SHORTCUTS.dueDate) && !readOnly) {
+      e.preventDefault();
+      pickDueDate(id);
+    } else if (is(SHORTCUTS.details)) {
       e.preventDefault();
       toggleDetails(id);
     } else if (is('ArrowUp') || is('ArrowDown')) {

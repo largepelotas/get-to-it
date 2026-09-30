@@ -23,6 +23,15 @@ export class LocalStorageRepository extends MemoryRepository {
 
   async write(ops: WriteOp[]): Promise<void> {
     await super.write(ops);
+    this.persist();
+  }
+
+  async replaceAll(data: LoadResult): Promise<void> {
+    await super.replaceAll(data);
+    this.persist();
+  }
+
+  private persist(): void {
     this.storage.setItem(KEY, JSON.stringify({ tables: this.tables, settings: this.settings }));
   }
 }

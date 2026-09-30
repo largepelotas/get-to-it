@@ -2,6 +2,7 @@ import {
   Archive,
   ArchiveRestore,
   BrushCleaning,
+  ClipboardCopy,
   Copy,
   FolderInput,
   Palette,
@@ -14,11 +15,13 @@ import {
   Undo2,
 } from 'lucide-react';
 import { COLOR_NAMES, type ColorName, type Folder, type List } from '@/data/types';
+import { SHORTCUTS } from '@/lib/keymap';
 import { bySortKey } from '@/lib/order';
 import { COLOR_LABEL } from '@/lib/theme';
 import {
   archive,
   clearCart,
+  copyAsMarkdown,
   deleteForever,
   duplicate,
   removeFolder,
@@ -47,6 +50,13 @@ function colorEntries(current: ColorName | null, set: (c: ColorName | null) => v
     })),
   ];
 }
+
+const copyEntry = (list: List): MenuEntry => ({
+  label: 'Copy as Markdown',
+  icon: <ClipboardCopy className={icon} />,
+  shortcut: SHORTCUTS.copyMarkdown,
+  onSelect: () => void copyAsMarkdown(list.id),
+});
 
 export interface ListMenuOptions {
   /** Starts renaming, wherever the menu was opened from. */
@@ -78,6 +88,7 @@ export function listMenuEntries(list: List, { onRename }: ListMenuOptions = {}):
         icon: <ArchiveRestore className={icon} />,
         onSelect: () => unarchive(list.id),
       },
+      copyEntry(list),
       { kind: 'separator' },
       {
         label: 'Move to Trash',
@@ -147,6 +158,7 @@ export function listMenuEntries(list: List, { onRename }: ListMenuOptions = {}):
       ],
     },
     { label: 'Duplicate', icon: <Copy className={icon} />, onSelect: () => duplicate(list.id) },
+    copyEntry(list),
     { kind: 'separator' },
     { label: 'Archive', icon: <Archive className={icon} />, onSelect: () => archive(list.id) },
     {

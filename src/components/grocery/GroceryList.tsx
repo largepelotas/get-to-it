@@ -31,7 +31,7 @@ import { deleteItems } from '@/store/actions/items';
 import { setShowCompleted } from '@/store/actions/lists';
 import { useData } from '@/store/data';
 import { groceryModel, groupOf } from '@/store/grocery';
-import { selectItem, useUI } from '@/store/ui';
+import { clearReveal, selectItem, useUI } from '@/store/ui';
 import { groceryMenuEntries } from './groceryMenu';
 import { GroceryQuickAdd } from './GroceryQuickAdd';
 import { GroceryRow, type GroceryKeyMode } from './GroceryRow';
@@ -80,6 +80,7 @@ export function GroceryList({ list }: { list: List }) {
     [items, list.id, categories],
   );
   const selectedId = useUI((s) => s.selectedItemId);
+  const reveal = useUI((s) => s.reveal);
   const readOnly = !!(list.deletedAt || list.archivedAt);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -105,6 +106,13 @@ export function GroceryList({ list }: { list: List }) {
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
   }, [focus]);
+
+  // An item opened from search: bring its row into view with focus.
+  useLayoutEffect(() => {
+    if (!reveal) return;
+    containerRef.current?.querySelector<HTMLElement>(`[data-item-id="${reveal}"]`)?.focus();
+    clearReveal();
+  }, [reveal]);
 
   const focusRow = (id: string, mode: GroceryKeyMode = 'row') => {
     selectItem(id);
