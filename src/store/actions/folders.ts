@@ -12,22 +12,25 @@ function liveFolders(tx: Tx, exceptId?: string): Folder[] {
     .sort(bySortKey);
 }
 
+/** Adds a folder at the end inside an existing transaction and returns its id. */
+export function insertFolder(tx: Tx, name: string): string {
+  const folders = liveFolders(tx);
+  const folder: Folder = {
+    id: newId(),
+    name: name.trim() || 'New folder',
+    color: null,
+    sortKey: keyAt(folders, folders.length),
+    collapsed: false,
+    createdAt: tx.now,
+    updatedAt: tx.now,
+    deletedAt: null,
+  };
+  tx.put('folders', folder);
+  return folder.id;
+}
+
 export function createFolder(name: string): string {
-  return commit('New folder', (tx) => {
-    const folders = liveFolders(tx);
-    const folder: Folder = {
-      id: newId(),
-      name: name.trim() || 'New folder',
-      color: null,
-      sortKey: keyAt(folders, folders.length),
-      collapsed: false,
-      createdAt: tx.now,
-      updatedAt: tx.now,
-      deletedAt: null,
-    };
-    tx.put('folders', folder);
-    return folder.id;
-  });
+  return commit('New folder', (tx) => insertFolder(tx, name));
 }
 
 export function renameFolder(id: string, name: string): void {

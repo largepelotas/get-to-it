@@ -115,7 +115,8 @@ export function commit<R>(label: string, fn: (tx: Tx) => R, options: CommitOptio
 
   const tables = applyChanges(state.tables, changes, 'after');
   if (options.undoable === false) {
-    useData.setState({ tables });
+    const removed = new Set(changes.filter((c) => !c.after).map((c) => `${c.table}:${c.id}`));
+    useData.setState(removed.size ? { tables, ...pruneHistory(state, removed) } : { tables });
   } else {
     const entry: HistoryEntry = {
       id: nextEntryId++,
@@ -133,6 +134,16 @@ export function commit<R>(label: string, fn: (tx: Tx) => R, options: CommitOptio
   }
   queue(toOps(changes, 'after'));
   return result;
+}
+
+/**
+ * Drops undo steps that touch rows which no longer exist. Undoing them after
+ * a permanent delete (emptying the Trash) would bring back half a list.
+ */
+function pruneHistory(state: DataState, removed: Set<string>) {
+  const keep = (entry: HistoryEntry) =>
+    !entry.changes.some((c) => removed.has(`${c.table}:${c.id}`));
+  return { past: state.past.filter(keep), future: state.future.filter(keep) };
 }
 
 /** The id of the newest undo step, so a toast can undo exactly that action. */

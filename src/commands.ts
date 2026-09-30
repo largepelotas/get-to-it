@@ -1,0 +1,145 @@
+import { toast } from 'sonner';
+import { createFolder, deleteFolder } from './store/actions/folders';
+import {
+  archiveList,
+  deleteList,
+  duplicateList,
+  unarchiveList,
+  restoreList,
+} from './store/actions/lists';
+import { deleteListForever, emptyTrash } from './store/actions/trash';
+import { lastEntryId, redo, undo, undoEntry, useData } from './store/data';
+import { confirmAction, navigate, openList, startRename, useUI, type View } from './store/ui';
+
+/*
+ * User-facing commands: store actions plus the navigation and toasts that go
+ * with them. Menus, buttons and shortcuts call these.
+ */
+
+const quote = (title: string) => `“${title}”`;
+
+function isLive(listId: string | null | undefined): boolean {
+  const list = listId ? useData.getState().tables.lists[listId] : undefined;
+  return !!list && !list.deletedAt && !list.archivedAt;
+}
+
+/** Where to go when the current list goes away: the default list, or Today. */
+export function homeView(): View {
+  const { defaultListId } = useData.getState().settings;
+  return defaultListId && isLive(defaultListId)
+    ? { kind: 'list', listId: defaultListId }
+    : { kind: 'today' };
+}
+
+function leaveList(id: string): void {
+  const { view } = useUI.getState();
+  if (view.kind === 'list' && view.listId === id) navigate(homeView());
+}
+
+/** A toast whose Undo button reverts exactly the action that was just taken. */
+function toastWithUndo(message: string): void {
+  const entry = lastEntryId();
+  toast(message, {
+    action:
+      entry === null
+        ? undefined
+        : {
+            label: 'Undo',
+            onClick: () => {
+              if (!undoEntry(entry))
+                toast('Other changes have been made since, so use Undo instead.');
+            },
+          },
+  });
+}
+
+export function trashList(id: string): void {
+  const list = useData.getState().tables.lists[id];
+  if (!list) return;
+  deleteList(id);
+  leaveList(id);
+  toastWithUndo(`Moved ${quote(list.title)} to the Trash`);
+}
+
+export function archive(id: string): void {
+  const list = useData.getState().tables.lists[id];
+  if (!list) return;
+  archiveList(id);
+  leaveList(id);
+  toastWithUndo(`Archived ${quote(list.title)}`);
+}
+
+export function unarchive(id: string): void {
+  unarchiveList(id);
+}
+
+export function restore(id: string): void {
+  const list = useData.getState().tables.lists[id];
+  if (!list) return;
+  restoreList(id);
+  toast(`Restored ${quote(list.title)}`, {
+    action: { label: 'Open', onClick: () => openList(id) },
+  });
+}
+
+export function duplicate(id: string): void {
+  const copy = duplicateList(id);
+  if (copy) openList(copy);
+}
+
+export function newFolder(): void {
+  const id = createFolder('New folder');
+  startRename({ kind: 'folder', id });
+}
+
+export function removeFolder(id: string): void {
+  const folder = useData.getState().tables.folders[id];
+  if (!folder) return;
+  deleteFolder(id);
+  toastWithUndo(`Deleted folder ${quote(folder.name)}`);
+}
+
+export function deleteForever(id: string): void {
+  const list = useData.getState().tables.lists[id];
+  if (!list) return;
+  confirmAction({
+    title: `Delete ${quote(list.title)} forever?`,
+    message: 'The list and everything in it will be removed. This can’t be undone.',
+    confirmLabel: 'Delete forever',
+    danger: true,
+    onConfirm: () => {
+      leaveList(id);
+      deleteListForever(id);
+      // Undo buttons on earlier toasts may point at history that's now gone.
+      toast.dismiss();
+    },
+  });
+}
+
+export function confirmEmptyTrash(): void {
+  const count = Object.values(useData.getState().tables.lists).filter((l) => l.deletedAt).length;
+  confirmAction({
+    title: 'Empty the Trash?',
+    message: `${count === 1 ? '1 list and everything in it' : `${count} lists and everything in them`} will be removed. This can’t be undone.`,
+    confirmLabel: 'Empty Trash',
+    danger: true,
+    onConfirm: () => {
+      const { view } = useUI.getState();
+      if (view.kind === 'list' && useData.getState().tables.lists[view.listId]?.deletedAt) {
+        navigate({ kind: 'trash' });
+      }
+      emptyTrash();
+      toast.dismiss();
+    },
+  });
+}
+
+export function undoCommand(): void {
+  const label = undo();
+  if (label) toast(`Undid ${label.toLowerCase()}`, { duration: 2000 });
+}
+
+export function redoCommand(): void {
+  const label = redo();
+  if (label) toast(`Redid ${label.toLowerCase()}`, { duration: 2000 });
+}

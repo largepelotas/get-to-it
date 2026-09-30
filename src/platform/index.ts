@@ -21,3 +21,10 @@ export function createRepository(): Repository {
 export async function appReady(): Promise<void> {
   if (isTauri) await invoke('app_ready');
 }
+
+/** Matches the native window chrome (title bar, traffic lights) to the app theme. */
+export async function setWindowTheme(theme: 'light' | 'dark' | null): Promise<void> {
+  if (!isTauri) return;
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  await getCurrentWindow().setTheme(theme);
+}

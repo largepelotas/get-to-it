@@ -1,11 +1,21 @@
-import { useData } from './store/data';
+import { Dialogs } from './components/dialogs/Dialogs';
+import { MainPane } from './components/MainPane';
+import { Sidebar } from './components/sidebar/Sidebar';
+import { Toaster, TooltipProvider } from './components/ui';
+import { useAppShortcuts } from './hooks/useAppShortcuts';
+import { useApplyTheme } from './hooks/useTheme';
 
-/** Placeholder shell. The real layout (sidebar, list views) arrives in M1. */
 export function App() {
-  const listCount = useData((s) => Object.keys(s.tables.lists).length);
+  useApplyTheme();
+  useAppShortcuts();
   return (
-    <main className="flex h-screen items-center justify-center">
-      <p>Checklist is set up. {listCount} lists stored.</p>
-    </main>
+    <TooltipProvider delayDuration={600}>
+      <div className="flex h-full">
+        <Sidebar />
+        <MainPane />
+      </div>
+      <Dialogs />
+      <Toaster />
+    </TooltipProvider>
   );
 }

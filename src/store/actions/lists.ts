@@ -30,34 +30,40 @@ export interface NewList {
   color?: ColorName | null;
 }
 
-export function createList({ type, title, folderId = null, color = null }: NewList): string {
-  return commit(`New ${LIST_TYPE_LABEL[type].toLowerCase()}`, (tx) => {
-    const existing = listsIn(tx, folderId);
-    const list: List = {
-      id: newId(),
-      folderId,
-      type,
-      title: title?.trim() || (type === 'note' ? 'Untitled note' : LIST_TYPE_LABEL[type]),
-      color,
-      pinned: false,
-      sortKey: keyAt(existing, existing.length),
-      showCompleted: true,
-      archivedAt: null,
-      deletedAt: null,
-      createdAt: tx.now,
+/** Adds a list inside an existing transaction and returns its id. */
+export function insertList(
+  tx: Tx,
+  { type, title, folderId = null, color = null }: NewList,
+): string {
+  const existing = listsIn(tx, folderId);
+  const list: List = {
+    id: newId(),
+    folderId,
+    type,
+    title: title?.trim() || (type === 'note' ? 'Untitled note' : LIST_TYPE_LABEL[type]),
+    color,
+    pinned: false,
+    sortKey: keyAt(existing, existing.length),
+    showCompleted: true,
+    archivedAt: null,
+    deletedAt: null,
+    createdAt: tx.now,
+    updatedAt: tx.now,
+  };
+  tx.put('lists', list);
+  if (type === 'note') {
+    tx.put('notes', {
+      id: list.id,
+      content: JSON.stringify(emptyDoc()),
+      plainText: '',
       updatedAt: tx.now,
-    };
-    tx.put('lists', list);
-    if (type === 'note') {
-      tx.put('notes', {
-        id: list.id,
-        content: JSON.stringify(emptyDoc()),
-        plainText: '',
-        updatedAt: tx.now,
-      });
-    }
-    return list.id;
-  });
+    });
+  }
+  return list.id;
+}
+
+export function createList(list: NewList): string {
+  return commit(`New ${LIST_TYPE_LABEL[list.type].toLowerCase()}`, (tx) => insertList(tx, list));
 }
 
 export function renameList(id: string, title: string): void {

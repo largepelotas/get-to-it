@@ -8,8 +8,9 @@ happens one milestone per chat; update this file at the end of each one.
 | #     | Milestone     | State                                                                  |
 | ----- | ------------- | ---------------------------------------------------------------------- |
 | M0    | Project setup | **Done**                                                               |
-| M1    | App frame     | Next. Folder and list actions already written and tested (see below).  |
-| M2–M8 |               | Not started. Several pure helpers they need already exist (see below). |
+| M1    | App frame     | **Done**                                                               |
+| M2    | To-do lists   | Next (see the end of this file).                                       |
+| M3–M8 |               | Not started. Several pure helpers they need already exist (see below). |
 
 ## How to run
 
@@ -58,8 +59,12 @@ and uploads them as workflow artifacts.
     notification, dialog, opener, clipboard-manager.
     Permissions are in `capabilities/default.json`.
   - macOS uses an overlay title bar (`titleBarStyle: Overlay`, traffic
-    lights at 16,20). **The M1 layout must leave about 28 px at the top of
-    the sidebar and mark drag areas with `data-tauri-drag-region`.**
+    lights at 16,20). The sidebar keeps a 44 px drag strip at the top on
+    macOS (12 px elsewhere), and view headers are drag regions too.
+    `data-tauri-drag-region` only applies to the element that has it, not
+    its children, so put it on empty containers.
+  - `setWindowTheme` (in `platform`) matches the native chrome to the app
+    theme; it needs `core:window:allow-set-theme`.
 
 ### Frontend (`src/`)
 
@@ -87,12 +92,35 @@ and uploads them as workflow artifacts.
   `projectDrop`, which decides where a drag lands in the subtask tree,
   following dnd-kit's tree example.
 - `store/actions/`
-  - `folders.ts`: create, rename, color, collapse, move, delete. Deleting a
-    folder moves its lists to the top level.
-  - `lists.ts`: create (a note list also gets a `notes` row), rename, color,
-    pin, show-completed, move, move to folder, archive, unarchive, delete
-    (soft), restore, duplicate.
+  - `folders.ts`: create (`insertFolder` inside a transaction), rename,
+    color, collapse, move, delete. Deleting a folder moves its lists to the
+    top level.
+  - `lists.ts`: create (`insertList` inside a transaction; a note list also
+    gets a `notes` row), rename, color, pin, show-completed, move, move to
+    folder, archive, unarchive, delete (soft), restore, duplicate.
+  - `trash.ts`: `deleteListForever` and `emptyTrash`, the only hard deletes.
+    Emptying removes trashed lists with their items, reminders, completions
+    and note, plus deleted items and deleted folders everywhere.
   - `helpers.ts`: `keyAt`, `siblings`, `listItems`.
+- `store/data.ts` also prunes history: a non-undoable commit that removes
+  rows drops every undo/redo step touching them, so undo can't bring back
+  half a list after the Trash is emptied.
+- `store/ui.ts`: `useUI` with `view` (today, upcoming, list, archive,
+  trash), `selectedItemId`, `dialog` (new list or a confirmation) and
+  `renaming` (the sidebar row with an inline rename field). Helpers:
+  `navigate`, `openList`, `openDialog`, `confirmAction`, `startRename`.
+- `store/sidebar.ts`: `sidebarModel` (pinned, unfiled, folders, archived,
+  trashed), `openCounts`, `sidebarRows` (the flat draggable rows) and
+  `resolveSidebarDrop`, which turns a dnd-kit drop into a `moveList` or
+  `moveFolder`. A list joins the folder of the row above where it lands.
+- `store/seed.ts`: `seedIfNeeded` creates Inbox, Groceries, a Welcome note
+  and a Work folder on first launch (not undoable), and always makes sure
+  `defaultListId` is set.
+- `commands.ts`: user-facing commands that wrap store actions with
+  navigation and toasts: trash/archive with an Undo toast (`undoEntry`),
+  restore, duplicate, new folder (then inline rename), delete forever and
+  empty Trash behind a confirmation, undo/redo. `homeView()` is where to go
+  when the open list disappears (the default list, else Today).
 - `lib/`
   - `dates.ts`: date keys (`YYYY-MM-DD`, local), formatting, `isOverdue`.
   - `recurrence.ts`: `nextDueDate`, `firstOccurrence`,
@@ -102,8 +130,62 @@ and uploads them as workflow artifacts.
   - `richText.ts`: TipTap JSON to plain text and Markdown, `docFromText`,
     `isDocEmpty`.
   - `order.ts`: fractional sort keys. `id.ts`: ULIDs.
-- `App.tsx` is a placeholder. `styles/index.css` has Tailwind and a couple of
-  starter tokens.
+  - `shortcuts.ts`: `matchesShortcut(event, 'Mod+Shift+Z', isMac)`,
+    `formatShortcut` (⌘⇧Z vs Ctrl+Shift+Z) and `isEditableTarget`.
+  - `theme.ts`: resolve and apply the theme, `colorVar(color)` for list
+    colors, `COLOR_LABEL`.
+- `hooks/`: `useApplyTheme`/`useResolvedTheme`, and `useAppShortcuts`
+  (undo ⌘Z/Ctrl+Z, redo ⌘⇧Z/Ctrl+Shift+Z/Ctrl+Y, ignored in text fields).
+  Add new global shortcuts there.
+
+### Design system
+
+- Tokens are CSS variables in `styles/index.css`, light on `:root` and
+  dark on `[data-theme='dark']`. `<html data-theme>` is set from
+  `settings.theme` (following the OS for "system") before the first paint
+  and by `useApplyTheme`. The `dark:` variant follows `data-theme` too.
+- Tailwind names map to the tokens: `bg-surface`, `bg-sidebar`,
+  `bg-elevated`, `bg-hover`, `bg-selected`, `text-fg`, `text-fg-muted`,
+  `text-fg-subtle`, `border-line`, `border-line-strong`, `bg-accent`,
+  `text-accent-fg`, `bg-accent-soft`, `text-danger`, `bg-danger-soft`,
+  `bg-overlay`, `shadow-popover`. Use these, not raw colors.
+- The 10 list colors are `--list-<name>`; use `colorVar(name)` in a style.
+- Prettier's Tailwind plugin reads `styles/index.css`
+  (`tailwindStylesheet`), so custom classes sort correctly.
+
+### UI kit (`src/components/ui/`)
+
+`Button` (primary, secondary, ghost, danger, danger-secondary), `IconButton`
+(label doubles as tooltip), `Input`, `Select` (native), `Label`, `Dialog`,
+`Menu` and `ContextMenu`, `Popover`, `Tooltip` (+ `TooltipProvider` in
+`App`), `Kbd`, `Swatch`, `Toaster` (sonner).
+
+- Menus take entries as data (`MenuEntry`: item, separator, label, sub), so
+  one builder serves the "…" button and the right-click menu. Pass a
+  function to build them only when the menu opens. Falsy entries and stray
+  separators are dropped.
+- An entry that focuses something itself (Rename) sets `movesFocus`: it
+  runs after the menu closes and the menu doesn't refocus its trigger.
+  Without this, the menu's focus trap steals focus from the new field.
+- `components/menus.tsx` builds the list and folder menus (different
+  entries for archived and trashed lists).
+
+### Screens
+
+- `components/sidebar/`: `Sidebar` (Today, Upcoming, Pinned, Lists tree,
+  Archive, Trash, New list, settings menu with the theme, and a warning
+  icon when saving fails), `ListTree` (dnd-kit; pointer drag after 5 px,
+  keyboard drag with Space so Enter still opens a row; a dragged folder
+  hides its lists), `SidebarItem`, `RenameField` (double-click a list or
+  use Rename).
+- `components/views/`: `ListView` (editable title, "…" menu, banners for
+  archived or trashed lists, placeholder bodies; notes show a read-only
+  `RichTextPreview`), `TodayView` and `UpcomingView` placeholders,
+  `ArchiveView` and `TrashView`.
+- `components/dialogs/Dialogs.tsx`: New list (type, name, folder) and the
+  confirmation dialog, driven by `useUI.dialog`.
+- `MainPane` switches on the view and goes to `homeView()` if the open list
+  stops existing.
 
 ### Conventions
 
@@ -112,8 +194,12 @@ and uploads them as workflow artifacts.
   not `localeCompare`.
 - Due dates are local `dueDate` + optional `dueTime` strings, never timestamps.
 - Prettier: single quotes, 100 columns, Tailwind class sorting.
-- Tests sit next to their code as `*.test.ts`. `tsconfig.test.json` adds Node
+- Tests sit next to their code as `*.test.ts(x)`. `tsconfig.test.json` adds Node
   types, which the SQLite test needs because it uses `node:sqlite`.
+- Component tests use Testing Library (`App.test.tsx` covers the frame end to
+  end). `test/setup.ts` cleans up between tests.
+- UI text uses British spelling ("colour", "Grey"), matching the history
+  labels.
 
 ## Deviations from the plan
 
@@ -123,27 +209,32 @@ and uploads them as workflow artifacts.
   data is all loaded anyway, and it works the same in the browser preview.
 - Repeat rules are stored as JSON (`Recurrence` in `types.ts`), not RRULE
   strings.
+- Pinned lists appear in the Pinned section and also stay in their folder.
+- Emptying the Trash also purges deleted folders and deleted items, not
+  only trashed lists.
 
-## Next: M1 (app frame)
+## Known gaps from M1
 
-1. Design tokens in `styles/index.css`: surfaces, text, border, accent, and
-   the 10 list colors. Light and dark, following `settings.theme` through a
-   `data-theme` attribute on `<html>`.
-2. UI kit in `src/components/ui/` (Button, IconButton, Input, Dialog, Menu,
-   ContextMenu, Popover, Tooltip, Kbd), built on `radix-ui`, with
-   `lucide-react` icons and `sonner` toasts.
-3. A `useUI` store: current view (today, upcoming, list, archive, trash),
-   selected item, open dialogs.
-4. Sidebar with a macOS drag region: Today, Upcoming, Pinned, unfiled lists,
-   folders with their lists, Archive, Trash. dnd-kit to reorder and move
-   lists between folders. Context menus for rename, color, pin, move,
-   duplicate, archive, delete.
-5. A New list dialog (type, name, folder).
-6. Archive and Trash views: restore, delete forever, empty trash (not
-   undoable; hard delete of the list's items, reminders, completions and
-   note).
-7. First-run seed: Inbox, Groceries, a Welcome note, and a Work folder. Set
-   `defaultListId` and `seeded`.
-8. Undo/redo shortcuts, skipped when focus is in an editable field. Toasts
-   with Undo on deletes.
-9. Placeholder main pane for each list type, to be filled in M2, M5 and M6.
+- Folders have no "…" button, so their menu is right-click only (lists have
+  one in the header). Revisit in the M8 accessibility pass.
+- The native window theme and macOS drag strip were checked in code only;
+  the browser preview can't show them. Check them in `npm run app:dev`.
+
+## Next: M2 (to-do lists)
+
+1. Item actions in `store/actions/items.ts`: create (from quick-add text,
+   after the selected item), edit text (coalesce per item), check/uncheck
+   (checking a parent checks its subtasks; set `completedAt`), delete
+   (soft, with its subtasks; Undo toast like `trashList`), indent/outdent
+   (`MAX_DEPTH`, `subtreeHeight`), move up/down, drag moves via
+   `projectDrop` in `store/tree.ts`, priority.
+2. Replace the to-do placeholder in `ListView` (`ListBody`) with the item
+   list: quick-add field at the top, rows built from `buildTree`/`flatten`,
+   a collapsible "Completed" section driven by `list.showCompleted`.
+3. Keyboard: Enter adds below, Tab/Shift+Tab indent, Alt+↑/↓ moves,
+   Backspace on an empty item deletes it, Space toggles the selected item.
+   Use `matchesShortcut` and `isEditableTarget`.
+4. Details panel for `useUI.selectedItemId`: title, notes (TipTap can wait
+   for M6; plain text is fine), priority, subtasks. Due dates, repeat and
+   reminders come in M3/M4.
+5. Undo covers all of it through `commit`.

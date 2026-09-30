@@ -1,23 +1,134 @@
 @import 'tailwindcss';
 
-/* Design tokens. M1 expands these into the full light/dark palette. */
+/* `dark:` follows the resolved theme on <html data-theme>, not the OS directly. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Design tokens. Components use the Tailwind names below (bg-surface,
+ * text-fg-muted, border-line, ...), which point at these variables, so a
+ * theme only has to redefine the variables.
+ */
 :root {
-  color-scheme: light dark;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-  --color-bg: #ffffff;
-  --color-text: #1f2328;
+  color-scheme: light;
+  --surface: #ffffff;
+  --sidebar: #f4f4f6;
+  --elevated: #ffffff;
+  --hover: rgb(0 0 0 / 0.045);
+  --selected: rgb(0 0 0 / 0.075);
+  --fg: #1f2328;
+  --fg-muted: #5c636e;
+  --fg-subtle: #8a9099;
+  --line: #e4e6ea;
+  --line-strong: #d2d6dc;
+  --accent: #2f6fed;
+  --accent-hover: #245fd6;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(47 111 237 / 0.12);
+  --danger: #d33a3a;
+  --danger-hover: #b92f2f;
+  --danger-soft: rgb(211 58 58 / 0.1);
+  --overlay: rgb(15 17 21 / 0.28);
+  --shadow-popover: 0 8px 28px rgb(15 17 21 / 0.14), 0 1px 3px rgb(15 17 21 / 0.08);
+
+  /* The 10 list and folder colours (ColorName in data/types.ts). */
+  --list-red: #e5484d;
+  --list-orange: #f76b15;
+  --list-amber: #e2a336;
+  --list-green: #30a46c;
+  --list-teal: #12a594;
+  --list-blue: #0090ff;
+  --list-indigo: #3e63dd;
+  --list-purple: #8e4ec6;
+  --list-pink: #d6409f;
+  --list-gray: #8b8d98;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #1c1d21;
-    --color-text: #e6e7ea;
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface: #1c1d21;
+  --sidebar: #16171a;
+  --elevated: #26282d;
+  --hover: rgb(255 255 255 / 0.055);
+  --selected: rgb(255 255 255 / 0.1);
+  --fg: #e6e7ea;
+  --fg-muted: #a2a7b1;
+  --fg-subtle: #6e747f;
+  --line: #2d2f35;
+  --line-strong: #3b3e46;
+  --accent: #5b8def;
+  --accent-hover: #74a0f3;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(91 141 239 / 0.18);
+  --danger: #f06464;
+  --danger-hover: #f47d7d;
+  --danger-soft: rgb(240 100 100 / 0.14);
+  --overlay: rgb(0 0 0 / 0.5);
+  --shadow-popover: 0 10px 32px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.06);
+
+  --list-red: #ec5d5e;
+  --list-orange: #ff801f;
+  --list-amber: #f1b54a;
+  --list-green: #3dd68c;
+  --list-teal: #0bd8b6;
+  --list-blue: #3b9eff;
+  --list-indigo: #7b93ff;
+  --list-purple: #b17ee4;
+  --list-pink: #e66bb8;
+  --list-gray: #9b9ca6;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-sidebar: var(--sidebar);
+  --color-elevated: var(--elevated);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-overlay: var(--overlay);
+  --shadow-popover: var(--shadow-popover);
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
   }
-}
 
-body {
-  margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* Desktop app feel: chrome isn't text-selectable and buttons use the arrow cursor. */
+  button,
+  [role='button'],
+  [role='menuitem'] {
+    cursor: default;
+    user-select: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
 }
