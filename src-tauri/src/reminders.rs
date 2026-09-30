@@ -5,7 +5,11 @@
 //! desktop notification and tells the frontend with a `reminder://fired`
 //! event. The thread lives on the native side so a hidden or throttled window
 //! can't delay reminders.
+//!
+//! The frontend may send a reminder again after it has fired but before it
+//! has heard about it; the scheduler remembers what it fired and skips it.
 
+use std::collections::HashSet;
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -34,24 +38,43 @@ struct FiredReminder {
 }
 
 #[derive(Default)]
+struct State {
+    entries: Vec<ScheduledReminder>,
+    /// `(id, at)` of reminders already fired, so sending one again is a no-op.
+    fired: HashSet<(String, i64)>,
+}
+
+#[derive(Default)]
 pub struct Scheduler {
-    entries: Mutex<Vec<ScheduledReminder>>,
+    state: Mutex<State>,
 }
 
 impl Scheduler {
     pub fn replace(&self, entries: Vec<ScheduledReminder>) {
-        if let Ok(mut current) = self.entries.lock() {
-            *current = entries;
-        }
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        let keys: HashSet<(String, i64)> = entries.iter().map(|r| (r.id.clone(), r.at)).collect();
+        // Only what's still being sent needs remembering.
+        state.fired.retain(|key| keys.contains(key));
+        let fired = &state.fired;
+        let pending = entries
+            .into_iter()
+            .filter(|r| !fired.contains(&(r.id.clone(), r.at)))
+            .collect();
+        state.entries = pending;
     }
 
     /// Removes and returns every reminder due at or before `now`.
     pub fn take_due(&self, now: i64) -> Vec<ScheduledReminder> {
-        let Ok(mut entries) = self.entries.lock() else {
+        let Ok(mut state) = self.state.lock() else {
             return Vec::new();
         };
-        let (due, pending): (Vec<_>, Vec<_>) = entries.drain(..).partition(|r| r.at <= now);
-        *entries = pending;
+        let (due, pending): (Vec<_>, Vec<_>) = state.entries.drain(..).partition(|r| r.at <= now);
+        state.entries = pending;
+        for r in &due {
+            state.fired.insert((r.id.clone(), r.at));
+        }
         due
     }
 }
@@ -138,5 +161,27 @@ mod tests {
         scheduler.replace(vec![reminder("a", 100)]);
         scheduler.replace(vec![reminder("b", 100)]);
         assert_eq!(scheduler.take_due(100), vec![reminder("b", 100)]);
+    }
+
+    #[test]
+    fn does_not_fire_a_resent_reminder_twice() {
+        let scheduler = Scheduler::default();
+        scheduler.replace(vec![reminder("a", 100), reminder("b", 500)]);
+        assert_eq!(scheduler.take_due(100), vec![reminder("a", 100)]);
+        scheduler.replace(vec![reminder("a", 100), reminder("b", 500)]);
+        assert!(scheduler.take_due(200).is_empty());
+        // A new fire time for the same reminder (snoozed) fires.
+        scheduler.replace(vec![reminder("a", 300), reminder("b", 500)]);
+        assert_eq!(scheduler.take_due(300), vec![reminder("a", 300)]);
+    }
+
+    #[test]
+    fn forgets_fired_reminders_that_are_no_longer_sent() {
+        let scheduler = Scheduler::default();
+        scheduler.replace(vec![reminder("a", 100)]);
+        scheduler.take_due(100);
+        scheduler.replace(vec![]);
+        scheduler.replace(vec![reminder("a", 100)]);
+        assert_eq!(scheduler.take_due(100), vec![reminder("a", 100)]);
     }
 }

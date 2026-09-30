@@ -11,8 +11,9 @@ happens one milestone per chat; update this file at the end of each one.
 | M1    | App frame     | **Done**                                                               |
 | M2    | To-do lists   | **Done**                                                               |
 | M3    | Due dates     | **Done**                                                               |
-| M4    | Reminders     | Next (see the end of this file).                                       |
-| M5–M8 |               | Not started. Several pure helpers they need already exist (see below). |
+| M4    | Reminders     | **Done**                                                               |
+| M5    | Grocery lists | Next (see the end of this file).                                       |
+| M6–M8 |               | Not started. Several pure helpers they need already exist (see below). |
 
 ## How to run
 
@@ -41,7 +42,10 @@ and uploads them as workflow artifacts.
 - `reminders.rs`: `set_reminder_schedule([{id, at, title, body}])`. A thread
   checks every second, shows a native notification and emits
   `reminder://fired` with `{id, at}`. The frontend owns all reminder logic
-  and only hands over future fire times (to be wired up in M4).
+  and hands over fire times (`store/reminderScheduler.ts`). The scheduler
+  remembers which `(id, at)` pairs it fired and ignores them if they're sent
+  again, since the frontend may resend one before it hears it fired; it
+  forgets a pair once it's no longer sent.
 - `files.rs`: `write_text_file`, `read_text_file`, `write_files(dir, files)`
   (relative paths only), `write_backup(name, contents, keep)` (into
   `<app data>/backups`, keeps the newest `keep`), `open_backups_folder`.
@@ -52,10 +56,8 @@ and uploads them as workflow artifacts.
   - Closing the window hides it to the tray while `set_close_to_tray(true)`
     (the default). Otherwise closing quits.
   - Quitting (tray Quit, Cmd+Q) emits `app://quit-requested`. The frontend
-    should flush saves and call `quit_app`. The app exits anyway after 3 s.
-    **The frontend listener is not written yet** (M4). Until then quitting
-    takes 3 s, but saves are flushed within 150 ms of each change, so
-    nothing is lost.
+    (`useAppLifecycle`) flushes saves and calls `quit_app`. The app exits
+    anyway after 3 s.
   - Launch at login passes `--hidden`, so the app starts in the tray.
   - Plugins: single-instance, autostart, window-state (not visibility),
     notification, dialog, opener, clipboard-manager.
@@ -78,8 +80,15 @@ and uploads them as workflow artifacts.
     `PRAGMA user_version`. Hard deletes write a `tombstones` row.
   - `localStorage.ts`: browser preview.
   - `memory.ts`: tests.
-- `platform/index.ts`: `isTauri`, `isMac`, `createRepository()`, `appReady()`.
+- `platform/index.ts`: `isTauri`, `isMac`, `createRepository()`, `appReady()`,
+  `setWindowTheme`, and since M4 `setReminderSchedule`, `onReminderFired`,
+  `requestNotificationPermission`, `notify`, `setCloseToTray`,
+  `getLaunchAtLogin` (null in the browser), `setLaunchAtLogin`,
+  `onQuitRequested`, `quitApp` and `setTrayTooltip`. Native events go
+  through `listenNative`, which returns an unsubscribe function right away.
   Put every other native call here too, with a browser fallback.
+  - `browserScheduler.ts`: the browser preview's copy of the native
+    scheduler (1 s tick, the Notification API, the same resend rule).
 - `store/data.ts`: Zustand store `useData` holding `{ tables, settings, past, future, saveError }`.
   - **All data changes go through `commit(label, tx => ..., { coalesce?, undoable? })`.**
     It applies changes, queues saves (150 ms debounce, writes to the same row
@@ -130,7 +139,19 @@ and uploads them as workflow artifacts.
     open top-level tasks as separate groups, since they're shown in
     separate sections. An open task never sits under a finished one: adding,
     moving or reopening a subtask reopens its ancestors.
+  - `reminders.ts`: `addReminder(itemId, spec)` (relative
+    `{offsetMinutes}` or absolute `{at}`; an identical reminder isn't added
+    twice) and `removeReminder`, both undoable. Bookkeeping, outside undo
+    history: `markFired`, `markSkipped`, `dismissReminders`,
+    `snoozeReminder(id, '10m' | '1h' | 'tomorrow')`. `clearSnoozes(tx,
+itemId)` runs from every due-date change in `items.ts` (set, clear,
+    time, move, repeat, completing an occurrence), so an old snooze can't
+    hold back the reminder for a new date.
   - `helpers.ts`: `keyAt`, `siblings`, `listItems`.
+- `commit`, `undo` and `redo` queue their save **before** updating the
+  store. Store listeners may commit in response (the reminder scheduler
+  does), and that newer write has to be queued last or the older row
+  overwrites it on disk.
 - `store/data.ts` also prunes history: a non-undoable commit that removes
   rows drops every undo/redo step touching them, so undo can't bring back
   half a list after the Trash is emptied.
@@ -139,10 +160,22 @@ and uploads them as workflow artifacts.
   sorted by date, then timed before untimed, then priority, then list and
   position. `todayModel` (overdue, today), `upcomingModel` (groups by day,
   after today only) and `todayCount` (the sidebar badge).
-- `store/ui.ts`: `useUI` with `view` (today, upcoming, list, archive,
-  trash), `selectedItemId`, `detailsOpen`, `duePickerFor` (the item whose
+- `store/reminderScheduler.ts`: `startReminderScheduler({ setSchedule,
+onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
+  start and on every change to items, lists, reminders or the all-day time
+  it runs `planSchedule` and sends every upcoming fire time. Fired events
+  call `markFired`. Past, undelivered reminders are handled three ways:
+  at launch they're **missed** (marked fired so they land in the inbox, and
+  `announceMissed` shows a toast plus one native notification); if they
+  were in the last schedule they're sent again (the scheduler is firing
+  them); otherwise an edit put them in the past (a reminder added for a
+  time that's gone, a due date moved back, a task reopened or restored)
+  and they're **skipped**: marked done without firing. Marking commits
+  from inside the store listener, so passes repeat until nothing changes.
+- `store/ui.ts`: `useUI` with `view` (today, upcoming, reminders, list,
+  archive, trash), `selectedItemId`, `detailsOpen`, `duePickerFor` (the item whose
   due-date popover is open in the details panel; `pickDueDate(id)` opens
-  the panel with it), `dialog` (new list or a
+  the panel with it), `dialog` (new list, settings or a
   confirmation) and `renaming` (the sidebar row with an inline rename
   field). Helpers: `navigate` (clears the selection and closes details),
   `openList`, `selectItem`, `openDetails`, `closeDetails`, `openDialog`,
@@ -161,6 +194,9 @@ and uploads them as workflow artifacts.
   and `toggleItem(id, checked, { announce })`, which every checkbox uses: a
   repeating task gets a "next due on Friday" toast with Undo, and
   `announce` (Today/Upcoming) confirms ordinary completions the same way.
+  Reminders: `remind` (adds, and asks for notification permission),
+  `snooze` (toast with the new time), `dismiss`, `completeFromReminder`
+  (dismisses, then `toggleItem` with `announce`) and `announceMissed`.
   `homeView()` is where to go when the open list disappears (the default
   list, else Today).
 - `lib/`
@@ -170,6 +206,15 @@ and uploads them as workflow artifacts.
     `msUntilTomorrow`.
   - `recurrence.ts`: `nextDueDate`, `firstOccurrence`,
     `describeRecurrence`, `sanitizeRecurrence`.
+  - `reminders.ts`: `fireTime` (relative: the due moment, at `dueTime` or
+    `settings.allDayReminderTime`, minus `offsetMinutes`; absolute: `at`;
+    a later `snoozedUntil` wins), `reminderState(r, at, now)` (scheduled,
+    due, fired, done: `firedFor`/`dismissedFor` hold the fire time they were
+    for, so a moved date resets them), `isRemindable` (open task, live
+    list), `reminderEntries` (soonest first), `inboxEntries` (fired, newest
+    first), `planSchedule`, `notificationFor`, the presets
+    (`TIMED_PRESETS`, `ALL_DAY_PRESETS`, `presetsFor`), `describeReminder`,
+    `formatOffset` and `snoozeUntil`.
   - `quickAdd.ts`: `parseQuickAdd`, which reads date, time, repeat and
     priority, and returns preview chips.
   - `richText.ts`: TipTap JSON to plain text and Markdown, `docFromText`,
@@ -180,9 +225,14 @@ and uploads them as workflow artifacts.
   - `theme.ts`: resolve and apply the theme, `colorVar(color)` for list
     colors, `COLOR_LABEL`.
 - `hooks/`: `useApplyTheme`/`useResolvedTheme`, `useToday` (today's date
-  key; re-renders at midnight and on window focus), and `useAppShortcuts`
-  (undo ⌘Z/Ctrl+Z, redo ⌘⇧Z/Ctrl+Shift+Z/Ctrl+Y, ignored in text fields).
-  Add new global shortcuts there.
+  key; re-renders at midnight and on window focus), `useNow` (the time to
+  the minute, for render code: the React lint rejects `Date.now()` in
+  render), `useReminderScheduler` and `useReminderEntries` (`{ all, inbox
+}`), `useAppLifecycle` (close to tray follows the setting, the quit
+  listener, and the tray tooltip: "Checklist · 3 due today, 1 reminder"),
+  and `useAppShortcuts` (undo ⌘Z/Ctrl+Z, redo ⌘⇧Z/Ctrl+Shift+Z/Ctrl+Y,
+  ignored in text fields; ⌘,/Ctrl+, opens Settings from anywhere). Add new
+  global shortcuts there.
 
 ### Design system
 
@@ -218,9 +268,9 @@ and uploads them as workflow artifacts.
 
 ### Screens
 
-- `components/sidebar/`: `Sidebar` (Today, Upcoming, Pinned, Lists tree,
-  Archive, Trash, New list, settings menu with the theme, and a warning
-  icon when saving fails), `ListTree` (dnd-kit; pointer drag after 5 px,
+- `components/sidebar/`: `Sidebar` (Today, Upcoming, Reminders with the
+  inbox count, Pinned, Lists tree, Archive, Trash, New list, settings menu
+  with the theme and "Settings…", and a warning icon when saving fails), `ListTree` (dnd-kit; pointer drag after 5 px,
   keyboard drag with Space so Enter still opens a row; a dragged folder
   hides its lists), `SidebarItem`, `RenameField` (double-click a list or
   use Rename).
@@ -231,7 +281,10 @@ and uploads them as workflow artifacts.
   today", then Today; `UpcomingView`: a section per day. Both have a
   quick-add into `settings.defaultListId`, falling back to any live to-do
   list, with a default due date of today or tomorrow, and the details
-  panel), `ArchiveView` and `TrashView`.
+  panel), `RemindersView` ("Reminded": the inbox, newest first, with
+  Complete, a Snooze menu and Dismiss per row and "Dismiss all"; "Coming
+  up": scheduled reminders; clicking a row opens the details panel),
+  `ArchiveView` and `TrashView`.
 - `components/items/` (to-do lists):
   - `TodoList`: quick-add, open rows (dnd-kit sortable), the inline
     new-task field ("draft"), and the collapsible Completed section
@@ -268,6 +321,12 @@ and uploads them as workflow artifacts.
     stored as a TipTap doc, subtasks with "Add subtask", completion
     history for repeating tasks (newest first, five then "Show all"), a
     link up to the parent, created/completed time, Delete).
+  - `ReminderField` (in `ItemDetails`, under Due): the task's reminders
+    with their fire times (greyed once passed, "Snoozed to …", "Needs a due
+    date"), a remove button, and an "Add reminder" menu with the presets
+    for timed or all-day tasks (disabled without a due date, checked when
+    already set) and "Custom date and time…", an inline `datetime-local`
+    field.
   - Two keyboard modes. **Text mode** (focus in a task's text): Enter opens
     the new-task field below, Backspace in an empty task without subtasks
     deletes it, ↑/↓ go to the row above/below, Mod+Enter toggles, Escape
@@ -284,7 +343,10 @@ and uploads them as workflow artifacts.
     dnd-kit modifier, because modifiers also zero the `delta.x` that
     `projectDrop` needs.
 - `components/dialogs/Dialogs.tsx`: New list (type, name, folder) and the
-  confirmation dialog, driven by `useUI.dialog`.
+  confirmation dialog, driven by `useUI.dialog`. `SettingsDialog.tsx`:
+  theme, week start, reading dates in new tasks, the all-day reminder
+  time, close to tray, and open at login (read from and written to the
+  autostart plugin, not stored in settings; disabled in the browser).
 - `MainPane` switches on the view and goes to `homeView()` if the open list
   stops existing.
 
@@ -332,6 +394,19 @@ and uploads them as workflow artifacts.
 - Clearing a due date also removes the repeat, since a repeat counts from
   the due date.
 - Today has a "Move to today" button for overdue tasks (not in the plan).
+- The reminder inbox is a Reminders view in the sidebar, which also lists
+  the reminders still to come.
+- All-day tasks get their own presets (on the day, 1 or 2 days, 1 week
+  before, at the all-day time) instead of minute offsets. A custom reminder
+  is a fixed moment and works on undated tasks too.
+- A reminder that's already in the past when it's added, or that an edit
+  moves into the past, is skipped rather than fired. Only reminders whose
+  time passes while scheduled (or while the app is closed) go off.
+- Missed reminders get a toast and one summary notification, not one
+  notification each.
+- Settings are a dialog (⌘,/Ctrl+,) rather than only the sidebar menu.
+- Duplicating a list doesn't copy reminders, so the copy doesn't notify
+  twice.
 
 ## Known gaps
 
@@ -346,6 +421,20 @@ From M2:
   before), mostly chrono-node, which quick-add now pulls in. After M3 the
   main chunk is 614 kB, with the due-date picker split out (54 kB). TipTap
   will add more in M6. Consider more code-splitting in M8.
+
+From M4:
+
+- Desktop notifications can't be clicked to open the task, and have no
+  Snooze or Complete buttons: the notification plugin doesn't support
+  actions on desktop. Both live in the Reminders view.
+- Task rows don't show that a task has a reminder; only the details panel
+  and the Reminders view do.
+- After the computer sleeps through several reminders, they all fire on
+  wake.
+- The native side (notifications, tray tooltip, close to tray, launch at
+  login, the quit handshake) was checked in code and `cargo test`/`clippy`
+  only, since this environment can't run the desktop app. Check it in
+  `npm run app:dev`, including the macOS notification permission prompt.
 
 From M3:
 
@@ -364,32 +453,30 @@ From M1:
 - The native window theme and macOS drag strip were checked in code only;
   the browser preview can't show them. Check them in `npm run app:dev`.
 
-## Next: M4 (reminders, tray, launch at login, missed reminders, snooze)
+## Next: M5 (grocery lists)
 
-The native side is ready (`reminders.rs`, `tray.rs`, the autostart plugin,
-close-to-tray); M4 is mostly frontend.
+The data model is ready: `Item.quantity` and `Item.category` exist, and
+`settings.groceryCategories` holds the default categories. `ListView`
+shows a placeholder for grocery lists.
 
-1. A pure `lib/reminders.ts`: the fire time of a `Reminder` for its item.
-   Relative: the due moment (`dueTime`, or `settings.allDayReminderTime`
-   for all-day tasks) minus `offsetMinutes`; absolute: `at`;
-   `snoozedUntil` wins while it's later. No fire time for undated,
-   checked, deleted or archived/trashed tasks. Because a repeating task's
-   `dueDate` moves when it's checked, the fire time moves with it, and
-   `firedFor`/`dismissedFor` (stored per fire time) reset by themselves.
-2. `store/actions/reminders.ts`: add a preset (at due time, 5/15/30 min,
-   1 hour, 1 day before) or a custom moment, remove, snooze (10 min,
-   1 hour, tomorrow at the all-day time), dismiss, mark fired. Reminders are
-   rows in `tables.reminders`; trash purging already removes them.
-3. A scheduler hook in `App`: whenever items, reminders or settings change,
-   send the future fire times to `set_reminder_schedule` (add a `platform`
-   wrapper; in the browser, fall back to `setTimeout` + the Notification
-   API). Listen for `reminder://fired` and set `firedFor`.
-4. Missed reminders: at launch, fire times in the past that were never
-   delivered get a summary (toast or dialog) and go to the inbox.
-5. An in-app inbox of fired, undismissed reminders (a sidebar entry with a
-   count, or a popover) with Snooze, Complete (`toggleItem`) and Dismiss.
-6. A Reminders section in `ItemDetails` (under Due) and settings for close
-   to tray, launch at login and the all-day reminder time.
-7. The quit listener: on `app://quit-requested`, `flushWrites()` then
-   `quit_app`. Optionally set the tray tooltip (`set_tray_tooltip`) to
-   what's due today, using `todayCount`.
+1. A pure `store/grocery.ts`: split a grocery list's live items into
+   category groups (in `settings.groceryCategories` order, then
+   "Other" for missing or unknown categories) plus an "In cart" section
+   for checked items. Grocery items are flat (no subtasks).
+2. Actions in `store/actions/items.ts` (or a new `grocery.ts`):
+   `setQuantity`, `setCategory`, `uncheckAll(listId)` and
+   `clearChecked(listId)` (soft delete, with an Undo toast via
+   `commands.ts`).
+3. Quick-add for groceries: read a leading or trailing quantity ("2 lemons",
+   "milk 1 l"), and guess the category from the item name (a small keyword
+   table per default category, plus what the same name was filed under
+   before in any grocery list).
+4. `GroceryList` component: quick-add, category sections with rows
+   (checkbox, name, quantity, category menu), the collapsible "In cart"
+   section, and header actions for Uncheck all and Clear checked. Reuse
+   `Checkbox`, the row keyboard handling ideas from `TodoList`, and
+   dnd-kit to reorder within a category.
+5. An editor for categories (rename, add, remove, reorder) in the
+   Settings dialog.
+6. Tests: the grouping model, quantity parsing, the actions, and a
+   component test for adding, checking into the cart and clearing.

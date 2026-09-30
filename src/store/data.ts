@@ -114,6 +114,9 @@ export function commit<R>(label: string, fn: (tx: Tx) => R, options: CommitOptio
   if (!changes.length) return result;
 
   const tables = applyChanges(state.tables, changes, 'after');
+  // Queue the save before updating the store: a listener may commit in
+  // response (reminder bookkeeping), and its newer write must win.
+  queue(toOps(changes, 'after'));
   if (options.undoable === false) {
     const removed = new Set(changes.filter((c) => !c.after).map((c) => `${c.table}:${c.id}`));
     useData.setState(removed.size ? { tables, ...pruneHistory(state, removed) } : { tables });
@@ -132,7 +135,6 @@ export function commit<R>(label: string, fn: (tx: Tx) => R, options: CommitOptio
         : [...state.past, entry].slice(-HISTORY_LIMIT);
     useData.setState({ tables, past, future: [] });
   }
-  queue(toOps(changes, 'after'));
   return result;
 }
 
@@ -158,12 +160,12 @@ export function undo(): string | null {
   const entry = state.past[state.past.length - 1];
   if (!entry) return null;
   const now = Date.now();
+  queue(toOps(entry.changes, 'before', now));
   useData.setState({
     tables: applyChanges(state.tables, entry.changes, 'before', now),
     past: state.past.slice(0, -1),
     future: [...state.future, entry],
   });
-  queue(toOps(entry.changes, 'before', now));
   return entry.label;
 }
 
@@ -172,12 +174,12 @@ export function redo(): string | null {
   const entry = state.future[state.future.length - 1];
   if (!entry) return null;
   const now = Date.now();
+  queue(toOps(entry.changes, 'after', now));
   useData.setState({
     tables: applyChanges(state.tables, entry.changes, 'after', now),
     past: [...state.past, entry],
     future: state.future.slice(0, -1),
   });
-  queue(toOps(entry.changes, 'after', now));
   return entry.label;
 }
 

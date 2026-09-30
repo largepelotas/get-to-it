@@ -7,8 +7,16 @@ import {
   unarchiveList,
   restoreList,
 } from './store/actions/lists';
-import { formatDateKey } from './lib/dates';
+import { formatDateKey, formatTimestamp } from './lib/dates';
+import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
+import { notify, requestNotificationPermission } from './platform';
 import { deleteItems, setChecked } from './store/actions/items';
+import {
+  addReminder,
+  dismissReminders,
+  snoozeReminder,
+  type ReminderSpec,
+} from './store/actions/reminders';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import { lastEntryId, redo, undo, undoEntry, useData } from './store/data';
 import { confirmAction, navigate, openList, startRename, useUI, type View } from './store/ui';
@@ -174,4 +182,42 @@ export function undoCommand(): void {
 export function redoCommand(): void {
   const label = redo();
   if (label) toast(`Redid ${label.toLowerCase()}`, { duration: 2000 });
+}
+
+/** Adds a reminder, asking for notification permission the first time. */
+export function remind(itemId: string, spec: ReminderSpec): void {
+  if (addReminder(itemId, spec)) void requestNotificationPermission();
+}
+
+export function snooze(reminderId: string, choice: SnoozeChoice): void {
+  const until = snoozeReminder(reminderId, choice);
+  toast(`Snoozed until ${formatTimestamp(until).replace(/^Today /, '')}`, { duration: 2500 });
+}
+
+export function dismiss(reminderIds: string[]): void {
+  dismissReminders(reminderIds);
+}
+
+/** Completes the task a reminder is for, and clears the reminder. */
+export function completeFromReminder(reminderId: string, itemId: string): void {
+  dismissReminders([reminderId]);
+  toggleItem(itemId, true, { announce: true });
+}
+
+/** Tells the user about reminders that passed while the app was closed. */
+export function announceMissed(entries: ReminderEntry[]): void {
+  const title = entries.length === 1 ? 'Missed reminder' : `You missed ${entries.length} reminders`;
+  const body =
+    entries.length === 1
+      ? entries[0].item.text
+      : entries
+          .slice(0, 3)
+          .map((e) => e.item.text)
+          .join(', ') + (entries.length > 3 ? '…' : '');
+  toast(title, {
+    description: body,
+    duration: 10_000,
+    action: { label: 'Show', onClick: () => navigate({ kind: 'reminders' }) },
+  });
+  void notify(title, body);
 }

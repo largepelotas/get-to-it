@@ -23,6 +23,18 @@ beforeEach(() => {
 const lists = () => useData.getState().tables.lists;
 
 describe('commit and history', () => {
+  it('saves the newer write when a listener commits in response to a change', async () => {
+    const id = createList({ type: 'todo', title: 'Inbox' });
+    const stop = useData.subscribe((state) => {
+      if (state.tables.lists[id]?.title === 'Renamed') renameList(id, 'Renamed again');
+    });
+    renameList(id, 'Renamed');
+    stop();
+    expect(lists()[id].title).toBe('Renamed again');
+    await flushWrites();
+    expect((await repo.load()).tables.lists[id].title).toBe('Renamed again');
+  });
+
   it('applies changes, saves them, and undoes/redoes', async () => {
     const id = createList({ type: 'todo', title: 'Inbox' });
     expect(lists()[id].title).toBe('Inbox');

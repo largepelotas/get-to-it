@@ -7,6 +7,7 @@ import { bySortKey } from '@/lib/order';
 import { createList, LIST_TYPE_LABEL } from '@/store/actions/lists';
 import { useData } from '@/store/data';
 import { closeDialog, openList, useUI, type DialogState } from '@/store/ui';
+import { SettingsDialog } from './SettingsDialog';
 
 const TYPES: ListType[] = ['todo', 'grocery', 'note'];
 
@@ -143,5 +144,6 @@ export function Dialogs() {
   const dialog = useUI((s) => s.dialog);
   if (!dialog) return null;
   if (dialog.kind === 'newList') return <NewListDialog dialog={dialog} />;
+  if (dialog.kind === 'settings') return <SettingsDialog />;
   return <ConfirmDialog dialog={dialog} />;
 }

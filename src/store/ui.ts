@@ -4,12 +4,14 @@ import type { ListType } from '@/data/types';
 export type View =
   | { kind: 'today' }
   | { kind: 'upcoming' }
+  | { kind: 'reminders' }
   | { kind: 'list'; listId: string }
   | { kind: 'archive' }
   | { kind: 'trash' };
 
 export type DialogState =
   | { kind: 'newList'; folderId: string | null; type?: ListType }
+  | { kind: 'settings' }
   | {
       kind: 'confirm';
       title: string;

@@ -9,6 +9,7 @@ import { commit, useData } from '../data';
 import type { Tx } from '../history';
 import { depthOf, descendantIds, MAX_DEPTH, subtreeHeight } from '../tree';
 import { itemIndex, keyAt, listItems, siblings } from './helpers';
+import { clearSnoozes } from './reminders';
 
 export interface NewItem {
   text: string;
@@ -135,10 +136,10 @@ export function setPriority(id: string, priority: Priority): void {
 }
 
 export function clearDue(id: string): void {
-  commit(
-    'Clear due date',
-    (tx) => void tx.update('items', id, { dueDate: null, dueTime: null, recurrence: null }),
-  );
+  commit('Clear due date', (tx) => {
+    tx.update('items', id, { dueDate: null, dueTime: null, recurrence: null });
+    clearSnoozes(tx, id);
+  });
 }
 
 /**
@@ -147,14 +148,10 @@ export function clearDue(id: string): void {
  */
 export function setDue(id: string, dueDate: string | null, dueTime: string | null = null): void {
   if (!dueDate || !isDateKey(dueDate)) return clearDue(id);
-  commit(
-    'Due date',
-    (tx) =>
-      void tx.update('items', id, {
-        dueDate,
-        dueTime: isTimeString(dueTime) ? dueTime : null,
-      }),
-  );
+  commit('Due date', (tx) => {
+    tx.update('items', id, { dueDate, dueTime: isTimeString(dueTime) ? dueTime : null });
+    clearSnoozes(tx, id);
+  });
 }
 
 /** Moves tasks to a new day, keeping their times (Today's "Reschedule" for overdue tasks). */
@@ -162,7 +159,9 @@ export function moveDueDates(ids: string[], dueDate: string): void {
   if (!isDateKey(dueDate)) return;
   commit(ids.length === 1 ? 'Due date' : 'Reschedule tasks', (tx) => {
     for (const id of ids) {
-      if (tx.get('items', id)?.dueDate) tx.update('items', id, { dueDate });
+      if (!tx.get('items', id)?.dueDate) continue;
+      tx.update('items', id, { dueDate });
+      clearSnoozes(tx, id);
     }
   });
 }
@@ -180,6 +179,7 @@ export function setDueTime(id: string, dueTime: string | null): void {
         dueDate: item.dueDate ?? todayKey(new Date(tx.now)),
         dueTime: time,
       });
+      clearSnoozes(tx, id);
     },
     // Typing in a time field sends a change per keystroke.
     { coalesce: `item-time:${id}` },
@@ -198,6 +198,7 @@ export function setRecurrence(id: string, rule: Recurrence | null): void {
     if (!clean) return void tx.update('items', id, { recurrence: null });
     const from = item.dueDate ?? todayKey(new Date(tx.now));
     tx.update('items', id, { recurrence: clean, dueDate: firstOccurrence(clean, from) });
+    clearSnoozes(tx, id);
   });
 }
 
@@ -218,6 +219,7 @@ function completeOccurrence(tx: Tx, item: Item): string {
     completedAt: tx.now,
   });
   tx.update('items', item.id, { dueDate: next });
+  clearSnoozes(tx, item.id);
   for (const childId of descendantIds(itemIndex(tx, item.listId), item.id)) {
     if (tx.get('items', childId)?.checked) {
       tx.update('items', childId, { checked: false, completedAt: null });

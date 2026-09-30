@@ -1,12 +1,14 @@
 import clsx from 'clsx';
 import {
   Archive,
+  Bell,
   CalendarDays,
   Ellipsis,
   FolderPlus,
   Monitor,
   Moon,
   Plus,
+  Settings as SettingsIcon,
   Sun,
   Trash,
   TriangleAlert,
@@ -17,6 +19,8 @@ import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
 import { Button, ContextMenu, IconButton, Menu, Tooltip, type MenuEntries } from '@/components/ui';
 import type { Settings } from '@/data/types';
+import { SETTINGS_SHORTCUT } from '@/hooks/useAppShortcuts';
+import { useReminderEntries } from '@/hooks/useReminders';
 import { useToday } from '@/hooks/useToday';
 import { colorVar } from '@/lib/theme';
 import { isMac } from '@/platform';
@@ -46,6 +50,13 @@ function settingsEntries(theme: Settings['theme']): MenuEntries {
       checked: theme === t.value,
       onSelect: () => setSetting('theme', t.value),
     })),
+    { kind: 'separator' },
+    {
+      label: 'Settings…',
+      icon: <SettingsIcon className="size-3.5" />,
+      shortcut: SETTINGS_SHORTCUT,
+      onSelect: () => openDialog({ kind: 'settings' }),
+    },
   ];
 }
 
@@ -62,6 +73,7 @@ export function Sidebar() {
   const counts = useMemo(() => openCounts(items), [items]);
   const today = useToday();
   const dueToday = useMemo(() => todayCount(dueRows(items, lists), today), [items, lists, today]);
+  const reminded = useReminderEntries().inbox.length;
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar">
@@ -81,6 +93,13 @@ export function Sidebar() {
           label="Upcoming"
           active={view.kind === 'upcoming'}
           onClick={() => navigate({ kind: 'upcoming' })}
+        />
+        <SidebarItem
+          icon={<Bell className={navIcon} style={{ color: colorVar('purple') }} />}
+          label="Reminders"
+          count={reminded}
+          active={view.kind === 'reminders'}
+          onClick={() => navigate({ kind: 'reminders' })}
         />
 
         {model.pinned.length > 0 && (

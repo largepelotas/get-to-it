@@ -3,6 +3,7 @@ import { homeView } from '@/commands';
 import { useData } from '@/store/data';
 import { navigate, useUI } from '@/store/ui';
 import { ListView } from './views/ListView';
+import { RemindersView } from './views/RemindersView';
 import { TodayView, UpcomingView } from './views/SmartViews';
 import { ArchiveView, TrashView } from './views/StoredLists';
 
@@ -22,6 +23,8 @@ export function MainPane() {
         <ListView key={view.listId} listId={view.listId} />
       ) : view.kind === 'upcoming' ? (
         <UpcomingView />
+      ) : view.kind === 'reminders' ? (
+        <RemindersView />
       ) : view.kind === 'archive' ? (
         <ArchiveView />
       ) : view.kind === 'trash' ? (

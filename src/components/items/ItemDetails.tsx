@@ -20,6 +20,7 @@ import { childrenIndex, depthOf, MAX_DEPTH } from '@/store/tree';
 import { closeDetails, openDetails, setDuePickerFor, useUI } from '@/store/ui';
 import { Checkbox } from './Checkbox';
 import { PRIORITIES, PRIORITY_COLOR, PRIORITY_LABEL } from './priority';
+import { ReminderField } from './ReminderField';
 
 // The calendar is only needed once the picker opens, so it loads separately.
 const DuePicker = lazy(() => import('./DuePicker').then((m) => ({ default: m.DuePicker })));
@@ -281,6 +282,8 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
         </div>
 
         <DueField item={item} readOnly={readOnly} />
+
+        <ReminderField key={item.id} item={item} readOnly={readOnly} />
 
         <div>
           <SectionLabel>Priority</SectionLabel>
