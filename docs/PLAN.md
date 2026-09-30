@@ -6,19 +6,19 @@ mobile.
 
 ## Decisions
 
-| Topic | Decision |
-|---|---|
-| Platform | Desktop app with **Tauri 2**. The UI is React, so it can be reused for web or mobile builds later. |
-| Operating systems | macOS (Apple silicon + Intel) and Windows |
-| Audience | A single user for now: unsigned builds, no auto-update |
-| Data | Stored on the computer in SQLite. Built so sync can be added later without a rewrite. |
-| Structure | Each list is one type: to-do, grocery or note |
-| v1 extras | Due dates, reminders, recurring tasks, subtasks with task details, folders |
-| Grouping | Folders (one folder per list, shown in the sidebar). Tags may come later. |
+| Topic             | Decision                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| Platform          | Desktop app with **Tauri 2**. The UI is React, so it can be reused for web or mobile builds later. |
+| Operating systems | macOS (Apple silicon + Intel) and Windows                                                          |
+| Audience          | A single user for now: unsigned builds, no auto-update                                             |
+| Data              | Stored on the computer in SQLite. Built so sync can be added later without a rewrite.              |
+| Structure         | Each list is one type: to-do, grocery or note                                                      |
+| v1 extras         | Due dates, reminders, recurring tasks, subtasks with task details, folders                         |
+| Grouping          | Folders (one folder per list, shown in the sidebar). Tags may come later.                          |
 
 ## Stack
 
-- **Shell:** Tauri 2 with the official plugins for SQLite, notifications,
+- **Shell:** Tauri 2, with SQLite through `rusqlite` behind two small commands, and the official plugins for notifications,
   launch at login, window state, dialogs, opening links and the clipboard. The
   tray icon is built into Tauri.
 - **UI:** React, TypeScript and Vite.
@@ -64,6 +64,7 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 ## Features
 
 ### To-do lists
+
 - Quick-add understands typed dates, repeats and priority, e.g.
   "Review deck tomorrow 3pm", "Standup every weekday 9:30", "Pay invoice p1".
   A preview shows what was understood.
@@ -77,6 +78,7 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
   history.
 
 ### Recurring tasks
+
 - Checking a recurring task moves its due date to the next occurrence, resets
   its subtasks and records the completion.
 - Rules: daily, weekdays, weekly on chosen days, monthly, yearly, every N.
@@ -84,6 +86,7 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
   finish.
 
 ### Reminders
+
 - Presets: at the due time, 5/15/30 minutes before, 1 hour before, 1 day
   before, or a custom date and time. For all-day tasks, reminders use a default
   time (09:00, set in Settings).
@@ -96,22 +99,26 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
   tomorrow), Complete and Dismiss.
 
 ### Smart views
+
 - **Today:** overdue and due-today tasks from every to-do list.
 - **Upcoming:** future tasks grouped by day.
 
 ### Grocery lists
+
 - Quantity and category per item. Items are grouped by category, from a
   default set you can edit.
 - Checked items move to an "In cart" section.
 - **Uncheck all** to reuse a list, **Clear checked** to remove bought items.
 
 ### Notes
+
 - TipTap editor with a toolbar and Markdown-style shortcuts.
 - Headings, bold, italic, underline, strikethrough, inline code, bullet and
   numbered lists, inline checklists, links, quotes, code blocks and dividers.
 - Links open in the default browser.
 
 ### Everywhere
+
 - Folders, pinning, colors, archive, and a Trash you can restore from.
 - Undo and redo for list and item changes.
 - ⌘/Ctrl+K command palette that also searches every list, item and note.
@@ -122,18 +129,19 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 
 ## Milestones
 
-| # | Scope |
-|---|---|
-| M0 | Project setup: Tauri, React, TypeScript, linting and formatting, migrations, storage layer, unit tests, CI with macOS and Windows builds |
-| M1 | App frame: sidebar, folders, list CRUD, pin/color/archive/trash, design system, dark mode |
-| M2 | To-do lists: items, subtasks, drag-and-drop, priority, details panel, undo |
-| M3 | Due dates, typed-date parsing, Today and Upcoming views, recurring tasks |
-| M4 | Reminders: notifications, tray, launch at login, missed-reminder summary, snooze |
-| M5 | Grocery lists |
-| M6 | Rich-text notes |
-| M7 | Search, command palette, shortcuts, copy as Markdown, export/import, backups |
-| M8 | End-to-end tests, accessibility pass, packaging polish |
+| #   | Scope                                                                                                                                    |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| M0  | Project setup: Tauri, React, TypeScript, linting and formatting, migrations, storage layer, unit tests, CI with macOS and Windows builds |
+| M1  | App frame: sidebar, folders, list CRUD, pin/color/archive/trash, design system, dark mode                                                |
+| M2  | To-do lists: items, subtasks, drag-and-drop, priority, details panel, undo                                                               |
+| M3  | Due dates, typed-date parsing, Today and Upcoming views, recurring tasks                                                                 |
+| M4  | Reminders: notifications, tray, launch at login, missed-reminder summary, snooze                                                         |
+| M5  | Grocery lists                                                                                                                            |
+| M6  | Rich-text notes                                                                                                                          |
+| M7  | Search, command palette, shortcuts, copy as Markdown, export/import, backups                                                             |
+| M8  | End-to-end tests, accessibility pass, packaging polish                                                                                   |
 
 ## Not in v1
+
 Sync and shared lists, a quick-capture hotkey, templates, grocery suggestions,
 images in notes, tags, mobile or web builds, code signing and auto-update.
