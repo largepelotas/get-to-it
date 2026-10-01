@@ -59,6 +59,8 @@ const item: Item = {
   details: null,
   dueDate: '2026-10-01',
   dueTime: '09:30',
+  endTime: null,
+  deadline: null,
   priority: 2,
   recurrence: { freq: 'weekly', interval: 1, weekdays: [1, 3], mode: 'schedule' },
   quantity: null,
@@ -74,7 +76,7 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.items).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(7);
   });
 
   it('adds the won’t-do column to a database made before it existed', async () => {
@@ -91,7 +93,7 @@ describe('SqliteRepository', () => {
     );
     const data = await new SqliteRepository(exec).load();
     expect(data.tables.items.OLD).toMatchObject({ checked: true, wontDo: false });
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(7);
   });
 
   // Bug prevented: an upgrade losing reminders, or leaving old ones unreadable without the new column.
@@ -108,7 +110,7 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.reminders.R1).toMatchObject({ offsetMinutes: 15, constant: false });
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(7);
     await repo.write([
       { kind: 'put', table: 'reminders', row: { ...data.tables.reminders.R1, constant: true } },
     ]);
@@ -131,7 +133,7 @@ describe('SqliteRepository', () => {
     const data = await repo.load();
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', sectionId: null });
     expect(data.tables.sections).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(6);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(7);
     const section = {
       id: 'S1',
       listId: 'L1',
@@ -237,8 +239,8 @@ describe('labels migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect(MIGRATIONS).toHaveLength(6);
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(6);
+    expect(MIGRATIONS).toHaveLength(7);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(7);
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', labelIds: [] });
     expect(data.tables.labels).toEqual({});
     const label = {
@@ -275,8 +277,8 @@ describe('filters migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect(MIGRATIONS).toHaveLength(6);
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(6);
+    expect(MIGRATIONS).toHaveLength(7);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(7);
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task' });
     expect(data.tables.filters).toEqual({});
     const filter = {
@@ -293,5 +295,32 @@ describe('filters migration', () => {
     expect(again.tables.filters.F1).toEqual(filter);
     await repo.write([{ kind: 'delete', table: 'filters', id: 'F1' }]);
     expect((await repo.load()).tables.filters).toEqual({});
+  });
+});
+
+describe('deadlines and end times migration', () => {
+  // Bug prevented: upgrading a version 6 database failing, old tasks loading with the new fields
+  // undefined, or an end time and deadline not surviving a save and reload.
+  it('adds endTime and deadline to a version 6 database, null for old tasks', async () => {
+    const exec = nodeExecutor();
+    exec.raw.exec('BEGIN');
+    for (const sql of MIGRATIONS.slice(0, 6).flat()) exec.raw.exec(sql);
+    exec.raw.exec('PRAGMA user_version = 6');
+    exec.raw.exec('COMMIT');
+    exec.raw.exec(
+      `INSERT INTO items (id, list_id, text, checked, sort_key, created_at, updated_at)
+       VALUES ('OLD', 'L1', 'Old task', 0, 'a0', 1, 1)`,
+    );
+    const repo = new SqliteRepository(exec);
+    const data = await repo.load();
+    expect(MIGRATIONS).toHaveLength(7);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(7);
+    expect(data.tables.items.OLD).toMatchObject({ endTime: null, deadline: null });
+    const item = { ...data.tables.items.OLD, dueDate: '2026-10-03', dueTime: '14:00' };
+    await repo.write([
+      { kind: 'put', table: 'items', row: { ...item, endTime: '15:30', deadline: '2026-10-10' } },
+    ]);
+    const again = await new SqliteRepository(exec).load();
+    expect(again.tables.items.OLD).toMatchObject({ endTime: '15:30', deadline: '2026-10-10' });
   });
 });

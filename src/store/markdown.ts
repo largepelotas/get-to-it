@@ -16,10 +16,14 @@ type Source = Pick<Tables, 'items' | 'notes'> & Partial<Pick<Tables, 'sections' 
 
 const PRIORITY = ['', 'P1', 'P2', 'P3'];
 
-/** Due date, repeat and priority, as "(due 2026-10-03 15:00, Every week, P1)". */
+/** Due date, deadline, repeat and priority, as "(due 2026-10-03 15:00–16:00, deadline 2026-10-10, Every week, P1)". */
 function taskMeta(item: Item): string {
   const parts: string[] = [];
-  if (item.dueDate) parts.push(`due ${item.dueDate}${item.dueTime ? ` ${item.dueTime}` : ''}`);
+  if (item.dueDate) {
+    const range = item.dueTime ? ` ${item.dueTime}${item.endTime ? `–${item.endTime}` : ''}` : '';
+    parts.push(`due ${item.dueDate}${range}`);
+  }
+  if (item.deadline) parts.push(`deadline ${item.deadline}`);
   if (item.recurrence) parts.push(describeRecurrence(item.recurrence, item.dueDate));
   if (item.priority) parts.push(PRIORITY[item.priority]);
   return parts.length ? ` (${parts.join(', ')})` : '';

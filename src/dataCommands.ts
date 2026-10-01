@@ -102,6 +102,7 @@ async function applyImport(data: ReturnType<typeof parseSnapshot>): Promise<void
     multiSelectedIds: [],
     detailsOpen: false,
     duePickerFor: null,
+    deadlinePickerFor: null,
     renaming: null,
   });
   // Undo buttons on earlier toasts point at history that's gone.

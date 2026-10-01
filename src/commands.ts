@@ -365,7 +365,12 @@ export function moveTaskToList(id: string, listId: string): void {
   const { view, selectedItemId } = useUI.getState();
   const selected = selectedItemId ? useData.getState().tables.items[selectedItemId] : undefined;
   if (view.kind === 'list' && selected && selected.listId !== view.listId) {
-    useUI.setState({ selectedItemId: null, detailsOpen: false, duePickerFor: null });
+    useUI.setState({
+      selectedItemId: null,
+      detailsOpen: false,
+      duePickerFor: null,
+      deadlinePickerFor: null,
+    });
   }
   toastWithUndo(`Moved to ${list.title}`);
 }
@@ -387,7 +392,12 @@ export function moveTasksToList(ids: string[], listId: string): void {
   const { view, selectedItemId } = useUI.getState();
   const selected = selectedItemId ? useData.getState().tables.items[selectedItemId] : undefined;
   if (view.kind === 'list' && selected && selected.listId !== view.listId) {
-    useUI.setState({ selectedItemId: null, detailsOpen: false, duePickerFor: null });
+    useUI.setState({
+      selectedItemId: null,
+      detailsOpen: false,
+      duePickerFor: null,
+      deadlinePickerFor: null,
+    });
   }
   toastWithUndo(`Moved ${moving.length} tasks to ${list.title}`);
 }
@@ -507,7 +517,10 @@ export function duplicateTask(id: string): void {
 export function skipTask(id: string): void {
   const item = useData.getState().tables.items[id];
   const next = skipOccurrence(id);
-  if (item && next) toast(`Skipped to ${formatDue(next, item.dueTime)}`, { duration: 3000 });
+  if (item && next)
+    toast(`Skipped to ${formatDue(next, item.dueTime, undefined, item.endTime)}`, {
+      duration: 3000,
+    });
 }
 
 /** Closes a task without doing it. */

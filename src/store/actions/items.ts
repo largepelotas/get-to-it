@@ -1,5 +1,5 @@
 import type { Item, Priority, Recurrence } from '@/data/types';
-import { isDateKey, isTimeString, todayKey } from '@/lib/dates';
+import { isDateKey, isTimeAfter, isTimeString, todayKey } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { keyBetween } from '@/lib/order';
 import { parseQuickAdd } from '@/lib/quickAdd';
@@ -33,6 +33,9 @@ export interface NewItem {
   labelIds?: string[];
   dueDate?: string | null;
   dueTime?: string | null;
+  /** Only kept when `dueTime` is set and this is after it. */
+  endTime?: string | null;
+  deadline?: string | null;
   recurrence?: Recurrence | null;
   /** Grocery items. */
   quantity?: string | null;
@@ -79,6 +82,11 @@ export function insertItem(tx: Tx, listId: string, input: NewItem): string {
     tx.get('lists', listId)?.type === 'todo'
       ? [...new Set(input.labelIds ?? [])].filter((l) => tx.get('labels', l))
       : [];
+  const dueTime = input.dueDate && isTimeString(input.dueTime) ? input.dueTime : null;
+  const endTime =
+    dueTime && isTimeString(input.endTime) && isTimeAfter(input.endTime, dueTime)
+      ? input.endTime
+      : null;
   const item: Item = {
     id: newId(),
     listId,
@@ -94,6 +102,8 @@ export function insertItem(tx: Tx, listId: string, input: NewItem): string {
     details: null,
     dueDate: input.dueDate ?? null,
     dueTime: input.dueDate ? (input.dueTime ?? null) : null,
+    endTime,
+    deadline: isDateKey(input.deadline) ? input.deadline : null,
     priority: input.priority ?? 0,
     recurrence: input.recurrence ?? null,
     quantity: input.quantity ?? null,
@@ -166,6 +176,8 @@ function prepareFromText(
       text: parsed.text,
       dueDate,
       dueTime: parsed.dueTime,
+      endTime: parsed.endTime,
+      deadline: parsed.deadline,
       recurrence: parsed.recurrence,
       priority: parsed.priority || defaultPriority,
       labelIds: [...new Set([...extraLabelIds, ...parsed.labelIds])],
@@ -275,7 +287,7 @@ export function setPriorities(ids: string[], priority: Priority): void {
 
 export function clearDue(id: string): void {
   commit('Clear due date', (tx) => {
-    tx.update('items', id, { dueDate: null, dueTime: null, recurrence: null });
+    tx.update('items', id, { dueDate: null, dueTime: null, endTime: null, recurrence: null });
     clearSnoozes(tx, id);
   });
 }
@@ -287,7 +299,14 @@ export function clearDue(id: string): void {
 export function setDue(id: string, dueDate: string | null, dueTime: string | null = null): void {
   if (!dueDate || !isDateKey(dueDate)) return clearDue(id);
   commit('Due date', (tx) => {
-    tx.update('items', id, { dueDate, dueTime: isTimeString(dueTime) ? dueTime : null });
+    const time = isTimeString(dueTime) ? dueTime : null;
+    // A range moves with its day, as long as it still has a start it comes after.
+    const end = tx.get('items', id)?.endTime ?? null;
+    tx.update('items', id, {
+      dueDate,
+      dueTime: time,
+      endTime: time && end && isTimeAfter(end, time) ? end : null,
+    });
     clearSnoozes(tx, id);
   });
 }
@@ -313,9 +332,9 @@ export function setDueDates(ids: string[], dueDate: string | null): void {
   commit(ids.length === 1 ? 'Due date' : 'Reschedule tasks', (tx) => {
     for (const id of ids) {
       if (!tx.get('items', id)) continue;
-      if (dueDate === null)
-        tx.update('items', id, { dueDate: null, dueTime: null, recurrence: null });
-      else tx.update('items', id, { dueDate });
+      if (dueDate === null) {
+        tx.update('items', id, { dueDate: null, dueTime: null, endTime: null, recurrence: null });
+      } else tx.update('items', id, { dueDate });
       clearSnoozes(tx, id);
     }
   });
@@ -330,15 +349,44 @@ export function setDueTime(id: string, dueTime: string | null): void {
       if (!item) return;
       const time = isTimeString(dueTime) ? dueTime : null;
       if (!item.dueDate && !time) return;
+      // The range goes when the time does, or when the new start isn't before its end.
+      const keepEnd = time && item.endTime && isTimeAfter(item.endTime, time);
       tx.update('items', id, {
         dueDate: item.dueDate ?? todayKey(new Date(tx.now)),
         dueTime: time,
+        endTime: keepEnd ? item.endTime : null,
       });
       clearSnoozes(tx, id);
     },
     // Typing in a time field sends a change per keystroke.
     { coalesce: `item-time:${id}` },
   );
+}
+
+/**
+ * Sets the end time of a task that has a due time. An invalid time, or one not
+ * after the start, clears it. Reminders count from the start, so snoozes stay.
+ */
+export function setEndTime(id: string, endTime: string | null): void {
+  commit(
+    'End time',
+    (tx) => {
+      const item = tx.get('items', id);
+      if (!item?.dueTime) return;
+      const valid = isTimeString(endTime) && isTimeAfter(endTime, item.dueTime);
+      tx.update('items', id, { endTime: valid ? endTime : null });
+    },
+    // Typing in a time field sends a change per keystroke.
+    { coalesce: `end-time:${id}` },
+  );
+}
+
+/** Sets or clears the deadline, which is separate from the due date. An invalid date clears it. */
+export function setDeadline(id: string, deadline: string | null): void {
+  commit('Deadline', (tx) => {
+    if (!tx.get('items', id)) return;
+    tx.update('items', id, { deadline: isDateKey(deadline) ? deadline : null });
+  });
 }
 
 /**

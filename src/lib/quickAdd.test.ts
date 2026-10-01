@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseQuickAdd, splitLines } from './quickAdd';
+import { formatDue } from './dates';
 
 // Wednesday 30 September 2026, 10:00 local time.
 const NOW = new Date(2026, 8, 30, 10, 0);
@@ -340,5 +341,220 @@ describe('parseQuickAdd /Section', () => {
     expect(parseQuickAdd('Buy paint /Kitchen', NOW, { sections: SECTIONS })).toMatchObject({
       sectionId: null,
     });
+  });
+});
+
+describe('parseQuickAdd deadlines, ranges and durations', () => {
+  const noDates = { dueDate: null, dueTime: null, endTime: null, deadline: null };
+
+  // Bug prevented: {date} being read as the due date, or left in the title.
+  it('reads {date} as a deadline and cuts it out', () => {
+    const r = parseQuickAdd('Send report {fri}', NOW);
+    expect(r).toMatchObject({ text: 'Send report', deadline: '2026-10-02', dueDate: null });
+    expect(r.chips).toEqual(['Deadline Friday']);
+  });
+
+  // Bug prevented: the deadline swallowing the due date, or the other way round.
+  it('reads a deadline and a due date together', () => {
+    expect(parseQuickAdd('Send report {15 oct} tomorrow', NOW)).toMatchObject({
+      text: 'Send report',
+      deadline: '2026-10-15',
+      dueDate: '2026-10-01',
+    });
+  });
+
+  // Bug prevented: a time inside the braces becoming the due time.
+  it('ignores a time inside the braces', () => {
+    expect(parseQuickAdd('Send report {fri 5pm}', NOW)).toMatchObject({
+      deadline: '2026-10-02',
+      dueDate: null,
+      dueTime: null,
+    });
+  });
+
+  // Bug prevented: braces that are not a date being eaten from the title.
+  it('leaves braces that do not read as a day in the title', () => {
+    expect(parseQuickAdd('Notes {draft}', NOW)).toMatchObject({
+      text: 'Notes {draft}',
+      ...noDates,
+    });
+  });
+
+  // Bug prevented: a second {…} being read too, or lost from the title.
+  it('only reads the first {…}', () => {
+    expect(parseQuickAdd('Plan {fri} {sat}', NOW)).toMatchObject({
+      text: 'Plan {sat}',
+      deadline: '2026-10-02',
+    });
+  });
+
+  // Bug prevented: a range being read as just its start.
+  it('reads time ranges', () => {
+    expect(parseQuickAdd('Call Sam 2-3:30pm', NOW)).toMatchObject({
+      text: 'Call Sam',
+      dueTime: '14:00',
+      endTime: '15:30',
+    });
+    for (const text of ['Call Sam 2–3:30pm', 'Call Sam 2pm-3:30pm', 'Call Sam 14:00-15:30']) {
+      expect(parseQuickAdd(text, NOW)).toMatchObject({
+        text: 'Call Sam',
+        dueTime: '14:00',
+        endTime: '15:30',
+      });
+    }
+    expect(parseQuickAdd('Call Sam tomorrow 2pm to 3:30pm', NOW)).toMatchObject({
+      text: 'Call Sam',
+      dueDate: '2026-10-01',
+      dueTime: '14:00',
+      endTime: '15:30',
+    });
+    expect(parseQuickAdd('Workshop fri from 9 to 10:30', NOW)).toMatchObject({
+      dueDate: '2026-10-02',
+      dueTime: '09:00',
+      endTime: '10:30',
+    });
+  });
+
+  it('shows the range in the due chip', () => {
+    const r = parseQuickAdd('Standup 9-10am tomorrow', NOW);
+    expect(r).toMatchObject({ dueDate: '2026-10-01', dueTime: '09:00', endTime: '10:00' });
+    expect(r.chips).toEqual([formatDue('2026-10-01', '09:00', NOW, '10:00')]);
+  });
+
+  // Bug prevented: "5-6" reading 5 as 17:00 but 6 as 06:00, an end before the start.
+  it('moves an end that would be before the start to the afternoon', () => {
+    expect(parseQuickAdd('Gym tomorrow at 5-6', NOW)).toMatchObject({
+      dueTime: '17:00',
+      endTime: '18:00',
+    });
+  });
+
+  // Bug prevented: "for 45m" being read by chrono as the time 10:45, or not added to the start.
+  it('adds "for N" to the start time and drops the token', () => {
+    expect(parseQuickAdd('Call Sam 2pm for 45m', NOW)).toMatchObject({
+      text: 'Call Sam',
+      dueTime: '14:00',
+      endTime: '14:45',
+    });
+    const forms: [string, string][] = [
+      ['for 45 min', '14:45'],
+      ['for 1h', '15:00'],
+      ['for 1h30m', '15:30'],
+      ['for 1 hour 15 minutes', '15:15'],
+      ['FOR 30 MINS', '14:30'],
+    ];
+    for (const [token, end] of forms) {
+      expect(parseQuickAdd(`Call Sam 2pm ${token}`, NOW)).toMatchObject({
+        text: 'Call Sam',
+        dueTime: '14:00',
+        endTime: end,
+      });
+    }
+  });
+
+  // Bug prevented: "for 45m" in an ordinary sentence being eaten or inventing a time.
+  it('leaves "for N" in the title when there is no due time', () => {
+    expect(parseQuickAdd('Write report for 45m', NOW)).toMatchObject({
+      text: 'Write report for 45m',
+      ...noDates,
+    });
+  });
+
+  // Bug prevented: a duration running past midnight giving an end time on the next day.
+  it('keeps "for N" in the title when it would cross midnight', () => {
+    expect(parseQuickAdd('Stay up 11pm for 2h', NOW)).toMatchObject({
+      text: 'Stay up for 2h',
+      dueTime: '23:00',
+      endTime: null,
+    });
+  });
+
+  // Bug prevented: a duration overriding an explicit range, or vanishing from the title.
+  it('keeps "for N" in the title when a range already gave the end', () => {
+    expect(parseQuickAdd('Call 2-3pm for 45m', NOW)).toMatchObject({
+      text: 'Call for 45m',
+      dueTime: '14:00',
+      endTime: '15:00',
+    });
+  });
+
+  // Bug prevented: "2-3 people" being read as a time range.
+  it('does not read "2-3 people" as a date', () => {
+    expect(parseQuickAdd('Plan 2-3 people', NOW)).toMatchObject({
+      text: 'Plan 2-3 people',
+      ...noDates,
+    });
+  });
+
+  const noMarkers = (text: string) => !/[\ue000-\ue1ff]/.test(text);
+
+  // Bug prevented: a "!word" inside a held brace leaving raw private-use marker characters in the title.
+  it('restores a held token that sits inside a held brace', () => {
+    const r = parseQuickAdd('Notes {ask !Sam later}', NOW);
+    expect(r.text).toBe('Notes {ask !Sam later}');
+    expect(noMarkers(r.text)).toBe(true);
+    const d = parseQuickAdd('x {a for 45m b} tomorrow 2pm', NOW);
+    expect(d).toMatchObject({
+      text: 'x {a for 45m b}',
+      dueTime: '14:00',
+      endTime: null,
+      deadline: null,
+    });
+    expect(noMarkers(d.text)).toBe(true);
+  });
+
+  // Bug prevented: "{for 45m}" or "{now}" being taken as a deadline.
+  it('does not read a duration or "now" in braces as a deadline', () => {
+    expect(parseQuickAdd('Pay {for 45m}', NOW)).toMatchObject({
+      text: 'Pay {for 45m}',
+      deadline: null,
+    });
+    expect(parseQuickAdd('Pay {now}', NOW)).toMatchObject({ text: 'Pay {now}', deadline: null });
+    expect(parseQuickAdd('{fri 5pm} Call', NOW)).toMatchObject({
+      text: 'Call',
+      deadline: '2026-10-02',
+    });
+  });
+
+  // Bug prevented: "for 45m." or "for 30m," not being read as a duration because of the punctuation.
+  it('reads a duration followed by punctuation', () => {
+    expect(parseQuickAdd('Write report 2pm for 45m.', NOW)).toMatchObject({
+      text: 'Write report .',
+      dueTime: '14:00',
+      endTime: '14:45',
+    });
+    expect(parseQuickAdd('Run 9am for 30m, then stretch', NOW)).toMatchObject({
+      text: 'Run , then stretch',
+      dueTime: '09:00',
+      endTime: '09:30',
+    });
+  });
+
+  // Bug prevented: stray braces or a lone "!" hanging or garbling the title on every keystroke.
+  it('returns stray braces and a lone "!" as typed', () => {
+    for (const t of ['x {}', '!', '{', '}', '{}{}']) {
+      const r = parseQuickAdd(t, NOW);
+      expect(r.text).toBe(t);
+      expect(noMarkers(r.text)).toBe(true);
+    }
+  });
+
+  // Bug prevented: past 256 held tokens, markers leaking into the title.
+  it('restores any number of held tokens', () => {
+    const words = Array.from({ length: 300 }, (_, i) => `{w${i}}`).join(' ');
+    const r = parseQuickAdd(words, NOW);
+    expect(r.text).toBe(words);
+  });
+
+  // Bug prevented: typed private-use characters surviving into the title as stray markers.
+  it('never leaves private-use characters in the title', () => {
+    expect(parseQuickAdd('a \ue000\ue100\ue001 b', NOW).text).toBe('a b');
+  });
+
+  // Bug prevented: a typed marker sequence inside a held brace or "!word" making the restore
+  // step put its own marker back forever, so the quick-add preview hung on every keystroke.
+  it('finishes when the typed text looks like a held-token marker', () => {
+    expect(parseQuickAdd('x {\ue000\ue100\ue000}', NOW).text).toBe('x {}');
+    expect(parseQuickAdd('x !\ue000\ue100\ue000y', NOW).text).toBe('x !y');
   });
 });

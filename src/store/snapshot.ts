@@ -11,7 +11,7 @@ import {
   type TableName,
   type Tables,
 } from '@/data/types';
-import { isDateKey, isTimeString } from '@/lib/dates';
+import { isDateKey, isTimeAfter, isTimeString } from '@/lib/dates';
 import { isPaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
 import { cleanMatrix, cleanViewOptions } from './viewOptions';
@@ -128,6 +128,8 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     details: opt(str),
     dueDate: date,
     dueTime: time,
+    endTime: time,
+    deadline: date,
     priority: or(oneOf([0, 1, 2, 3]), 0),
     recurrence: (v) => sanitizeRecurrence(v),
     quantity: opt(str),
@@ -206,6 +208,12 @@ function checkRow(table: TableName, raw: unknown, index: number): AnyRow {
   }
   // A time only makes sense with a date.
   if (table === 'items' && !row.dueDate) row.dueTime = null;
+  // An end time needs a start, and must come after it.
+  if (table === 'items') {
+    const start = row.dueTime as string | null;
+    const end = row.endTime as string | null;
+    if (!start || (end !== null && !isTimeAfter(end, start))) row.endTime = null;
+  }
   return row as unknown as AnyRow;
 }
 

@@ -94,7 +94,9 @@ function ResultRow({ result, onSelect }: { result: SearchResult; onSelect: () =>
       aside={
         item && (
           <>
-            {item.dueDate && <span>{formatDue(item.dueDate, item.dueTime)}</span>}
+            {item.dueDate && (
+              <span>{formatDue(item.dueDate, item.dueTime, undefined, item.endTime)}</span>
+            )}
             <span className="flex max-w-40 items-center gap-1">
               <ListIcon type={list.type} color={list.color} className="size-3.5" />
               <span className="truncate">{list.title}</span>

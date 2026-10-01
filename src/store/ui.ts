@@ -56,6 +56,8 @@ interface UIState {
   detailsOpen: boolean;
   /** The item whose due-date picker is open in the details panel. */
   duePickerFor: string | null;
+  /** The item whose deadline picker is open in the details panel. */
+  deadlinePickerFor: string | null;
   /** The item whose label picker is open in the details panel. */
   labelPickerFor: string | null;
   /** The selection bar's Labels popover is open. */
@@ -77,6 +79,7 @@ export const useUI = create<UIState>(() => ({
   selectionDateOpen: false,
   detailsOpen: false,
   duePickerFor: null,
+  deadlinePickerFor: null,
   labelPickerFor: null,
   selectionLabelsOpen: false,
   dialog: null,
@@ -102,6 +105,7 @@ export function navigate(view: View): void {
     selectionDateOpen: false,
     detailsOpen: false,
     duePickerFor: null,
+    deadlinePickerFor: null,
     labelPickerFor: null,
     selectionLabelsOpen: false,
   });
@@ -224,12 +228,22 @@ export function openDetails(id: string): void {
 }
 
 export function closeDetails(): void {
-  useUI.setState({ detailsOpen: false, duePickerFor: null, labelPickerFor: null });
+  useUI.setState({
+    detailsOpen: false,
+    duePickerFor: null,
+    deadlinePickerFor: null,
+    labelPickerFor: null,
+  });
 }
 
 /** Opens the details panel with the due-date picker showing. */
 export function pickDueDate(id: string): void {
   useUI.setState({ selectedItemId: id, detailsOpen: true, duePickerFor: id });
+}
+
+/** Opens the details panel with the deadline picker showing. */
+export function pickDeadline(id: string): void {
+  useUI.setState({ selectedItemId: id, detailsOpen: true, deadlinePickerFor: id });
 }
 
 /** Opens the details panel with the label picker showing. */
@@ -247,6 +261,10 @@ export function setSelectionLabelsOpen(open: boolean): void {
 
 export function setDuePickerFor(id: string | null): void {
   useUI.setState({ duePickerFor: id });
+}
+
+export function setDeadlinePickerFor(id: string | null): void {
+  useUI.setState({ deadlinePickerFor: id });
 }
 
 export function clearReveal(): void {

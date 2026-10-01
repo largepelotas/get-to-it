@@ -1,5 +1,5 @@
 import type { List } from '@/data/types';
-import { formatDue, isOverdue } from '@/lib/dates';
+import { formatDateKey, formatDue, formatTime, isOverdue, todayKey } from '@/lib/dates';
 import { describeRecurrence } from '@/lib/recurrence';
 import type { FlatRow } from '@/store/tree';
 import { PRIORITY_LABEL } from './priority';
@@ -26,7 +26,16 @@ export function describeRow(
   if (item.checked) parts.push(item.wontDo ? "Won't do" : 'Completed');
   if (item.dueDate) {
     const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
-    parts.push(`Due ${formatDue(item.dueDate, item.dueTime)}${overdue ? ', overdue' : ''}`);
+    // Said as words, so a screen reader doesn't read out a dash.
+    const day = formatDue(item.dueDate, null);
+    const time = item.dueTime
+      ? ` ${formatTime(item.dueTime)}${item.endTime ? ` to ${formatTime(item.endTime)}` : ''}`
+      : '';
+    parts.push(`Due ${day}${time}${overdue ? ', overdue' : ''}`);
+  }
+  if (item.deadline) {
+    const passed = !item.checked && item.deadline < todayKey();
+    parts.push(`Deadline ${formatDateKey(item.deadline)}${passed ? ', passed' : ''}`);
   }
   if (item.recurrence) {
     const rule = describeRecurrence(item.recurrence, item.dueDate);

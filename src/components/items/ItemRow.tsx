@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Flag,
   GripVertical,
+  Hourglass,
   NotebookText,
   PanelRight,
   Repeat,
@@ -11,7 +12,7 @@ import {
 import { useState, type CSSProperties, type KeyboardEvent, type Ref } from 'react';
 import { ContextMenu, IconButton, type MenuEntries } from '@/components/ui';
 import { toggleItem } from '@/commands';
-import { formatDue, formatTime, isOverdue } from '@/lib/dates';
+import { formatDateKey, formatDue, formatTimeRange, isOverdue, todayKey } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { setItemCollapsed, setItemText } from '@/store/actions/items';
 import { useData } from '@/store/data';
@@ -300,14 +301,26 @@ export function ItemRow({
             <DueLabel
               label={
                 timeOnly
-                  ? (item.dueTime && formatTime(item.dueTime)) || ''
-                  : formatDue(item.dueDate, item.dueTime)
+                  ? (item.dueTime && formatTimeRange(item.dueTime, item.endTime)) || ''
+                  : formatDue(item.dueDate, item.dueTime, undefined, item.endTime)
               }
-              fullLabel={formatDue(item.dueDate, item.dueTime)}
+              fullLabel={formatDue(item.dueDate, item.dueTime, undefined, item.endTime)}
               repeats={!!item.recurrence}
               overdue={overdue}
               onPick={readOnly ? undefined : () => pickDueDate(item.id)}
             />
+          )}
+          {item.deadline && (
+            <span
+              aria-hidden
+              className={clsx(
+                'flex items-center gap-1',
+                !item.checked && item.deadline < todayKey() && 'text-danger',
+              )}
+            >
+              <Hourglass className="size-3" />
+              {formatDateKey(item.deadline)}
+            </span>
           )}
           {item.priority > 0 && (
             <Flag

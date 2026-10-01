@@ -183,6 +183,9 @@ describe('text', () => {
     expect(notificationFor({ item: item(), list }, now).title).toBe('Send report');
     expect(notificationFor({ item: item(), list }, now).body).toMatch(/^Due Today .+ · Work$/);
     expect(notificationFor({ item: item({ dueDate: null }), list }, now).body).toBe('Work');
+    // Bug it prevents: a ranged task's notification named only the start.
+    const ranged = item({ dueTime: '14:00', endTime: '15:30' });
+    expect(notificationFor({ item: ranged, list }, now).body).toMatch(/–.+ · Work$/);
   });
 });
 

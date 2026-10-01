@@ -752,6 +752,45 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   (`grid` prop); its two searches are edited in Settings
   (`MatrixSettingsFields.tsx`) with errors shown inline, and the view explains
   which search is broken.
+- Deadlines and time ranges (after M8; step 8 of `docs/todoist-gap.md`).
+  Data: two fields on `Item`, `deadline` (a date, independent of the due
+  date: when it must be finished, where "due" is when you plan to do it) and
+  `endTime` (HH:mm, only with a `dueTime` and strictly after it, on the same
+  day), SQLite migration 7 (`end_time`, `deadline`); old data and exports
+  load with nulls and the snapshot version is unchanged. An imported end
+  time without a start, or not after it, becomes null. Actions in
+  `store/actions/items.ts`: `setDeadline` (undoable) and `setEndTime`
+  (coalesced; a no-op without a due time; an end not after the start stores
+  null). Clearing the due date or time clears the end time; a new due time
+  keeps the end only while it's still later; repeats and "Skip this time"
+  move the due date only, so the end time and deadline stay. Markdown export
+  writes `due 2026-10-03 14:00–15:30` and `deadline 2026-10-10`. Quick add
+  (`lib/quickAdd.ts`): `{fri}` or `{15 oct}` is a deadline (the first brace
+  chrono reads as a day; a time inside is ignored; a brace that is a
+  duration, just "now", or no day at all stays in the title as typed, and
+  nothing inside any brace is parsed); "2-3:30pm", "2pm-3:30pm",
+  "14:00-15:30", "tomorrow 2pm to 3:30pm" are ranges (chrono reads them;
+  an end on another day or not after the start is dropped, after trying
+  twelve hours later for "5-6"); "for 45m", "for 1h30m", "for 1 hour 15
+  minutes" after a start time sets the end, and without one, or when it
+  would cross midnight, stays in the title. Held tokens (things kept out of
+  chrono's sight: `!word`s that aren't reminders, non-deadline braces, an
+  unused duration) are numbered markers in a private-use range, restored in
+  one bounded pass; typed characters from that range are dropped first.
+  Helpers in `lib/dates.ts`: `formatDue(date, time, now, endTime)` gives
+  "Tomorrow 2:00 PM–3:30 PM", `formatTimeRange`, `addMinutes`,
+  `formatDuration` ("1 h 30 min"), `isTimeAfter`. `describeRow` says
+  "Due Today 2:00 PM to 3:30 PM" and "Deadline Friday" (", passed" once it
+  has, for an open task). UI: an "End" time field in the due picker once a
+  time is set; a Deadline field under the due date in the details panel
+  (an hourglass button opening `DateChoices`, with "Clear deadline";
+  `useUI.deadlinePickerFor`, `pickDeadline`); the row shows the range in
+  its due label and the deadline with an hourglass, red once passed; a
+  "Deadline" submenu in the task menu (Today, Tomorrow, Next week, Pick a
+  date…, No deadline); Today's header adds the time scheduled across its
+  timed tasks (`scheduledMinutes` in `store/smart.ts`). Not yet: Today and
+  Upcoming don't list a task on its deadline day, filters have no deadline
+  term, and the selection bar sets due dates only.
 
 ### Accessibility and loading (M8)
 
