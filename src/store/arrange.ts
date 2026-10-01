@@ -1,4 +1,4 @@
-import type { GroupKey, Label, List, Section, SortKey } from '@/data/types';
+import type { GroupKey, Item, Label, List, Section, SortKey } from '@/data/types';
 import { formatDateKey, formatLongDate, type DateKey } from '@/lib/dates';
 import { bySortKey } from '@/lib/order';
 import { sortedLabels } from './labels';
@@ -62,6 +62,8 @@ export interface GroupContext {
   labels: Record<string, Label>;
   /** For grouping a list by its sections. */
   sections?: Record<string, Section>;
+  /** For finding a nested subtask's top-level ancestor when grouping by section. */
+  items?: Record<string, Item>;
   listId?: string;
 }
 
@@ -137,7 +139,18 @@ export function groupRows(rows: DueRow[], group: GroupKey, ctx: GroupContext): R
       const known = new Set(sections.map((s) => s.id));
       // A subtask follows its parent's section; a task naming a missing section is unsectioned.
       const sectionOf = (r: DueRow) => {
-        const top = r.parent ?? r.item;
+        let top = r.parent ?? r.item;
+        if (ctx.items) {
+          // Subtasks carry no section of their own: walk up to the top-level ancestor.
+          top = r.item;
+          const seen = new Set<string>([top.id]);
+          while (top.parentId) {
+            const up: Item | undefined = ctx.items[top.parentId];
+            if (!up || seen.has(up.id)) break;
+            seen.add(up.id);
+            top = up;
+          }
+        }
         return top.sectionId && known.has(top.sectionId) ? top.sectionId : null;
       };
       const groups: RowGroup[] = [];

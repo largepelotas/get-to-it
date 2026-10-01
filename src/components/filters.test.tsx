@@ -8,7 +8,7 @@ import { MemoryRepository } from '@/data/memory';
 import type { Filter, Item } from '@/data/types';
 import { addDaysKey, todayKey } from '@/lib/dates';
 import { createFilter } from '@/store/actions/filters';
-import { createItem } from '@/store/actions/items';
+import { createItem, setChecked, setItemCollapsed } from '@/store/actions/items';
 import { createLabel } from '@/store/actions/labels';
 import { createList } from '@/store/actions/lists';
 import { createSection } from '@/store/actions/sections';
@@ -317,6 +317,28 @@ describe('sort and group', () => {
     expect(screen.getByRole('button', { name: /^Add section$/ })).toBeInTheDocument();
     expect(rowTexts()).toEqual(['Zebra', 'Apple', 'Mango']);
     expect(useData.getState().settings.viewOptions[`list:${work}`]).toBeUndefined();
+  });
+
+  // Bug prevented: a done subtask shown ticked among open rows, a collapsed parent's subtasks
+  // missing, and a note claiming completed tasks are on screen.
+  it('shows every open task, no done subtasks, and says completed tasks are not shown', async () => {
+    const open = createItem(work, { text: 'Open parent' })!;
+    createItem(work, { text: 'Done sub', parentId: open });
+    createItem(work, { text: 'Live sub', parentId: open });
+    const folded = createItem(work, { text: 'Folded parent' })!;
+    createItem(work, { text: 'Hidden sub', parentId: folded });
+    const finished = createItem(work, { text: 'Finished' })!;
+    setChecked(find('Done sub').id, true);
+    setItemCollapsed(folded, true);
+    setChecked(finished, true);
+    const user = userEvent.setup();
+    render(<App />);
+    act(() => navigate({ kind: 'list', listId: work }));
+    await sortBy(user, 'Name');
+    expect(rowTexts()).toEqual(['Folded parent', 'Hidden sub', 'Live sub', 'Open parent']);
+    expect(
+      screen.getByText('1 completed task isn’t shown while the list is sorted or grouped.'),
+    ).toBeInTheDocument();
   });
 });
 

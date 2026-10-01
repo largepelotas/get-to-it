@@ -140,6 +140,25 @@ describe('groupRows', () => {
     ]);
   });
 
+  // Bug prevented: a task two levels down (its parent is a subtask, stored with no section)
+  // landing in "No section" although its top-level ancestor sits in a section.
+  it("groups a deeply nested subtask under its top-level ancestor's section", () => {
+    const errands = createSection(work, 'Errands')!;
+    const shop = add(work, 'Shop', { sectionId: errands });
+    const fruit = add(work, 'Fruit', { parentId: shop });
+    add(work, 'Apples', { parentId: fruit });
+    add(work, 'Loose');
+    const groups = groupRows(rows(), 'section', {
+      ...ctx(),
+      items: useData.getState().tables.items,
+      listId: work,
+    });
+    expect(groups.map((g) => [g.key, texts(g.rows)])).toEqual([
+      ['no-section', ['Loose']],
+      [`section:${errands}`, ['Shop', 'Fruit', 'Apples']],
+    ]);
+  });
+
   it('puts everything in one bare group for none, and nothing for no rows', () => {
     add(work, 'A');
     expect(groupRows(rows(), 'none', ctx())).toMatchObject([{ key: 'all', bare: true }]);

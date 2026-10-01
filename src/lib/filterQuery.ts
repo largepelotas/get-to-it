@@ -47,13 +47,15 @@ export const FILTER_SYNTAX: { example: string; meaning: string }[] = [
   { example: '& | ! ( )', meaning: 'and, or, not, brackets' },
 ];
 
+export class FilterSyntaxError extends Error {}
+
 type Op = '&' | '|' | '!' | '(' | ')';
 type Token = { type: 'op'; value: Op } | { type: 'term'; text: string };
 
 const OPS: Op[] = ['&', '|', '!', '(', ')'];
 const isOperator = (c: string): c is Op => OPS.includes(c as Op);
 
-/** Splits a query at its operators. Quoted text is kept whole, quotes included. */
+/** Splits a query at its operators. Quoted text is kept whole, quotes included. Throws on an unclosed quote. */
 function tokenize(query: string): Token[] {
   const tokens: Token[] = [];
   let term = '';
@@ -66,7 +68,8 @@ function tokenize(query: string): Token[] {
     const c = query[i];
     if (c === '"' || c === '“' || c === '”') {
       const close = query.indexOf(c === '“' ? '”' : c === '”' ? '“' : '"', i + 1);
-      const end = close < 0 ? query.length : close + 1;
+      if (close < 0) throw new FilterSyntaxError('Missing a closing quote.');
+      const end = close + 1;
       term += query.slice(i, end);
       i = end - 1;
     } else if (isOperator(c)) {
@@ -77,8 +80,6 @@ function tokenize(query: string): Token[] {
   flush();
   return tokens;
 }
-
-export class FilterSyntaxError extends Error {}
 
 const quote = (text: string) => `“${text}”`;
 /** Strips one pair of straight or curly quotes. */
@@ -98,7 +99,11 @@ function parseTerm(raw: string): FilterNode {
     if (!name) throw new FilterSyntaxError('Give the label a name after @.');
     return { kind: 'label', name };
   }
-  if (/^["“”]/.test(text)) return { kind: 'search', text: unquote(text) };
+  if (/^["“”]/.test(text)) {
+    const needle = unquote(text);
+    if (!needle) throw new FilterSyntaxError('Give some text to search for.');
+    return { kind: 'search', text: needle };
+  }
   const search = lower.match(/^search\s*:\s*(.*)$/s);
   if (search) {
     const needle = unquote(text.slice(text.length - search[1].length));
@@ -151,7 +156,13 @@ function parseTerm(raw: string): FilterNode {
 
 /** Reads a query into a tree, or says what's wrong with it. */
 export function parseFilter(query: string): ParseResult {
-  const tokens = tokenize(query);
+  let tokens: Token[];
+  try {
+    tokens = tokenize(query);
+  } catch (err) {
+    if (err instanceof FilterSyntaxError) return { ok: false, error: err.message };
+    throw err;
+  }
   if (!tokens.length) return { ok: false, error: 'Type a search, e.g. p1 & overdue.' };
   let i = 0;
   const peek = () => tokens[i];
@@ -229,13 +240,20 @@ export function readQueryDate(
   today: DateKey,
   now: Date = new Date(),
 ): DateKey | null {
-  const lower = text.trim().toLowerCase();
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
   if (lower === 'today') return today;
   if (lower === 'tomorrow') return addDaysKey(today, 1);
   if (lower === 'yesterday') return addDaysKey(today, -1);
-  if (isDateKey(lower)) return lower;
-  const parsed = chrono.parseDate(text, now, { forwardDate: true });
-  return parsed ? toDateKey(parsed) : null;
+  // Shaped like an ISO date: a real date or nothing, never left to chrono.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(lower)) return isDateKey(lower) ? lower : null;
+  // "next week" and the like: chrono gives them a day, but not one the user named.
+  if (/^(?:this|next|last|coming)\s+(?:week|month|year|weekend)$/.test(lower)) return null;
+  const result = chrono.parse(trimmed, now, { forwardDate: true })[0];
+  // All of the text must be the date, and it must name a day (not just a time like "3pm").
+  if (!result || result.index !== 0 || result.text.length !== trimmed.length) return null;
+  if (!result.start.isCertain('day') && !result.start.isCertain('weekday')) return null;
+  return toDateKey(result.start.date());
 }
 
 export interface FilterContext {

@@ -8,6 +8,7 @@ import { useToday } from '@/hooks/useToday';
 import { ListIcon } from '@/components/ListIcon';
 import { useData } from '@/store/data';
 import type { DueRow } from '@/store/smart';
+import { buildTree, flatten } from '@/store/tree';
 import { todoModel } from '@/store/todo';
 import { useUI } from '@/store/ui';
 import { QuickAdd } from './QuickAdd';
@@ -41,23 +42,33 @@ export function ArrangedTodoList({
     [items, list.id, sectionTable],
   );
   const sections = useMemo(() => {
-    // The list's own order, as rows Today would show, so the same sorts and groups apply.
-    const rows: DueRow[] = model.open.map((row) => ({
-      ...row,
-      depth: 0,
-      list,
-      parent: (row.item.parentId && items[row.item.parentId]) || null,
-    }));
+    // Every open task of the list, subtasks of collapsed parents included, as rows Today
+    // would show, so the same sorts and groups apply. List order is the tree order.
+    const live = Object.values(items).filter((i) => i.listId === list.id && !i.deletedAt);
+    const rows: DueRow[] = flatten(
+      buildTree(live).filter((n) => !n.item.checked),
+      0,
+      [],
+      true,
+    )
+      .filter((row) => !row.item.checked)
+      .map((row) => ({
+        ...row,
+        depth: 0,
+        list,
+        parent: (row.item.parentId && items[row.item.parentId]) || null,
+      }));
     const sorted = sortRows(rows, sort);
     const grouped = groupRows(sorted, group === 'default' ? 'section' : group, {
       today,
       lists,
       labels,
       sections: sectionTable,
+      items,
       listId: list.id,
     });
     return toSmartSections(grouped);
-  }, [model, sort, group, list, items, lists, labels, sectionTable, today]);
+  }, [sort, group, list, items, lists, labels, sectionTable, today]);
 
   return (
     <div className={clsx('px-6', several ? 'pb-24' : 'pb-10')}>
@@ -83,8 +94,10 @@ export function ArrangedTodoList({
       )}
       {model.doneCount > 0 && (
         <p className="px-2 py-3 text-xs text-fg-subtle">
-          {model.doneCount === 1 ? '1 completed task is' : `${model.doneCount} completed tasks are`}{' '}
-          shown in list order.
+          {model.doneCount === 1
+            ? '1 completed task isn’t'
+            : `${model.doneCount} completed tasks aren’t`}{' '}
+          shown while the list is sorted or grouped.
         </p>
       )}
     </div>

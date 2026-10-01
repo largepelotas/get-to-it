@@ -238,6 +238,43 @@ describe('compileFilter', () => {
   });
 });
 
+describe('dates and quotes in queries', () => {
+  // Bug prevented: junk, a lone time or a month 13 being read as some date, so the filter matched the wrong tasks.
+  it('rejects text that is not wholly a date naming a day', () => {
+    for (const q of [
+      'on 2026-13-01',
+      'on garbage tomorrow',
+      'after 3pm',
+      'on noon',
+      'before next week',
+    ]) {
+      expect(error(q), q).toMatch(/isn’t a date\.$/);
+    }
+    for (const q of ['before 1 dec', 'after friday', 'on 2026-12-01', 'on next monday']) {
+      expect(error(q), q).toBeNull();
+    }
+  });
+
+  // Bug prevented: an unclosed quote silently swallowing the rest of the query.
+  it('reports an unclosed quote', () => {
+    for (const q of [
+      '"dentist',
+      'search: "dentist',
+      '#"Side projects',
+      '“dentist',
+      'search: “dentist”  & "x',
+    ]) {
+      expect(error(q), q).toBe('Missing a closing quote.');
+    }
+  });
+
+  // Bug prevented: an empty quoted search matching every task.
+  it('reports an empty quoted search', () => {
+    expect(error('""')).toBe('Give some text to search for.');
+    expect(error('search: ""')).toBe('Give some text after search:.');
+  });
+});
+
 describe('readQueryDate', () => {
   // Bug prevented: "friday" read as last Friday, or an ISO date shifted by the time zone.
   it('reads relative words, ISO dates and natural dates forwards', () => {
