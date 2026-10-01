@@ -4,7 +4,16 @@ import type { Priority } from '@/data/types';
 import { archiveList, createList } from './actions/lists';
 import { createItem, setChecked } from './actions/items';
 import { resetForTests, useData } from './data';
-import { dueRows, todayCount, todayModel, upcomingModel } from './smart';
+import {
+  dueRows,
+  next7Count,
+  next7Model,
+  todayCount,
+  todayModel,
+  tomorrowCount,
+  tomorrowModel,
+  upcomingModel,
+} from './smart';
 
 let work: string;
 let home: string;
@@ -79,5 +88,58 @@ describe('Today and Upcoming', () => {
       ['2026-10-01', ['Tomorrow B', 'Tomorrow A']],
       ['2026-10-07', ['Next week']],
     ]);
+  });
+});
+
+describe('Tomorrow', () => {
+  const today = '2026-09-30';
+
+  it('holds only tasks due tomorrow, in the same order as Today, and counts them', () => {
+    add(work, 'Today', '2026-09-30');
+    add(work, 'Old', '2026-09-28');
+    add(work, 'Plain', '2026-10-01');
+    add(home, 'At 8', '2026-10-01', { dueTime: '08:00' });
+    add(work, 'Later', '2026-10-02');
+    expect(texts(tomorrowModel(rows(), today))).toEqual(['At 8', 'Plain']);
+    expect(tomorrowCount(rows(), today)).toBe(2);
+  });
+});
+
+describe('Next 7 days', () => {
+  const today = '2026-09-30';
+
+  // Bug prevented: empty days dropping out, so the week isn't visible at a glance.
+  it('always has seven days from today, empty ones included', () => {
+    add(work, 'Now', '2026-09-30');
+    add(work, 'Friday', '2026-10-03');
+    const model = next7Model(rows(), today);
+    expect(model.days.map((d) => d.date)).toEqual([
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+      '2026-10-03',
+      '2026-10-04',
+      '2026-10-05',
+      '2026-10-06',
+    ]);
+    expect(model.days.map((d) => texts(d.rows))).toEqual([['Now'], [], [], ['Friday'], [], [], []]);
+  });
+
+  it('keeps overdue tasks apart and leaves out day eight', () => {
+    add(work, 'Old', '2026-09-28');
+    add(work, 'Last day', '2026-10-06');
+    add(work, 'Day eight', '2026-10-07');
+    const model = next7Model(rows(), today);
+    expect(texts(model.overdue)).toEqual(['Old']);
+    expect(texts(model.days[6].rows)).toEqual(['Last day']);
+    expect(model.days.flatMap((d) => texts(d.rows))).not.toContain('Day eight');
+  });
+
+  it('counts overdue plus the seven days', () => {
+    add(work, 'Old', '2026-09-28');
+    add(work, 'Now', '2026-09-30');
+    add(work, 'Last day', '2026-10-06');
+    add(work, 'Day eight', '2026-10-07');
+    expect(next7Count(rows(), today)).toBe(3);
   });
 });

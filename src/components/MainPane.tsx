@@ -8,7 +8,7 @@ import { useData } from '@/store/data';
 import { navigate, useUI } from '@/store/ui';
 import { ListView } from './views/ListView';
 import { RemindersView } from './views/RemindersView';
-import { TodayView, UpcomingView } from './views/SmartViews';
+import { Next7View, TodayView, TomorrowView, UpcomingView } from './views/SmartViews';
 import { ArchiveView, TrashView } from './views/StoredLists';
 import { IconButton } from './ui';
 
@@ -54,6 +54,10 @@ export function MainPane() {
       {sidebarHidden && <ShowSidebarButton />}
       {view.kind === 'list' && listExists ? (
         <ListView key={view.listId} listId={view.listId} />
+      ) : view.kind === 'tomorrow' ? (
+        <TomorrowView />
+      ) : view.kind === 'next7' ? (
+        <Next7View />
       ) : view.kind === 'upcoming' ? (
         <UpcomingView />
       ) : view.kind === 'reminders' ? (

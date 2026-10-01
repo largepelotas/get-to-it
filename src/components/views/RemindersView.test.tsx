@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { preloadDialogs } from '@/components/dialogs/lazy';
@@ -8,8 +8,10 @@ import { addDaysKey, todayKey } from '@/lib/dates';
 import { fireTime } from '@/lib/reminders';
 import { createItem } from '@/store/actions/items';
 import { createList } from '@/store/actions/lists';
-import { addReminder, markFired } from '@/store/actions/reminders';
-import { resetForTests, useData } from '@/store/data';
+import { TooltipProvider } from '@/components/ui';
+import { ReminderField } from '@/components/items/ReminderField';
+import { addReminder, markFired, setReminderConstant } from '@/store/actions/reminders';
+import { resetForTests, undo, useData } from '@/store/data';
 import { navigate, openDetails, useUI } from '@/store/ui';
 
 let work: string;
@@ -163,5 +165,63 @@ describe('Settings', () => {
     expect(dialog.getByLabelText('Open at login')).toBeDisabled();
     await user.click(dialog.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('Constant reminders', () => {
+  const setup = (readOnly = false) => {
+    const id = createItem(work, { text: 'Send deck', dueDate: tomorrow, dueTime: '15:00' })!;
+    const r = addReminder(id, { kind: 'relative', offsetMinutes: 15 })!;
+    const item = useData.getState().tables.items[id];
+    render(
+      <TooltipProvider>
+        <ReminderField item={item} readOnly={readOnly} />
+      </TooltipProvider>,
+    );
+    return r;
+  };
+
+  it('turns on and off from the reminder row, as one undoable step each', async () => {
+    const user = userEvent.setup();
+    const r = setup();
+    const button = screen.getByRole('button', { name: 'Keep reminding' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(button);
+    expect(useData.getState().tables.reminders[r].constant).toBe(true);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Repeats until dismissed/)).toBeInTheDocument();
+
+    // Bug prevented: toggling taking more than one Undo, or none.
+    const steps = useData.getState().past.length;
+    act(() => void undo());
+    expect(useData.getState().past.length).toBe(steps - 1);
+    expect(useData.getState().tables.reminders[r].constant).toBe(false);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText(/Repeats until dismissed/)).not.toBeInTheDocument();
+  });
+
+  it('shows the state without a toggle when read-only', () => {
+    const r = setup(true);
+    expect(screen.queryByRole('button', { name: 'Keep reminding' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Repeats until dismissed/)).not.toBeInTheDocument();
+    act(() => setReminderConstant(r, true));
+    expect(screen.getByText(/Repeats until dismissed/)).toBeInTheDocument();
+  });
+
+  it('marks a constant reminder in the inbox', async () => {
+    const { r } = firedTask('Call Sam');
+    firedTask('Water plants');
+    setReminderConstant(r, true);
+    navigate({ kind: 'reminders' });
+    render(<App />);
+    expect(
+      within(section('Reminded').getByRole('listitem', { name: 'Call Sam' })).getByText('Repeats'),
+    ).toBeVisible();
+    expect(
+      within(section('Reminded').getByRole('listitem', { name: 'Water plants' })).queryByText(
+        'Repeats',
+      ),
+    ).not.toBeInTheDocument();
   });
 });

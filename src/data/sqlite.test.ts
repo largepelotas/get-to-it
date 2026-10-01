@@ -72,7 +72,7 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.items).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(2);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(3);
   });
 
   it('adds the won’t-do column to a database made before it existed', async () => {
@@ -90,6 +90,27 @@ describe('SqliteRepository', () => {
     const data = await new SqliteRepository(exec).load();
     expect(data.tables.items.OLD).toMatchObject({ checked: true, wontDo: false });
     expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
+  });
+
+  // Bug prevented: an upgrade losing reminders, or leaving old ones unreadable without the new column.
+  it('adds the constant column to a version 2 database, keeping its reminders ordinary', async () => {
+    const exec = nodeExecutor();
+    exec.raw.exec('BEGIN');
+    for (const sql of [...MIGRATIONS[0], ...MIGRATIONS[1]]) exec.raw.exec(sql);
+    exec.raw.exec('PRAGMA user_version = 2');
+    exec.raw.exec('COMMIT');
+    exec.raw.exec(
+      `INSERT INTO reminders (id, item_id, kind, offset_minutes, created_at, updated_at)
+       VALUES ('R1', 'I1', 'relative', 15, 1, 1)`,
+    );
+    const repo = new SqliteRepository(exec);
+    const data = await repo.load();
+    expect(data.tables.reminders.R1).toMatchObject({ offsetMinutes: 15, constant: false });
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(3);
+    await repo.write([
+      { kind: 'put', table: 'reminders', row: { ...data.tables.reminders.R1, constant: true } },
+    ]);
+    expect((await new SqliteRepository(exec).load()).tables.reminders.R1.constant).toBe(true);
   });
 
   it('keeps a task closed as won’t do', async () => {

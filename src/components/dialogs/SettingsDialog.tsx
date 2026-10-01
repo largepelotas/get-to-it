@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button, Dialog, Input, Select } from '@/components/ui';
-import type { Settings } from '@/data/types';
+import { BUILT_IN_VIEWS, type BuiltInView, type Settings } from '@/data/types';
 import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
 import { formatTimestamp, isTimeString } from '@/lib/dates';
 import { PALETTES } from '@/lib/theme';
@@ -94,6 +94,77 @@ function AllDayTimeField() {
       }}
       onBlur={() => setDraft(stored)}
     />
+  );
+}
+
+/** The daily review: a checkbox, and its time once it's on. */
+function DailyReview() {
+  const stored = useData((s) => s.settings.dailyReviewTime);
+  const [draft, setDraft] = useState(stored ?? '09:00');
+  return (
+    <>
+      <Toggle
+        id="settings-daily-review"
+        label="Daily review reminder"
+        hint="A “Plan your day” notification with what’s due. Skipped if Checklist isn’t running."
+        checked={stored !== null}
+        onChange={(on) => {
+          const time = isTimeString(draft) ? draft : '09:00';
+          setDraft(time);
+          setSetting('dailyReviewTime', on ? time : null);
+        }}
+      />
+      {stored !== null && (
+        <Row label="Daily review at" htmlFor="settings-daily-review-time">
+          <Input
+            id="settings-daily-review-time"
+            type="time"
+            required
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (isTimeString(e.target.value)) setSetting('dailyReviewTime', e.target.value);
+            }}
+            onBlur={() => setDraft(stored)}
+          />
+        </Row>
+      )}
+    </>
+  );
+}
+
+const VIEW_NAME: Record<BuiltInView, string> = {
+  today: 'Today',
+  tomorrow: 'Tomorrow',
+  next7: 'Next 7 days',
+  upcoming: 'Upcoming',
+  reminders: 'Reminders',
+};
+
+/** One checkbox per built-in view: whether the sidebar lists it. */
+function SidebarViews() {
+  const hidden = useData((s) => s.settings.hiddenViews);
+  return (
+    <>
+      {BUILT_IN_VIEWS.map((name) => (
+        <Toggle
+          key={name}
+          id={`settings-show-${name}`}
+          label={`Show ${VIEW_NAME[name]}`}
+          checked={!hidden.includes(name)}
+          onChange={(show) =>
+            setSetting(
+              'hiddenViews',
+              BUILT_IN_VIEWS.filter((v) => (v === name ? !show : hidden.includes(v))),
+            )
+          }
+        />
+      ))}
+      <p className="text-xs text-fg-subtle">
+        A hidden view is still in the command palette. Reminders shows anyway while some are
+        waiting.
+      </p>
+    </>
   );
 }
 
@@ -244,10 +315,15 @@ export function SettingsDialog() {
           />
         </Section>
 
+        <Section title="Sidebar">
+          <SidebarViews />
+        </Section>
+
         <Section title="Reminders">
           <Row label="Remind about all-day tasks at" htmlFor="settings-all-day-time">
             <AllDayTimeField />
           </Row>
+          <DailyReview />
           <Toggle
             id="settings-close-to-tray"
             label="Keep running in the tray when the window is closed"

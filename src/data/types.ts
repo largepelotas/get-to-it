@@ -103,6 +103,8 @@ export interface Reminder {
   /** The fire time the user last dismissed. */
   dismissedFor: number | null;
   snoozedUntil: number | null;
+  /** Keeps notifying every few minutes after it fires, until dealt with. */
+  constant: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -154,6 +156,10 @@ export interface GroceryCategory {
   name: string;
 }
 
+/** The built-in views the sidebar can hide. */
+export const BUILT_IN_VIEWS = ['today', 'tomorrow', 'next7', 'upcoming', 'reminders'] as const;
+export type BuiltInView = (typeof BUILT_IN_VIEWS)[number];
+
 export interface Settings {
   theme: 'system' | 'light' | 'dark';
   /** The colour scheme, independent of the light/dark theme. */
@@ -174,6 +180,10 @@ export interface Settings {
   seeded: boolean;
   /** The sidebar is tucked away; the main pane shows a button to bring it back. */
   sidebarHidden: boolean;
+  /** Built-in views left out of the sidebar. They stay reachable from the palette and shortcuts. */
+  hiddenViews: BuiltInView[];
+  /** When the "Plan your day" reminder goes off, HH:mm. Null is off. */
+  dailyReviewTime: string | null;
 }
 
 export const DEFAULT_GROCERY_CATEGORIES: GroceryCategory[] = [
@@ -202,6 +212,8 @@ export const DEFAULT_SETTINGS: Settings = {
   lastBackupAt: null,
   seeded: false,
   sidebarHidden: false,
+  hiddenViews: [],
+  dailyReviewTime: null,
 };
 
 /** A complete copy of the data, used for export, import and backups. */

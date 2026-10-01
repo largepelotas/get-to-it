@@ -11,6 +11,7 @@ import {
   markFired,
   markSkipped,
   removeReminder,
+  setReminderConstant,
   snoozeReminder,
 } from './reminders';
 
@@ -98,5 +99,24 @@ describe('bookkeeping', () => {
     setChecked(task, true);
     expect(timeOf(a)).toBe(first + 86_400_000);
     expect(get(a).dismissedFor).toBe(first);
+  });
+});
+
+describe('constant reminders', () => {
+  // Bug prevented: adding the same preset again quietly creating a second, ordinary copy.
+  it('are not added twice by an identical one, and keep their setting', () => {
+    const r = addReminder(task, { kind: 'relative', offsetMinutes: 15 })!;
+    setReminderConstant(r, true);
+    expect(addReminder(task, { kind: 'relative', offsetMinutes: 15 })).toBe(r);
+    expect(reminders()).toHaveLength(1);
+    expect(get(r).constant).toBe(true);
+  });
+
+  it('start out ordinary, and switching on is one undo step', () => {
+    const r = addReminder(task, { kind: 'relative', offsetMinutes: 15 })!;
+    expect(get(r).constant).toBe(false);
+    setReminderConstant(r, true);
+    undo();
+    expect(get(r).constant).toBe(false);
   });
 });

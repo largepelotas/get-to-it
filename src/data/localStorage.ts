@@ -20,6 +20,10 @@ export class LocalStorageRepository extends MemoryRepository {
       tables.items = Object.fromEntries(
         Object.entries(tables.items).map(([id, item]) => [id, { ...item, wontDo: !!item.wontDo }]),
       );
+      // Reminders saved before constant reminders existed don't have the field.
+      tables.reminders = Object.fromEntries(
+        Object.entries(tables.reminders).map(([id, r]) => [id, { ...r, constant: !!r.constant }]),
+      );
       return { tables, settings: parsed.settings ?? {} };
     } catch {
       return undefined;

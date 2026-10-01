@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { AlarmClock, Bell, Check, X } from 'lucide-react';
+import { AlarmClock, Bell, BellRing, Check, X } from 'lucide-react';
 import { completeFromReminder, dismiss, snooze } from '@/commands';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { Button, IconButton, Menu } from '@/components/ui';
@@ -51,6 +51,15 @@ function ReminderRow({ entry, inbox }: { entry: ReminderEntry; inbox: boolean })
             {formatTimestamp(at)}
             {snoozed ? ' (snoozed)' : ` · ${describeReminder(reminder, item)}`}
           </span>
+          {reminder.constant && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="flex shrink-0 items-center gap-1">
+                <BellRing aria-hidden className="size-3" />
+                Repeats
+              </span>
+            </>
+          )}
         </span>
       </button>
       {inbox && (

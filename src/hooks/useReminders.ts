@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { announceMissed } from '@/commands';
+import { announceDailyReview, announceMissed } from '@/commands';
 import { inboxEntries, reminderEntries, type ReminderEntry } from '@/lib/reminders';
 import { onReminderFired, setReminderSchedule } from '@/platform';
 import { useData } from '@/store/data';
@@ -14,6 +14,7 @@ export function useReminderScheduler(): void {
         setSchedule: setReminderSchedule,
         onFired: onReminderFired,
         onMissed: announceMissed,
+        onDailyReview: announceDailyReview,
       }),
     [],
   );

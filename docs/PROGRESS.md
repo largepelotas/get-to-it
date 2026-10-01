@@ -626,6 +626,40 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   "Move to today" is now "Reschedule" (today, tomorrow, next week or a
   picked date, one undo step; `DateChoices` is shared with the bar).
 
+- Smarter reminders and views (after M8): the `View` union has `tomorrow`
+  and `next7`. `store/smart.ts` gained `tomorrowModel`, `next7Model`
+  (an overdue list plus seven `DayGroup`s, empty days kept) and their
+  counts. `SmartSection.emptyText` lets `SmartList` show "Nothing due"
+  under an empty day's heading; empty sections add no rows, so arrow keys
+  skip them. Quick add in Tomorrow dates tasks tomorrow, in Next 7 days
+  today (and the "Add a task" dialog follows). The sidebar order is Today,
+  Tomorrow, Next 7 days, Upcoming, Reminders. The setting `hiddenViews`
+  (built-in view names, unknown ones dropped on load and import) leaves
+  entries out of the sidebar only; the palette ("Go to Tomorrow", "Go to
+  Next 7 days") and Today/Upcoming/Reminders shortcuts still work, the open
+  view stays open, and a hidden Reminders entry shows while the inbox has
+  something in it. Settings has a "Sidebar" group of "Show …" checkboxes.
+  Constant reminders: `Reminder.constant` (SQLite migration 3, `constant
+INTEGER NOT NULL DEFAULT 0`; missing in old localStorage data or exports
+  reads as false; the snapshot `version` stays 1). A delivered (`fired`)
+  constant reminder gets one extra scheduled notification, id
+  `<reminderId>:again`, at `nextRepeatAt` (`lib/reminders.ts`: the next
+  `fire time + k × REPEAT_EVERY`, 5 minutes, up to `REPEAT_LIMIT`, 2 hours),
+  with "Still waiting · " in front of the body. When the platform reports it
+  fired, `reminderScheduler` stores nothing and just runs another pass to
+  queue the next one. Dismissing, snoozing, completing, deleting, removing,
+  switching off or moving the time all end it, because the entry stops being
+  `fired`. The native and browser schedulers are unchanged. `ReminderField`
+  rows have a "Keep reminding" toggle (`setReminderConstant`, one undo step)
+  and the inbox marks them "Repeats". The daily review is the setting
+  `dailyReviewTime` (HH:mm or null): the pass adds a "Plan your day"
+  notification with id `daily-review` at the next occurrence (`dailyReviewAt`),
+  with a body from the due counts for the day it fires on. When it fires the
+  scheduler calls `onDailyReview` (a toast with a Today button,
+  `announceDailyReview`) and queues the next one; nothing is shown late if
+  the app was closed. The scheduler subscription also watches
+  `dailyReviewTime`.
+
 ### Accessibility and loading (M8)
 
 - **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)

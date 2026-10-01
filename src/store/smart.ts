@@ -1,6 +1,6 @@
 import type { Item, List } from '@/data/types';
 import { bySortKey } from '@/lib/order';
-import type { DateKey } from '@/lib/dates';
+import { addDaysKey, type DateKey } from '@/lib/dates';
 import type { FlatRow } from './tree';
 
 /** A task shown in Today or Upcoming, with the list it comes from. */
@@ -92,4 +92,41 @@ export function upcomingModel(rows: DueRow[], today: DateKey): DayGroup[] {
 /** How many tasks Today shows, for the sidebar. */
 export function todayCount(rows: DueRow[], today: DateKey): number {
   return rows.filter((r) => r.item.dueDate! <= today).length;
+}
+
+/** Tasks due tomorrow, in the same order as Today. */
+export function tomorrowModel(rows: DueRow[], today: DateKey): DueRow[] {
+  const tomorrow = addDaysKey(today, 1);
+  return rows.filter((r) => r.item.dueDate === tomorrow);
+}
+
+export function tomorrowCount(rows: DueRow[], today: DateKey): number {
+  return tomorrowModel(rows, today).length;
+}
+
+export interface Next7Model {
+  overdue: DueRow[];
+  /** Today and the six days after it, every one present even when it has no tasks. */
+  days: DayGroup[];
+}
+
+/** Overdue tasks, then each of the next seven days (today first). */
+export function next7Model(rows: DueRow[], today: DateKey): Next7Model {
+  const days: DayGroup[] = Array.from({ length: 7 }, (_, i) => ({
+    date: addDaysKey(today, i),
+    rows: [],
+  }));
+  const overdue: DueRow[] = [];
+  for (const row of rows) {
+    const date = row.item.dueDate!;
+    if (date < today) overdue.push(row);
+    else days.find((d) => d.date === date)?.rows.push(row);
+  }
+  return { overdue, days };
+}
+
+/** How many tasks Next 7 days shows, for the sidebar: overdue plus the seven days. */
+export function next7Count(rows: DueRow[], today: DateKey): number {
+  const { overdue, days } = next7Model(rows, today);
+  return overdue.length + days.reduce((sum, d) => sum + d.rows.length, 0);
 }

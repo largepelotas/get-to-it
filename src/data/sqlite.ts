@@ -82,6 +82,8 @@ const SCHEMA: Record<TableName, Column[]> = {
     firedFor: 'int',
     dismissedFor: 'int',
     snoozedUntil: 'int',
+    // Added in migration 3.
+    constant: 'bool',
     createdAt: 'int',
     updatedAt: 'int',
   }),
@@ -188,6 +190,8 @@ export const MIGRATIONS: string[][] = [
   ],
   // Tasks closed without being done.
   [`ALTER TABLE items ADD COLUMN wont_do INTEGER NOT NULL DEFAULT 0`],
+  // Reminders that keep notifying until dealt with.
+  [`ALTER TABLE reminders ADD COLUMN constant INTEGER NOT NULL DEFAULT 0`],
 ];
 
 function toColumnValue(value: unknown, type: ColumnType): unknown {

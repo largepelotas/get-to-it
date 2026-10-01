@@ -30,6 +30,8 @@ export interface SmartSection {
   actions?: ReactNode;
   tone?: 'danger';
   rows: DueRow[];
+  /** Shown under the heading when there are no rows (otherwise an empty section is just a heading). */
+  emptyText?: string;
   /** The heading names the day, so rows show only their time. */
   timeOnly?: boolean;
 }
@@ -183,6 +185,9 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
             <span className="min-w-0 flex-1 truncate">{section.title}</span>
             {section.actions}
           </h2>
+          {!section.rows.length && section.emptyText && (
+            <p className="px-2 py-2 text-sm text-fg-muted">{section.emptyText}</p>
+          )}
           <div role="list" className="pt-1">
             {section.rows.map((row, rowIndex) => {
               const i = starts[sectionIndex] + rowIndex;

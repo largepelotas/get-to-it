@@ -3,6 +3,11 @@ import { addDaysKey, formatDue, formatTimestamp, todayKey, toTimestamp } from '.
 
 const MINUTE = 60_000;
 
+/** A constant reminder notifies again this often while it waits in the inbox... */
+export const REPEAT_EVERY = 5 * MINUTE;
+/** ...for this long after its fire time. */
+export const REPEAT_LIMIT = 2 * 60 * MINUTE;
+
 /** A reminder to add: some minutes before the due moment, or at a fixed time (epoch ms). */
 export type ReminderSpec =
   { kind: 'relative'; offsetMinutes: number } | { kind: 'absolute'; at: number };
@@ -125,6 +130,28 @@ export function planSchedule(
     else plan.skipped.push(entry);
   }
   return plan;
+}
+
+/**
+ * When a delivered constant reminder should notify again: the first
+ * `at + k × REPEAT_EVERY` (k ≥ 1) after `now`, or null once that would be
+ * past `REPEAT_LIMIT`, or if the reminder isn't constant and waiting.
+ */
+export function nextRepeatAt(
+  entry: Pick<ReminderEntry, 'reminder' | 'at' | 'state'>,
+  now: number,
+): number | null {
+  if (!entry.reminder.constant || entry.state !== 'fired') return null;
+  const k = Math.max(1, Math.floor((now - entry.at) / REPEAT_EVERY) + 1);
+  const next = entry.at + k * REPEAT_EVERY;
+  return next <= entry.at + REPEAT_LIMIT ? next : null;
+}
+
+/** The next time the daily review goes off: today at `time` if still ahead, else tomorrow. */
+export function dailyReviewAt(time: string, now: number): number {
+  const today = todayKey(new Date(now));
+  const todays = toTimestamp(today, time);
+  return todays > now ? todays : toTimestamp(addDaysKey(today, 1), time);
 }
 
 /** Notification text: the task, then when it's due and which list it's in. */

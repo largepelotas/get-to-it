@@ -3,6 +3,7 @@ import { MemoryRepository } from '@/data/memory';
 import {
   commit,
   flushWrites,
+  initData,
   redo,
   resetForTests,
   undo,
@@ -108,5 +109,26 @@ describe('folders and lists', () => {
     expect(lists()[note].deletedAt).not.toBeNull();
     restoreList(note);
     expect(lists()[note].deletedAt).toBeNull();
+  });
+});
+
+describe('loading settings', () => {
+  // Bug prevented: data saved before these settings existed loading without defaults.
+  it('uses defaults for missing settings and drops unknown view names', async () => {
+    await initData(new MemoryRepository({ settings: { theme: 'dark' } }));
+    expect(useData.getState().settings).toMatchObject({
+      theme: 'dark',
+      hiddenViews: [],
+      dailyReviewTime: null,
+    });
+    await initData(
+      new MemoryRepository({
+        settings: { hiddenViews: ['tomorrow', 'bogus'] as never, dailyReviewTime: '07:00' },
+      }),
+    );
+    expect(useData.getState().settings).toMatchObject({
+      hiddenViews: ['tomorrow'],
+      dailyReviewTime: '07:00',
+    });
   });
 });

@@ -9,7 +9,7 @@ import { docFromText } from '@/lib/richText';
 import { createItem, setItemCollapsed } from '@/store/actions/items';
 import { createList } from '@/store/actions/lists';
 import { setNoteContent } from '@/store/actions/notes';
-import { resetForTests, useData } from '@/store/data';
+import { resetForTests, setSetting, useData } from '@/store/data';
 import { seedIfNeeded } from '@/store/seed';
 import { navigate, useUI } from '@/store/ui';
 
@@ -173,6 +173,21 @@ describe('app shortcuts', () => {
     expect(useUI.getState().view).toEqual({ kind: 'today' });
     await user.keyboard('{Control>}{Shift>}n{/Shift}{/Control}');
     expect(screen.getByRole('dialog', { name: 'New list' })).toBeInTheDocument();
+  });
+
+  // Bug prevented: hiding a view in the sidebar also taking it out of the palette.
+  it('goes to Tomorrow and Next 7 days, even when the sidebar hides them', async () => {
+    const user = userEvent.setup();
+    setSetting('hiddenViews', ['tomorrow', 'next7']);
+    render(<App />);
+    await user.keyboard('{Control>}k{/Control}');
+    await user.type(screen.getByRole('combobox'), 'go to tomorrow');
+    await user.keyboard('{Enter}');
+    expect(useUI.getState().view).toEqual({ kind: 'tomorrow' });
+    await user.keyboard('{Control>}k{/Control}');
+    await user.type(screen.getByRole('combobox'), 'go to next 7');
+    await user.keyboard('{Enter}');
+    expect(useUI.getState().view).toEqual({ kind: 'next7' });
   });
 
   it('copies the open list as Markdown', async () => {

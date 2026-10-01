@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { AlarmClock, Bell, BellPlus, X } from 'lucide-react';
+import { AlarmClock, Bell, BellPlus, BellRing, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { useMemo, useState } from 'react';
 import { remind } from '@/commands';
@@ -7,7 +7,7 @@ import { Button, IconButton, Input, Menu, type MenuEntries } from '@/components/
 import type { Item } from '@/data/types';
 import { formatTimestamp } from '@/lib/dates';
 import { describeReminder, fireTime, presetsFor } from '@/lib/reminders';
-import { removeReminder } from '@/store/actions/reminders';
+import { removeReminder, setReminderConstant } from '@/store/actions/reminders';
 import { useNow } from '@/hooks/useNow';
 import { useData } from '@/store/data';
 
@@ -118,7 +118,7 @@ export function ReminderField({ item, readOnly }: { item: Item; readOnly: boolea
             const passed = at === null || at <= now || item.checked;
             const snoozed = at !== null && reminder.snoozedUntil === at;
             const label = describeReminder(reminder, item);
-            const detail =
+            const when =
               reminder.kind === 'relative' && !item.dueDate
                 ? 'Needs a due date'
                 : at === null
@@ -128,6 +128,9 @@ export function ReminderField({ item, readOnly }: { item: Item; readOnly: boolea
                     : reminder.kind === 'relative'
                       ? formatTimestamp(at)
                       : null;
+            const detail = reminder.constant
+              ? [when, 'Repeats until dismissed'].filter(Boolean).join(' · ')
+              : when;
             return (
               <li
                 key={reminder.id}
@@ -145,6 +148,20 @@ export function ReminderField({ item, readOnly }: { item: Item; readOnly: boolea
                     <span className="block truncate text-xs text-fg-subtle">{detail}</span>
                   )}
                 </span>
+                {!readOnly && (
+                  <IconButton
+                    size="sm"
+                    label="Keep reminding"
+                    aria-pressed={reminder.constant}
+                    icon={<BellRing className="size-3.5" />}
+                    onClick={() => setReminderConstant(reminder.id, !reminder.constant)}
+                    className={clsx(
+                      reminder.constant
+                        ? 'text-accent!'
+                        : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                    )}
+                  />
+                )}
                 {!readOnly && (
                   <IconButton
                     size="sm"

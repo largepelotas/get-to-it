@@ -1,5 +1,6 @@
 import type { LoadResult } from '@/data/repository';
 import {
+  BUILT_IN_VIEWS,
   COLOR_NAMES,
   DEFAULT_SETTINGS,
   emptyTables,
@@ -134,6 +135,7 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     firedFor: opt(num),
     dismissedFor: opt(num),
     snoozedUntil: opt(num),
+    constant: or(bool, false),
     createdAt: num,
     updatedAt: num,
   },
@@ -192,6 +194,12 @@ function checkSettings(raw: unknown): Partial<Settings> {
         out[key] = value.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }));
     } else if (key === 'allDayReminderTime') {
       if (isTimeString(value)) out[key] = value;
+    } else if (key === 'hiddenViews') {
+      // Unknown view names (from a newer version) are dropped.
+      if (Array.isArray(value))
+        out[key] = BUILT_IN_VIEWS.filter((v) => (value as unknown[]).includes(v));
+    } else if (key === 'dailyReviewTime') {
+      if (value === null || isTimeString(value)) out[key] = value;
     } else if (key === 'theme') {
       if (['system', 'light', 'dark'].includes(value as string)) out[key] = value;
     } else if (key === 'palette') {
