@@ -110,6 +110,7 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     parentId: opt(id),
     text: str,
     checked: or(bool, false),
+    wontDo: or(bool, false),
     completedAt: opt(num),
     sortKey: str,
     collapsed: or(bool, false),

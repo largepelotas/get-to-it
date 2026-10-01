@@ -8,6 +8,7 @@ import {
   Keyboard,
   Monitor,
   Moon,
+  PanelLeftClose,
   Plus,
   Settings as SettingsIcon,
   Sun,
@@ -15,7 +16,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useMemo } from 'react';
-import { newFolder } from '@/commands';
+import { newFolder, toggleSidebar } from '@/commands';
 import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
 import { Button, ContextMenu, IconButton, Menu, Tooltip, type MenuEntries } from '@/components/ui';
@@ -52,6 +53,13 @@ function settingsEntries(theme: Settings['theme']): MenuEntries {
       onSelect: () => setSetting('theme', t.value),
     })),
     { kind: 'separator' },
+    {
+      label: 'Hide sidebar',
+      icon: <PanelLeftClose className="size-3.5" />,
+      shortcut: SHORTCUTS.toggleSidebar,
+      movesFocus: true,
+      onSelect: toggleSidebar,
+    },
     {
       label: 'Settings…',
       icon: <SettingsIcon className="size-3.5" />,
@@ -204,6 +212,12 @@ export function Sidebar() {
               </span>
             </Tooltip>
           )}
+          <IconButton
+            label="Hide sidebar"
+            shortcut={SHORTCUTS.toggleSidebar}
+            icon={<PanelLeftClose className="size-4" />}
+            onClick={toggleSidebar}
+          />
           <Menu
             side="top"
             align="end"

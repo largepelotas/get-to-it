@@ -6,7 +6,15 @@ import { matchesShortcut } from '@/lib/shortcuts';
 import { useItemsWithReminders } from '@/hooks/useReminders';
 import { isMac } from '@/platform';
 import type { DueRow } from '@/store/smart';
-import { closeDetails, openDetails, openList, pickDueDate, selectItem, useUI } from '@/store/ui';
+import {
+  clearReveal,
+  closeDetails,
+  openDetails,
+  openList,
+  pickDueDate,
+  selectItem,
+  useUI,
+} from '@/store/ui';
 import { itemMenuEntries } from './itemMenu';
 import { ItemRow, type RowKeyMode } from './ItemRow';
 
@@ -56,6 +64,14 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
     input?.focus();
     input?.setSelectionRange(input.value.length, input.value.length);
   }, [focus]);
+
+  // A row asked for from outside (a duplicate): focus it, and never leave the request pending.
+  const reveal = useUI((s) => s.reveal);
+  useLayoutEffect(() => {
+    if (!reveal) return;
+    containerRef.current?.querySelector<HTMLElement>(`[data-item-id="${reveal}"]`)?.focus();
+    clearReveal();
+  }, [reveal]);
 
   const focusRow = (id: string, mode: RowKeyMode = 'row') => {
     selectItem(id);

@@ -1,7 +1,7 @@
 import clsx from 'clsx';
-import { CalendarDays, ChevronUp, Flag, Plus, Repeat, Trash, X } from 'lucide-react';
+import { CalendarDays, ChevronUp, Flag, Plus, Repeat, SkipForward, Trash, X } from 'lucide-react';
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { toggleItem, trashItems } from '@/commands';
+import { skipTask, toggleItem, trashItems } from '@/commands';
 import { RichTextField } from '@/components/editor/RichTextField';
 import { Button, IconButton, Popover } from '@/components/ui';
 import type { Item } from '@/data/types';
@@ -275,6 +275,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
             className="mt-1.5"
             tabbable
             checked={item.checked}
+            wontDo={item.wontDo}
             priority={item.priority}
             disabled={readOnly}
             label={item.checked ? 'Mark as not done' : 'Mark as done'}
@@ -284,6 +285,12 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
         </div>
 
         <DueField item={item} readOnly={readOnly} />
+        {!readOnly && !item.checked && !!item.recurrence && !!item.dueDate && (
+          <Button size="sm" variant="ghost" onClick={() => skipTask(item.id)}>
+            <SkipForward aria-hidden className="size-3.5" />
+            Skip this time
+          </Button>
+        )}
 
         <ReminderField key={item.id} item={item} readOnly={readOnly} />
 
@@ -346,6 +353,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
                   <Checkbox
                     tabbable
                     checked={sub.checked}
+                    wontDo={sub.wontDo}
                     priority={sub.priority}
                     disabled={readOnly}
                     label={sub.text}
@@ -374,7 +382,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
       <div className="flex shrink-0 items-center gap-2 border-t border-line px-4 py-2.5 text-xs text-fg-subtle">
         <span className="min-w-0 flex-1 truncate">
           {item.completedAt
-            ? `Completed ${formatTimestamp(item.completedAt)}`
+            ? `${item.wontDo ? "Closed as won't do" : 'Completed'} ${formatTimestamp(item.completedAt)}`
             : `Created ${formatTimestamp(item.createdAt)}`}
         </span>
         {!readOnly && (

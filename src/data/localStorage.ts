@@ -15,7 +15,12 @@ export class LocalStorageRepository extends MemoryRepository {
       const raw = storage.getItem(KEY);
       if (!raw) return undefined;
       const parsed = JSON.parse(raw) as LoadResult;
-      return { tables: { ...emptyTables(), ...parsed.tables }, settings: parsed.settings ?? {} };
+      const tables = { ...emptyTables(), ...parsed.tables };
+      // Items saved before "won't do" existed don't have the field.
+      tables.items = Object.fromEntries(
+        Object.entries(tables.items).map(([id, item]) => [id, { ...item, wontDo: !!item.wontDo }]),
+      );
+      return { tables, settings: parsed.settings ?? {} };
     } catch {
       return undefined;
     }

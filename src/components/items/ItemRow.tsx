@@ -14,6 +14,7 @@ import { toggleItem } from '@/commands';
 import { formatDue, formatTime, isOverdue } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { setItemCollapsed, setItemText } from '@/store/actions/items';
+import { pickDueDate } from '@/store/ui';
 import type { FlatRow } from '@/store/tree';
 import { Checkbox } from './Checkbox';
 import { describeRow, originTitle, type RowOrigin } from './describeRow';
@@ -99,6 +100,46 @@ function ItemText({
         )}
       />
     </span>
+  );
+}
+
+/** The due date on a row. Clicking it opens the due-date picker. */
+function DueLabel({
+  label,
+  fullLabel,
+  repeats,
+  overdue,
+  onPick,
+}: {
+  label: string;
+  fullLabel: string;
+  repeats: boolean;
+  overdue: boolean;
+  onPick?: () => void;
+}) {
+  const content = (
+    <>
+      {repeats && <Repeat aria-hidden className="size-3" />}
+      {label}
+    </>
+  );
+  const tone = overdue ? 'text-danger' : 'hover:text-fg';
+  if (!onPick) {
+    return <span className={clsx('flex items-center gap-1', tone)}>{content}</span>;
+  }
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={`Due date: ${fullLabel}, change`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPick();
+      }}
+      className={clsx('-mx-1 flex items-center gap-1 rounded px-1 py-0.5 hover:bg-line', tone)}
+    >
+      {content}
+    </button>
   );
 }
 
@@ -192,6 +233,7 @@ export function ItemRow({
         )}
         <Checkbox
           checked={item.checked}
+          wontDo={item.wontDo}
           priority={item.priority}
           disabled={readOnly}
           label={item.text}
@@ -204,27 +246,37 @@ export function ItemRow({
             {description}
           </span>
         )}
-        <span aria-hidden className="flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle">
+        <span className="flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle">
           {childCount > 0 && (
-            <span className="tabular-nums">
+            <span aria-hidden className="tabular-nums">
               {doneCount}/{childCount}
             </span>
           )}
-          {hasReminder && <Bell className="size-3.5" />}
-          {hasNotes && <NotebookText className="size-3.5" />}
+          {hasReminder && <Bell aria-hidden className="size-3.5" />}
+          {hasNotes && <NotebookText aria-hidden className="size-3.5" />}
           {item.dueDate && (!timeOnly || item.dueTime || item.recurrence) && (
-            <span className={clsx('flex items-center gap-1', overdue && 'text-danger')}>
-              {item.recurrence && <Repeat className="size-3" />}
-              {timeOnly
-                ? item.dueTime && formatTime(item.dueTime)
-                : formatDue(item.dueDate, item.dueTime)}
-            </span>
+            <DueLabel
+              label={
+                timeOnly
+                  ? (item.dueTime && formatTime(item.dueTime)) || ''
+                  : formatDue(item.dueDate, item.dueTime)
+              }
+              fullLabel={formatDue(item.dueDate, item.dueTime)}
+              repeats={!!item.recurrence}
+              overdue={overdue}
+              onPick={readOnly ? undefined : () => pickDueDate(item.id)}
+            />
           )}
           {item.priority > 0 && (
-            <Flag className="size-3.5" style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }} />
+            <Flag
+              aria-hidden
+              className="size-3.5"
+              style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }}
+            />
           )}
           {origin && (
             <span
+              aria-hidden
               className="flex max-w-48 min-w-0 items-center gap-1.5"
               title={originTitle(origin)}
             >

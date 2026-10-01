@@ -75,3 +75,16 @@ test('a repeating task moves to its next date when checked', async ({ page }) =>
   await task.getByRole('checkbox').click();
   await expect(task).toHaveAccessibleDescription(/^Due Tomorrow\. Repeats every day/);
 });
+
+test('clicking the due date on a row opens the date picker', async ({ page }) => {
+  await addTasks(page, 'Review deck tomorrow');
+  const task = row(page, 'Review deck');
+  await task.getByRole('button', { name: 'Due date: Tomorrow, change' }).click();
+
+  const panel = page.getByRole('complementary', { name: 'Task details' });
+  await expect(panel).toBeVisible();
+  await expect(page.getByLabel('Time')).toBeVisible();
+  // The click didn't tick the task or start editing it.
+  await expect(task.getByRole('checkbox')).not.toBeChecked();
+  await expect(task.getByRole('textbox', { name: 'Task' })).not.toBeFocused();
+});

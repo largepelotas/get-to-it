@@ -8,11 +8,19 @@ import {
   restoreList,
   setShowCompleted,
 } from './store/actions/lists';
-import { formatDateKey, formatTimestamp } from './lib/dates';
+import { formatDateKey, formatDue, formatTimestamp } from './lib/dates';
 import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
 import { copyText, notify, requestNotificationPermission } from './platform';
 import { clearChecked, uncheckAll } from './store/actions/grocery';
-import { deleteItems, setChecked, setItemCollapsed } from './store/actions/items';
+import {
+  deleteItems,
+  duplicateItem,
+  moveItemToList,
+  setChecked,
+  setItemCollapsed,
+  setWontDo,
+  skipOccurrence,
+} from './store/actions/items';
 import {
   addReminder,
   dismissReminders,
@@ -20,7 +28,7 @@ import {
   type ReminderSpec,
 } from './store/actions/reminders';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
-import { lastEntryId, redo, undo, undoEntry, useData } from './store/data';
+import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
 import { listToMarkdown } from './store/markdown';
 import { confirmAction, navigate, openList, startRename, useUI, type View } from './store/ui';
 
@@ -194,6 +202,41 @@ export function trashItems(ids: string[]): void {
   );
 }
 
+/** Moves a task to another to-do list, with an Undo toast. */
+export function moveTaskToList(id: string, listId: string): void {
+  const { items, lists } = useData.getState().tables;
+  const list = lists[listId];
+  if (!items[id] || !list || items[id].listId === listId) return;
+  moveItemToList(id, listId);
+  if (useData.getState().tables.items[id]?.listId !== listId) return;
+  // In a list view the task is no longer there, so nothing in it stays selected.
+  const { view, selectedItemId } = useUI.getState();
+  const selected = selectedItemId ? useData.getState().tables.items[selectedItemId] : undefined;
+  if (view.kind === 'list' && selected && selected.listId !== view.listId) {
+    useUI.setState({ selectedItemId: null, detailsOpen: false, duePickerFor: null });
+  }
+  toastWithUndo(`Moved to ${list.title}`);
+}
+
+/** Copies a task and its subtasks, and selects the copy. */
+export function duplicateTask(id: string): void {
+  const copy = duplicateItem(id);
+  // Whichever list is open (a list, Today or Upcoming) focuses the row and clears `reveal`.
+  if (copy) useUI.setState({ selectedItemId: copy, reveal: copy });
+}
+
+/** Skips one occurrence of a repeating task. */
+export function skipTask(id: string): void {
+  const item = useData.getState().tables.items[id];
+  const next = skipOccurrence(id);
+  if (item && next) toast(`Skipped to ${formatDue(next, item.dueTime)}`, { duration: 3000 });
+}
+
+/** Closes a task without doing it. */
+export function closeAsWontDo(id: string): void {
+  setWontDo(id);
+}
+
 const itemCount = (n: number) => (n === 1 ? '1 item' : `${n} items`);
 
 /** Grocery "Uncheck all": everything in the cart goes back on the list. */
@@ -225,6 +268,27 @@ export function toggleItem(id: string, checked: boolean, { announce = false } = 
   const next = setChecked(id, checked);
   if (next) toastWithUndo(`${quote(item.text)} is next due ${dueOn(next)}`);
   else if (checked && announce) toastWithUndo(`Completed ${quote(item.text)}`);
+}
+
+/**
+ * Hides or shows the sidebar. If focus was on what's about to disappear (the
+ * sidebar, or the Show sidebar button), it moves to the other one.
+ */
+export function toggleSidebar(): void {
+  const hide = !useData.getState().settings.sidebarHidden;
+  const active = document.activeElement;
+  // Focus only moves when the thing holding it is about to go away.
+  const lost = hide
+    ? !!active?.closest('[data-region="sidebar"]')
+    : !!active?.closest('[data-show-sidebar]');
+  setSetting('sidebarHidden', hide);
+  if (!lost) return;
+  setTimeout(() => {
+    const target = hide
+      ? document.querySelector<HTMLElement>('[data-show-sidebar]')
+      : document.querySelector<HTMLElement>('[data-region="sidebar"] [aria-current]');
+    target?.focus();
+  }, 0);
 }
 
 export function undoCommand(): void {

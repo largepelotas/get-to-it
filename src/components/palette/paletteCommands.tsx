@@ -12,6 +12,8 @@ import {
   Monitor,
   Moon,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Redo2,
   Settings as SettingsIcon,
@@ -22,7 +24,14 @@ import {
   Upload,
   type LucideIcon,
 } from 'lucide-react';
-import { confirmEmptyTrash, copyAsMarkdown, newFolder, redoCommand, undoCommand } from '@/commands';
+import {
+  confirmEmptyTrash,
+  copyAsMarkdown,
+  newFolder,
+  redoCommand,
+  toggleSidebar,
+  undoCommand,
+} from '@/commands';
 import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
 import type { Settings, Tables } from '@/data/types';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
@@ -56,6 +65,7 @@ export interface PaletteContext {
   tables: Pick<Tables, 'lists'>;
   theme: Settings['theme'];
   palette: Settings['palette'];
+  sidebarHidden: boolean;
   undoLabel: string | null;
   redoLabel: string | null;
 }
@@ -72,6 +82,7 @@ export function paletteCommands({
   tables,
   theme,
   palette,
+  sidebarHidden,
   undoLabel,
   redoLabel,
 }: PaletteContext): PaletteCommand[] {
@@ -145,6 +156,14 @@ export function paletteCommands({
       shortcut: SHORTCUTS.redo,
       keepsFocus: true,
       run: redoCommand,
+    },
+    {
+      id: 'toggle-sidebar',
+      label: sidebarHidden ? 'Show sidebar' : 'Hide sidebar',
+      keywords: 'panel lists',
+      icon: sidebarHidden ? PanelLeftOpen : PanelLeftClose,
+      shortcut: SHORTCUTS.toggleSidebar,
+      run: toggleSidebar,
     },
     ...THEMES.filter((t) => t.value !== theme).map((t): PaletteCommand => ({
       id: `theme-${t.value}`,

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { copyAsMarkdown, redoCommand, undoCommand } from '@/commands';
+import { copyAsMarkdown, redoCommand, toggleSidebar, undoCommand } from '@/commands';
 import { SHORTCUTS } from '@/lib/keymap';
 import { isEditableTarget, matchesShortcut } from '@/lib/shortcuts';
 import { isMac } from '@/platform';
@@ -70,6 +70,7 @@ export function useAppShortcuts(): void {
       if (dialog) return;
       if (is(SHORTCUTS.nextRegion)) return run(() => cycleRegion(1));
       if (is(SHORTCUTS.previousRegion)) return run(() => cycleRegion(-1));
+      if (is(SHORTCUTS.toggleSidebar)) return run(toggleSidebar);
       if (is(SHORTCUTS.settings)) return run(() => openDialog({ kind: 'settings' }));
       if (is(SHORTCUTS.help)) return run(() => openDialog({ kind: 'shortcuts' }));
       if (is(SHORTCUTS.newList)) return run(() => openDialog({ kind: 'newList', folderId: null }));

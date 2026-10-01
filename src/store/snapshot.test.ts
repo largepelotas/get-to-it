@@ -118,6 +118,8 @@ describe('snapshots', () => {
     expect(tables.lists.L).toMatchObject({ pinned: false, showCompleted: true, folderId: null });
     expect(tables.items.I).toMatchObject({
       checked: false,
+      // Exports from before "won't do" load as ordinary tasks.
+      wontDo: false,
       priority: 0,
       recurrence: null,
       dueDate: null,

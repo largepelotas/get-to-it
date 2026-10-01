@@ -68,6 +68,8 @@ export interface Item {
   parentId: string | null;
   text: string;
   checked: boolean;
+  /** Closed without being done. Only meaningful with `checked`. */
+  wontDo: boolean;
   completedAt: number | null;
   sortKey: string;
   /** Subtasks hidden. */
@@ -170,6 +172,8 @@ export interface Settings {
   lastBackupAt: number | null;
   /** Set once the welcome content has been created. */
   seeded: boolean;
+  /** The sidebar is tucked away; the main pane shows a button to bring it back. */
+  sidebarHidden: boolean;
 }
 
 export const DEFAULT_GROCERY_CATEGORIES: GroceryCategory[] = [
@@ -197,6 +201,7 @@ export const DEFAULT_SETTINGS: Settings = {
   backupsEnabled: true,
   lastBackupAt: null,
   seeded: false,
+  sidebarHidden: false,
 };
 
 /** A complete copy of the data, used for export, import and backups. */

@@ -31,11 +31,17 @@ function notesBlock(item: Item, pad: string): string[] {
   return md.split('\n').map((line) => (line ? pad + line : ''));
 }
 
+/** A won't-do task is struck through, so it reads as closed but not done. */
+function taskText(item: Item): string {
+  const text = escapeMarkdown(item.text);
+  return item.checked && item.wontDo ? `~~${text}~~` : text;
+}
+
 function taskLines(node: TreeNode, depth: number): string[] {
   const pad = '  '.repeat(depth);
   const { item } = node;
   return [
-    `${pad}- [${item.checked ? 'x' : ' '}] ${escapeMarkdown(item.text)}${taskMeta(item)}`,
+    `${pad}- [${item.checked ? 'x' : ' '}] ${taskText(item)}${taskMeta(item)}`,
     ...notesBlock(item, `${pad}  `),
     ...node.children.flatMap((child) => taskLines(child, depth + 1)),
   ];

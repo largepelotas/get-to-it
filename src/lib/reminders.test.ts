@@ -101,6 +101,10 @@ describe('reminderEntries', () => {
     const r = reminder();
     expect(reminderEntries(tables([item()], [r]), '09:00', now)).toHaveLength(1);
     expect(reminderEntries(tables([item({ checked: true })], [r]), '09:00', now)).toEqual([]);
+    // A task closed as won't do never fires either.
+    expect(
+      reminderEntries(tables([item({ checked: true, wontDo: true })], [r]), '09:00', now),
+    ).toEqual([]);
     expect(reminderEntries(tables([item({ deletedAt: 1 })], [r]), '09:00', now)).toEqual([]);
     const archived = { ...list, archivedAt: 1 };
     expect(reminderEntries(tables([item()], [r], [archived]), '09:00', now)).toEqual([]);

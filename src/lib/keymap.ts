@@ -12,6 +12,7 @@ export const SHORTCUTS = {
   copyMarkdown: 'Mod+Shift+C',
   settings: 'Mod+,',
   help: 'Mod+/',
+  toggleSidebar: 'Mod+\\',
   /** Move between the sidebar, the open view and the details panel. */
   nextRegion: 'F6',
   previousRegion: 'Shift+F6',
@@ -47,6 +48,7 @@ export const SHORTCUT_HELP: { title: string; entries: ShortcutHelp[] }[] = [
       { keys: ['Shift+F10'], label: 'Open the menu of the focused row' },
       { keys: [SHORTCUTS.undo], label: 'Undo' },
       { keys: [SHORTCUTS.redo], label: 'Redo' },
+      { keys: [SHORTCUTS.toggleSidebar], label: 'Hide or show the sidebar' },
       { keys: [SHORTCUTS.settings], label: 'Settings' },
       { keys: [SHORTCUTS.help], label: 'Keyboard shortcuts' },
     ],

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Recurrence } from '@/data/types';
-import { describeRecurrence, firstOccurrence, nextDueDate, sanitizeRecurrence } from './recurrence';
+import {
+  describeRecurrence,
+  firstOccurrence,
+  nextDueDate,
+  sanitizeRecurrence,
+  skipDueDate,
+} from './recurrence';
 
 const rule = (r: Partial<Recurrence>): Recurrence => ({
   freq: 'daily',
@@ -112,5 +118,43 @@ describe('sanitizeRecurrence', () => {
       mode: 'schedule',
       weekdays: [1],
     });
+  });
+});
+
+describe('skipDueDate', () => {
+  it('moves to the next occurrence after the due date, not after today', () => {
+    // Late by a week: finishing would jump past today, skipping goes one step.
+    expect(skipDueDate(rule({}), '2026-09-23')).toBe('2026-09-24');
+    expect(skipDueDate(rule({ interval: 3 }), '2026-09-24')).toBe('2026-09-27');
+  });
+
+  it('lands on today or later when the task is overdue', () => {
+    expect(skipDueDate(rule({}), '2026-09-23', WED)).toBe(WED);
+    expect(skipDueDate(rule({ interval: 3 }), '2026-09-20', WED)).toBe('2026-10-02');
+    const weekly = rule({ freq: 'weekly', interval: 2, weekdays: [1], mode: 'schedule' });
+    // Every other Monday from 14 September: 28 September has passed, 12 October is next.
+    expect(skipDueDate(weekly, '2026-09-14', WED)).toBe('2026-10-12');
+    const completion = rule({ freq: 'weekly', mode: 'completion' });
+    expect(skipDueDate(completion, '2026-09-01', WED)).toBe('2026-10-06');
+    // A future due date still moves one occurrence.
+    expect(skipDueDate(rule({}), '2026-10-05', WED)).toBe('2026-10-06');
+  });
+
+  it('follows the weekdays of a weekly rule', () => {
+    const weekdays = rule({ freq: 'weekly', weekdays: [1, 3, 5] });
+    expect(skipDueDate(weekdays, WED)).toBe('2026-10-02');
+    expect(skipDueDate(weekdays, '2026-10-02')).toBe('2026-10-05');
+  });
+
+  it('counts "after completion" rules from the due date', () => {
+    const rule6 = rule({ freq: 'weekly', interval: 2, mode: 'completion' });
+    expect(skipDueDate(rule6, '2026-09-01')).toBe('2026-09-15');
+  });
+
+  it('keeps month ends on the schedule', () => {
+    expect(skipDueDate(rule({ freq: 'monthly' }), '2026-01-31')).toBe('2026-02-28');
+    // Overdue across February: still the month end, not the 28th.
+    const completion = rule({ freq: 'monthly', mode: 'completion' });
+    expect(skipDueDate(completion, '2026-01-31', '2026-04-15')).toBe('2026-04-30');
   });
 });

@@ -24,7 +24,8 @@ function columns(spec: Record<string, ColumnType>): Column[] {
   return Object.entries(spec).map(([field, type]) => ({ field, column: snake(field), type }));
 }
 
-/** How each table's fields map to SQLite columns. Order matches the migrations. */
+/** How each table's fields map to SQLite columns. Columns are matched by name, so
+ * the order here doesn't have to follow the migrations. */
 const SCHEMA: Record<TableName, Column[]> = {
   folders: columns({
     id: 'text',
@@ -69,6 +70,8 @@ const SCHEMA: Record<TableName, Column[]> = {
     createdAt: 'int',
     updatedAt: 'int',
     deletedAt: 'int',
+    // Added in migration 2.
+    wontDo: 'bool',
   }),
   reminders: columns({
     id: 'text',
@@ -183,6 +186,8 @@ export const MIGRATIONS: string[][] = [
       PRIMARY KEY (entity, id)
     )`,
   ],
+  // Tasks closed without being done.
+  [`ALTER TABLE items ADD COLUMN wont_do INTEGER NOT NULL DEFAULT 0`],
 ];
 
 function toColumnValue(value: unknown, type: ColumnType): unknown {

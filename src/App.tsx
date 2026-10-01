@@ -7,6 +7,9 @@ import { useAppShortcuts } from './hooks/useAppShortcuts';
 import { useBackups } from './hooks/useBackups';
 import { useReminderScheduler } from './hooks/useReminders';
 import { useApplyTheme } from './hooks/useTheme';
+import { useEffect } from 'react';
+import { setSetting, useData } from './store/data';
+import { useUI } from './store/ui';
 
 export function App() {
   useApplyTheme();
@@ -14,10 +17,17 @@ export function App() {
   useReminderScheduler();
   useAppLifecycle();
   useBackups();
+  const sidebarHidden = useData((s) => s.settings.sidebarHidden);
+  const renaming = useUI((s) => s.renaming);
+  const creatingList = useUI((s) => s.dialog?.kind === 'newList');
+  // New list and Rename act on the sidebar, so show it if it's hidden.
+  useEffect(() => {
+    if (sidebarHidden && (renaming || creatingList)) setSetting('sidebarHidden', false);
+  }, [sidebarHidden, renaming, creatingList]);
   return (
     <TooltipProvider delayDuration={600}>
       <div className="flex h-full">
-        <Sidebar />
+        {!sidebarHidden && <Sidebar />}
         <MainPane />
       </div>
       <Dialogs />

@@ -9,6 +9,7 @@ function item(id: string, parentId: string | null, sortKey: string): Item {
     parentId,
     text: id,
     checked: false,
+    wontDo: false,
     completedAt: null,
     sortKey,
     collapsed: false,
