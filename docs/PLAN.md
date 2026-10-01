@@ -73,6 +73,9 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - Subtasks: Tab and Shift+Tab indent and outdent. A parent shows progress like
   2/5, and checking a parent completes its subtasks.
 - Drag to reorder. Alt+↑/↓ moves an item.
+- Select several tasks (Ctrl/Shift+click, Shift+↑/↓, Ctrl+A) and complete,
+  reschedule, set the priority of, move or delete them together; E, T, 1–4, V
+  and Shift+A work on a focused task.
 - Priority P1–P3.
 - Finished items go to a collapsible "Completed" section.
 - A details panel for the selected task holds the title, rich-text notes, due

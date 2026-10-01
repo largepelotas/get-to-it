@@ -99,6 +99,7 @@ async function applyImport(data: ReturnType<typeof parseSnapshot>): Promise<void
   useUI.setState({
     view: homeView(),
     selectedItemId: null,
+    multiSelectedIds: [],
     detailsOpen: false,
     duePickerFor: null,
     renaming: null,

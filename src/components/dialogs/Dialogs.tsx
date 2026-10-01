@@ -11,7 +11,13 @@ import { createList, LIST_TYPE_LABEL } from '@/store/actions/lists';
 import { useData } from '@/store/data';
 import { liveTodoLists } from '@/store/sidebar';
 import { closeDialog, openList, useUI, type DialogState } from '@/store/ui';
-import { CommandPalette, preloadDialogs, SettingsDialog, ShortcutsDialog } from './lazy';
+import {
+  CommandPalette,
+  MoveTasksDialog,
+  preloadDialogs,
+  SettingsDialog,
+  ShortcutsDialog,
+} from './lazy';
 
 const TYPES: ListType[] = ['todo', 'grocery', 'note'];
 
@@ -222,6 +228,8 @@ export function Dialogs() {
         <SettingsDialog />
       ) : dialog.kind === 'shortcuts' ? (
         <ShortcutsDialog />
+      ) : dialog.kind === 'moveTasks' ? (
+        <MoveTasksDialog />
       ) : (
         <CommandPalette />
       )}

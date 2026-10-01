@@ -8,6 +8,7 @@ import {
   restoreList,
   setShowCompleted,
 } from './store/actions/lists';
+import type { Priority } from './data/types';
 import { formatDateKey, formatDue, formatTimestamp } from './lib/dates';
 import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
 import { copyText, notify, requestNotificationPermission } from './platform';
@@ -17,11 +18,17 @@ import {
   createItemsFromLines,
   deleteItems,
   duplicateItem,
+  moveDueDates,
   moveItemToList,
+  moveItemsToList,
   setChecked,
+  setCheckedMany,
+  setDueDates,
   setItemCollapsed,
+  setPriorities,
   setWontDo,
   skipOccurrence,
+  withoutDescendants,
 } from './store/actions/items';
 import {
   addReminder,
@@ -74,6 +81,21 @@ function toastWithUndo(message: string): void {
             },
           },
   });
+}
+
+const tasks = (n: number) => (n === 1 ? '1 task' : `${n} tasks`);
+
+/** Runs a change and says whether it recorded an undo step (a no-op leaves nothing to undo). */
+function recorded(run: () => void): boolean {
+  const before = lastEntryId();
+  run();
+  return lastEntryId() !== before;
+}
+
+/** The ids that still exist and aren't in the Trash. */
+function liveIds(ids: string[]): string[] {
+  const { items } = useData.getState().tables;
+  return ids.filter((id) => items[id] && !items[id].deletedAt);
 }
 
 export function trashList(id: string): void {
@@ -196,7 +218,8 @@ export function confirmEmptyTrash(): void {
 /** Deletes tasks (with their subtasks) and offers Undo. */
 export function trashItems(ids: string[]): void {
   const { items } = useData.getState().tables;
-  const live = ids.filter((id) => items[id] && !items[id].deletedAt);
+  // A subtask selected with its parent goes with the parent, so it isn't counted twice.
+  const live = withoutDescendants((id) => items[id], liveIds(ids));
   if (!live.length) return;
   deleteItems(live);
   toastWithUndo(
@@ -218,6 +241,80 @@ export function moveTaskToList(id: string, listId: string): void {
     useUI.setState({ selectedItemId: null, detailsOpen: false, duePickerFor: null });
   }
   toastWithUndo(`Moved to ${list.title}`);
+}
+
+/**
+ * Moves tasks to another to-do list, with one Undo toast. One task goes as
+ * `moveTaskToList` does; a task selected along with its parent goes with the parent.
+ */
+export function moveTasksToList(ids: string[], listId: string): void {
+  const { items, lists } = useData.getState().tables;
+  const list = lists[listId];
+  if (!list) return;
+  const moving = withoutDescendants((id) => items[id], liveIds(ids)).filter(
+    (id) => items[id].listId !== listId,
+  );
+  if (moving.length <= 1) return moving.length ? moveTaskToList(moving[0], listId) : undefined;
+  if (!recorded(() => moveItemsToList(moving, listId))) return;
+  // In a list view the moved tasks are no longer there, so nothing in them stays selected.
+  const { view, selectedItemId } = useUI.getState();
+  const selected = selectedItemId ? useData.getState().tables.items[selectedItemId] : undefined;
+  if (view.kind === 'list' && selected && selected.listId !== view.listId) {
+    useUI.setState({ selectedItemId: null, detailsOpen: false, duePickerFor: null });
+  }
+  toastWithUndo(`Moved ${moving.length} tasks to ${list.title}`);
+}
+
+/** Completes the tasks, or reopens them if they are all done already. One undo step, one toast. */
+export function toggleItems(ids: string[]): void {
+  const live = liveIds(ids);
+  const { items } = useData.getState().tables;
+  if (live.length <= 1) {
+    if (live.length) toggleItem(live[0], !items[live[0]].checked, { announce: true });
+    return;
+  }
+  const allDone = live.every((id) => items[id].checked);
+  const target = !allDone;
+  // Only tasks that change count (and a subtask selected with its parent goes with the parent).
+  const changing = (target ? withoutDescendants((id) => items[id], live) : live).filter(
+    (id) => items[id].checked !== target,
+  );
+  if (!changing.length || !recorded(() => setCheckedMany(changing, target))) return;
+  // A selected subtask that was ticked along with its parent counts too.
+  const after = useData.getState().tables.items;
+  const withParent = live.filter(
+    (id) => !changing.includes(id) && !items[id].checked && after[id]?.checked,
+  );
+  const count = changing.length + (target ? withParent.length : 0);
+  toastWithUndo(allDone ? `Marked ${tasks(count)} not done` : `Completed ${tasks(count)}`);
+}
+
+/** Sets the priority of tasks. Several at once get one Undo toast. */
+export function setTasksPriority(ids: string[], priority: Priority): void {
+  const { items } = useData.getState().tables;
+  const live = liveIds(ids).filter((id) => items[id].priority !== priority);
+  if (!live.length || !recorded(() => setPriorities(live, priority))) return;
+  if (ids.length > 1) toastWithUndo(`Priority set on ${tasks(live.length)}`);
+}
+
+/** Sets (or, with `null`, clears) the due date of tasks, keeping their times. One Undo toast. */
+export function setTasksDue(ids: string[], date: string | null): void {
+  const { items } = useData.getState().tables;
+  const live = liveIds(ids).filter((id) => items[id].dueDate !== date);
+  if (!live.length || !recorded(() => setDueDates(live, date))) return;
+  toastWithUndo(
+    date === null
+      ? `Cleared the date on ${tasks(live.length)}`
+      : `Rescheduled ${tasks(live.length)}`,
+  );
+}
+
+/** Today's "Reschedule": moves overdue tasks to a day, keeping their times. */
+export function rescheduleTasks(ids: string[], date: string): void {
+  const { items } = useData.getState().tables;
+  const live = liveIds(ids).filter((id) => items[id].dueDate !== date);
+  if (!live.length || !recorded(() => moveDueDates(live, date))) return;
+  toastWithUndo(`Rescheduled ${tasks(live.length)}`);
 }
 
 /**
