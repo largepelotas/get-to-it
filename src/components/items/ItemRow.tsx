@@ -14,6 +14,7 @@ import { toggleItem } from '@/commands';
 import { formatDue, formatTime, isOverdue } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { setItemCollapsed, setItemText } from '@/store/actions/items';
+import { isMac } from '@/platform';
 import { pickDueDate } from '@/store/ui';
 import type { FlatRow } from '@/store/tree';
 import { Checkbox } from './Checkbox';
@@ -24,6 +25,9 @@ import { PRIORITY_COLOR } from './priority';
 export const INDENT = 24;
 
 export type RowKeyMode = 'row' | 'text';
+
+/** How a click on a row picks it: on its own, added or removed (Ctrl/Cmd), or as a range (Shift). */
+export type RowClickKind = 'plain' | 'toggle' | 'range';
 
 export interface DragBits {
   ref: (el: HTMLElement | null) => void;
@@ -52,9 +56,14 @@ export interface ItemRowProps {
   onToggle?: (checked: boolean) => void;
   /** The task has a reminder still to go off. */
   hasReminder?: boolean;
+  /** One of several selected tasks. */
+  multiSelected?: boolean;
   menu: () => MenuEntries;
   onKeyDown: (event: KeyboardEvent<HTMLElement>, mode: RowKeyMode) => void;
-  onSelect: () => void;
+  /** The row took focus; `editing` when it was the text field. */
+  onSelect: (editing: boolean) => void;
+  /** The row was clicked. Modifier clicks on its own controls arrive as `plain`. */
+  onClickRow: (kind: RowClickKind) => void;
   onOpenDetails: () => void;
 }
 
@@ -143,6 +152,17 @@ function DueLabel({
   );
 }
 
+/** What a mouse event on a row means: a plain pick, or a modifier pick (not on the row's own buttons). */
+function clickKind(
+  e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean },
+  readOnly: boolean,
+  target: HTMLElement,
+): RowClickKind {
+  if (readOnly || target.closest('button')) return 'plain';
+  if (e.shiftKey) return 'range';
+  return (isMac ? e.metaKey : e.ctrlKey) ? 'toggle' : 'plain';
+}
+
 export function ItemRow({
   row,
   selected,
@@ -154,15 +174,21 @@ export function ItemRow({
   timeOnly = false,
   onToggle,
   hasReminder = false,
+  multiSelected = false,
   menu,
   onKeyDown,
   onSelect,
+  onClickRow,
   onOpenDetails,
 }: ItemRowProps) {
   const { item, childCount, doneCount } = row;
   const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
   const hasNotes = !!item.details;
-  const description = describeRow(row, { hasReminder, origin });
+  // A row in a group of selected tasks says so (aria-selected isn't allowed on a list item).
+  const description =
+    [multiSelected && 'Selected', describeRow(row, { hasReminder, origin })]
+      .filter(Boolean)
+      .join('. ') || '';
   const descriptionId = `row-desc-${item.id}`;
 
   return (
@@ -176,11 +202,19 @@ export function ItemRow({
         aria-label={item.text}
         aria-describedby={description ? descriptionId : undefined}
         aria-current={selected ? 'true' : undefined}
-        onFocus={onSelect}
+        data-multi-selected={multiSelected ? '' : undefined}
+        onFocus={(e) => onSelect((e.target as HTMLElement).tagName === 'INPUT')}
+        // A modifier-click on the row picks it, so keep the browser from moving focus or text selection.
+        onMouseDown={(e) => {
+          if (clickKind(e, readOnly, e.target as HTMLElement) !== 'plain') e.preventDefault();
+        }}
         onClick={(e) => {
-          onSelect();
+          const kind = clickKind(e, readOnly, e.target as HTMLElement);
+          onClickRow(kind);
           // Clicks outside the text (including the checkbox) leave the row focused for keys.
-          if (!(e.target as HTMLElement).closest('input')) e.currentTarget.focus();
+          // After a modifier click the list focuses the right row itself.
+          if (kind === 'plain' && !(e.target as HTMLElement).closest('input'))
+            e.currentTarget.focus();
         }}
         onDoubleClick={(e) => {
           if (!(e.target as HTMLElement).closest('input, button')) onOpenDetails();
@@ -191,7 +225,9 @@ export function ItemRow({
         className={clsx(
           'group relative flex h-8 items-center gap-1.5 rounded-md pr-1 outline-none',
           'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
-          selected ? 'bg-selected' : 'hover:bg-hover',
+          selected || multiSelected ? 'bg-selected' : 'hover:bg-hover',
+          // Keeps a row reached with Shift+arrows clear of the selection bar.
+          multiSelected && 'scroll-mb-24',
           drag?.dragging && 'z-10 bg-elevated shadow-popover',
         )}
       >

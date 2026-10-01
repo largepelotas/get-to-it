@@ -9,14 +9,19 @@ import type { DueRow } from '@/store/smart';
 import {
   clearReveal,
   closeDetails,
+  dropMissingSelection,
+  focusItem,
   openDetails,
   openList,
   pickDueDate,
   selectItem,
+  selectRange,
+  toggleSelected,
   useUI,
 } from '@/store/ui';
 import { itemMenuEntries } from './itemMenu';
-import { ItemRow, type RowKeyMode } from './ItemRow';
+import { ItemRow, type RowClickKind, type RowKeyMode } from './ItemRow';
+import { handleSelectionKey } from './selection';
 
 export interface SmartSection {
   key: string;
@@ -47,11 +52,20 @@ export interface SmartListProps {
  */
 export function SmartList({ sections, onExitTop }: SmartListProps) {
   const selectedId = useUI((s) => s.selectedItemId);
+  const multiIds = useUI((s) => s.multiSelectedIds);
   const reminded = useItemsWithReminders();
   const containerRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
   const visible = sections.flatMap((s) => s.rows);
   const selectionShown = visible.some((r) => r.item.id === selectedId);
+  const visibleKey = visible.map((r) => r.item.id).join('|');
+
+  // Selected tasks that leave the view (done, rescheduled, deleted) drop out of the selection.
+  useLayoutEffect(() => {
+    dropMissingSelection(visibleKey ? visibleKey.split('|') : []);
+  }, [visibleKey]);
+  // When the last row goes the whole list is replaced by an empty message, so nothing stays selected.
+  useLayoutEffect(() => () => dropMissingSelection([]), []);
 
   useLayoutEffect(() => {
     if (!focus) return;
@@ -88,11 +102,30 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
     if (next) focusRow(next.item.id);
   };
 
+  const clickRow = (id: string, kind: RowClickKind) => {
+    const ids = visible.map((r) => r.item.id);
+    if (kind === 'toggle') toggleSelected(id, ids);
+    else if (kind === 'range') selectRange(id, ids);
+    else selectItem(id);
+    // Focus follows the selection: the clicked row, or one that is still selected.
+    const target = useUI.getState().selectedItemId;
+    if (kind !== 'plain' && target) setFocus({ target, mode: 'row' });
+  };
+
   const onRowKey = (e: KeyboardEvent<HTMLElement>, index: number, mode: RowKeyMode) => {
     if (e.nativeEvent.isComposing) return;
     const row = visible[index];
     const id = row.item.id;
     const is = (shortcut: string) => matchesShortcut(e, shortcut, isMac);
+
+    const handled = handleSelectionKey(e, mode, {
+      id,
+      ids: visible.map((r) => r.item.id),
+      readOnly: false,
+      focusRow: (target) => setFocus({ target, mode: 'row' }),
+      toggleOne: () => toggle(index),
+    });
+    if (handled) return;
 
     if (is(SHORTCUTS.dueDate)) {
       e.preventDefault();
@@ -162,6 +195,7 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
                   timeOnly={section.timeOnly}
                   readOnly={false}
                   selected={id === selectedId}
+                  multiSelected={multiIds.includes(id)}
                   hasReminder={reminded.has(id)}
                   tabbable={id === selectedId || (i === 0 && !selectionShown)}
                   onToggle={() => toggle(i)}
@@ -175,7 +209,8 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
                       remove: () => trashItems([id]),
                     })
                   }
-                  onSelect={() => selectItem(id)}
+                  onSelect={(editing) => focusItem(id, editing)}
+                  onClickRow={(kind) => clickRow(id, kind)}
                   onOpenDetails={() => openDetails(id)}
                   onKeyDown={(e, mode) => onRowKey(e, i, mode)}
                 />

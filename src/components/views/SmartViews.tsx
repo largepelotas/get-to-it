@@ -1,17 +1,51 @@
+import clsx from 'clsx';
 import { CalendarDays, Sun } from 'lucide-react';
-import { useMemo, useRef, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react';
+import { rescheduleTasks } from '@/commands';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { QuickAdd } from '@/components/items/QuickAdd';
+import { SelectionBar } from '@/components/items/SelectionBar';
 import { SmartList, type SmartSection } from '@/components/items/SmartList';
-import { Button } from '@/components/ui';
+import { Button, Popover } from '@/components/ui';
 import type { List } from '@/data/types';
 import { useToday } from '@/hooks/useToday';
 import { addDaysKey, formatDateKey, formatLongDate } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
-import { moveDueDates } from '@/store/actions/items';
 import { useData } from '@/store/data';
+import { useUI } from '@/store/ui';
 import { dueRows, todayModel, upcomingModel } from '@/store/smart';
 import { EmptyState, ViewHeader } from './ViewHeader';
+
+// The calendar is only needed once Reschedule opens, so it loads separately.
+const DateChoices = lazy(() =>
+  import('@/components/items/DateChoices').then((m) => ({ default: m.DateChoices })),
+);
+
+/** Today's Overdue heading button: moves every overdue task to a day you pick. */
+function RescheduleOverdue({ ids }: { ids: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      align="end"
+      trigger={
+        <Button size="sm" variant="ghost" className="h-6 text-xs font-medium text-accent">
+          Reschedule
+        </Button>
+      }
+    >
+      <Suspense fallback={<div className="h-64 w-[252px]" />}>
+        <DateChoices
+          onPick={(date) => {
+            setOpen(false);
+            if (date) rescheduleTasks(ids, date);
+          }}
+        />
+      </Suspense>
+    </Popover>
+  );
+}
 
 const isLiveTodo = (list: List | undefined): list is List =>
   !!list && list.type === 'todo' && !list.deletedAt && !list.archivedAt;
@@ -46,6 +80,8 @@ function SmartLayout({
   empty: ReactNode;
 }) {
   const target = useQuickAddList();
+  // Room under the last row for the selection bar.
+  const several = useUI((s) => s.multiSelectedIds.length >= 2);
   const quickAddRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -53,29 +89,32 @@ function SmartLayout({
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         {header}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="px-6 pb-10">
-            {target && (
-              <div className="px-2">
-                <QuickAdd
-                  listId={target.id}
-                  inputRef={quickAddRef}
-                  defaultDue={defaultDue}
-                  hint={target.title}
-                  onArrowDown={() =>
-                    listRef.current?.querySelector<HTMLElement>('[data-item-id]')?.focus()
-                  }
-                />
-              </div>
-            )}
-            {sections.length ? (
-              <div ref={listRef} className="mt-4 px-2">
-                <SmartList sections={sections} onExitTop={() => quickAddRef.current?.focus()} />
-              </div>
-            ) : (
-              empty
-            )}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className={clsx('px-6', several ? 'pb-24' : 'pb-10')}>
+              {target && (
+                <div className="px-2">
+                  <QuickAdd
+                    listId={target.id}
+                    inputRef={quickAddRef}
+                    defaultDue={defaultDue}
+                    hint={target.title}
+                    onArrowDown={() =>
+                      listRef.current?.querySelector<HTMLElement>('[data-item-id]')?.focus()
+                    }
+                  />
+                </div>
+              )}
+              {sections.length ? (
+                <div ref={listRef} className="mt-4 px-2">
+                  <SmartList sections={sections} onExitTop={() => quickAddRef.current?.focus()} />
+                </div>
+              ) : (
+                empty
+              )}
+            </div>
           </div>
+          <SelectionBar />
         </div>
       </div>
       <DetailsPanel />
@@ -95,21 +134,7 @@ export function TodayView() {
       title: 'Overdue',
       tone: 'danger',
       rows: overdue,
-      actions: (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 text-xs font-medium text-accent"
-          onClick={() =>
-            moveDueDates(
-              overdue.map((r) => r.item.id),
-              today,
-            )
-          }
-        >
-          Move to today
-        </Button>
-      ),
+      actions: <RescheduleOverdue ids={overdue.map((r) => r.item.id)} />,
     });
   }
   if (dueToday.length) {

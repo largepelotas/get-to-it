@@ -41,10 +41,29 @@ import { setShowCompleted } from '@/store/actions/lists';
 import { useData } from '@/store/data';
 import { endOfSubtree, todoModel } from '@/store/todo';
 import { MAX_DEPTH, projectDrop, type FlatRow } from '@/store/tree';
-import { clearReveal, closeDetails, openDetails, pickDueDate, selectItem, useUI } from '@/store/ui';
+import {
+  clearReveal,
+  closeDetails,
+  dropMissingSelection,
+  focusItem,
+  openDetails,
+  pickDueDate,
+  selectItem,
+  selectRange,
+  toggleSelected,
+  useUI,
+} from '@/store/ui';
 import { itemMenuEntries } from './itemMenu';
-import { DraftRow, INDENT, ItemRow, type DragBits, type RowKeyMode } from './ItemRow';
+import {
+  DraftRow,
+  INDENT,
+  ItemRow,
+  type DragBits,
+  type RowClickKind,
+  type RowKeyMode,
+} from './ItemRow';
 import { QuickAdd } from './QuickAdd';
+import { handleSelectionKey } from './selection';
 
 /** Where the inline new-task field sits: under `parentId`, after the sibling `after` (null = first). */
 interface Draft {
@@ -114,6 +133,7 @@ export function TodoList({ list }: { list: List }) {
   const items = useData((s) => s.tables.items);
   const model = useMemo(() => todoModel(items, list.id), [items, list.id]);
   const selectedId = useUI((s) => s.selectedItemId);
+  const multiIds = useUI((s) => s.multiSelectedIds);
   const reveal = useUI((s) => s.reveal);
   const reminded = useItemsWithReminders();
   const readOnly = !!(list.deletedAt || list.archivedAt);
@@ -136,6 +156,12 @@ export function TodoList({ list }: { list: List }) {
   const visible = [...model.open, ...doneRows];
   const inDone = (index: number) => index >= model.open.length;
   const selectionShown = visible.some((r) => r.item.id === selectedId);
+  const visibleKey = visible.map((r) => r.item.id).join('|');
+
+  // Selected tasks that leave the list (done and hidden, moved, deleted) drop out of the selection.
+  useLayoutEffect(() => {
+    dropMissingSelection(visibleKey ? visibleKey.split('|') : []);
+  }, [visibleKey]);
 
   useLayoutEffect(() => {
     if (!focus) return;
@@ -290,6 +316,16 @@ export function TodoList({ list }: { list: List }) {
     const id = row.item.id;
     const is = (shortcut: string) => matchesShortcut(e, shortcut, isMac);
 
+    const handled = handleSelectionKey(e, mode, {
+      id,
+      ids: visible.map((r) => r.item.id),
+      readOnly,
+      focusRow: (target) => setFocus({ target, mode: 'row' }),
+      toggleOne: () => toggle(index),
+      addAtTop: () => openDraft({ parentId: null, after: null }),
+    });
+    if (handled) return;
+
     if (is(SHORTCUTS.dueDate) && !readOnly) {
       e.preventDefault();
       pickDueDate(id);
@@ -403,6 +439,16 @@ export function TodoList({ list }: { list: List }) {
     moveItem(String(active.id), target.parentId, target.afterId);
   };
 
+  const clickRow = (id: string, kind: RowClickKind) => {
+    const ids = visible.map((r) => r.item.id);
+    if (kind === 'toggle') toggleSelected(id, ids);
+    else if (kind === 'range') selectRange(id, ids);
+    else selectItem(id);
+    // Focus follows the selection: the clicked row, or one that is still selected.
+    const target = useUI.getState().selectedItemId;
+    if (kind !== 'plain' && target) setFocus({ target, mode: 'row' });
+  };
+
   const renderRow = (row: FlatRow, index: number, drag?: DragBits, depth?: number) => (
     <ItemRow
       key={row.item.id}
@@ -411,10 +457,12 @@ export function TodoList({ list }: { list: List }) {
       drag={drag}
       readOnly={readOnly}
       selected={row.item.id === selectedId}
+      multiSelected={multiIds.includes(row.item.id)}
       hasReminder={reminded.has(row.item.id)}
       tabbable={row.item.id === selectedId || (index === 0 && !selectionShown)}
       menu={menuFor(index)}
-      onSelect={() => selectItem(row.item.id)}
+      onSelect={(editing) => focusItem(row.item.id, editing)}
+      onClickRow={(kind) => clickRow(row.item.id, kind)}
       onOpenDetails={() => openDetails(row.item.id)}
       onKeyDown={(e, mode) => onRowKey(e, index, mode)}
     />
@@ -448,7 +496,11 @@ export function TodoList({ list }: { list: List }) {
   const isEmpty = !model.open.length && !model.doneCount && !draftPlace;
 
   return (
-    <div ref={containerRef} tabIndex={-1} className="px-6 pb-10 outline-none">
+    <div
+      ref={containerRef}
+      tabIndex={-1}
+      className={clsx('px-6 outline-none', multiIds.length >= 2 ? 'pb-24' : 'pb-10')}
+    >
       {!readOnly && (
         <div className="px-2">
           <QuickAdd

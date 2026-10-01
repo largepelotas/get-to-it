@@ -197,6 +197,15 @@ export function setPriority(id: string, priority: Priority): void {
   commit('Priority', (tx) => void tx.update('items', id, { priority }));
 }
 
+/** Sets the priority of several tasks as one undo step. */
+export function setPriorities(ids: string[], priority: Priority): void {
+  commit(ids.length === 1 ? 'Priority' : 'Priorities', (tx) => {
+    for (const id of ids) {
+      if (tx.get('items', id)) tx.update('items', id, { priority });
+    }
+  });
+}
+
 export function clearDue(id: string): void {
   commit('Clear due date', (tx) => {
     tx.update('items', id, { dueDate: null, dueTime: null, recurrence: null });
@@ -223,6 +232,23 @@ export function moveDueDates(ids: string[], dueDate: string): void {
     for (const id of ids) {
       if (!tx.get('items', id)?.dueDate) continue;
       tx.update('items', id, { dueDate });
+      clearSnoozes(tx, id);
+    }
+  });
+}
+
+/**
+ * Sets the due date of several tasks as one undo step, keeping each one's time.
+ * `null` clears the date, time and repeat (as `clearDue` does).
+ */
+export function setDueDates(ids: string[], dueDate: string | null): void {
+  if (dueDate !== null && !isDateKey(dueDate)) return;
+  commit(ids.length === 1 ? 'Due date' : 'Reschedule tasks', (tx) => {
+    for (const id of ids) {
+      if (!tx.get('items', id)) continue;
+      if (dueDate === null)
+        tx.update('items', id, { dueDate: null, dueTime: null, recurrence: null });
+      else tx.update('items', id, { dueDate });
       clearSnoozes(tx, id);
     }
   });
@@ -302,22 +328,34 @@ export function setItemCollapsed(id: string, collapsed: boolean): void {
  * repeating task moves it to its next date instead, and returns that date.
  */
 export function setChecked(id: string, checked: boolean): string | null {
-  return commit(checked ? 'Complete task' : 'Reopen task', (tx) => {
-    const item = tx.get('items', id);
-    if (!item || item.checked === checked) return null;
-    if (checked && item.recurrence) return completeOccurrence(tx, item);
-    if (checked) {
-      tx.update('items', id, { checked: true, wontDo: false, completedAt: tx.now });
-      for (const childId of descendantIds(itemIndex(tx, item.listId), id)) {
-        if (!tx.get('items', childId)?.checked) {
-          tx.update('items', childId, { checked: true, wontDo: false, completedAt: tx.now });
-        }
+  return commit(checked ? 'Complete task' : 'Reopen task', (tx) => checkInTx(tx, id, checked));
+}
+
+function checkInTx(tx: Tx, id: string, checked: boolean): string | null {
+  const item = tx.get('items', id);
+  if (!item || item.checked === checked) return null;
+  if (checked && item.recurrence) return completeOccurrence(tx, item);
+  if (checked) {
+    tx.update('items', id, { checked: true, wontDo: false, completedAt: tx.now });
+    for (const childId of descendantIds(itemIndex(tx, item.listId), id)) {
+      if (!tx.get('items', childId)?.checked) {
+        tx.update('items', childId, { checked: true, wontDo: false, completedAt: tx.now });
       }
-    } else {
-      tx.update('items', id, { checked: false, wontDo: false, completedAt: null });
-      reopenAncestors(tx, item);
     }
-    return null;
+  } else {
+    tx.update('items', id, { checked: false, wontDo: false, completedAt: null });
+    reopenAncestors(tx, item);
+  }
+  return null;
+}
+
+/** Checks or unchecks several tasks as one undo step (each as `setChecked` would). */
+export function setCheckedMany(ids: string[], checked: boolean): void {
+  commit(checked ? 'Complete tasks' : 'Reopen tasks', (tx) => {
+    // Completing a parent completes its subtasks (or, for a repeating one, resets them), so a
+    // subtask selected with it is left to the parent; the order must not matter.
+    const targets = checked ? withoutDescendants((id) => tx.get('items', id), ids) : ids;
+    for (const id of targets) checkInTx(tx, id, checked);
   });
 }
 
@@ -470,6 +508,42 @@ export function moveItemToList(id: string, listId: string): void {
       sortKey: keyAfter(tx, listId, null, undefined),
     });
     for (const childId of subtasks) tx.update('items', childId, { listId });
+  });
+}
+
+/** `ids` without any task whose parent (or higher ancestor) is also in `ids`. */
+export function withoutDescendants(get: (id: string) => Item | undefined, ids: string[]): string[] {
+  const chosen = new Set(ids);
+  return ids.filter((id) => {
+    let parent = get(get(id)?.parentId ?? '');
+    for (let guard = 0; parent && guard < 50; guard++) {
+      if (chosen.has(parent.id)) return false;
+      parent = get(parent.parentId ?? '');
+    }
+    return true;
+  });
+}
+
+/**
+ * Moves several tasks (each with its subtasks) to another to-do list as one
+ * undo step. A task selected along with its parent goes with the parent;
+ * one whose parent stays behind becomes a top-level task, as a single move does.
+ */
+export function moveItemsToList(ids: string[], listId: string): void {
+  commit(ids.length === 1 ? 'Move task' : 'Move tasks', (tx) => {
+    const target = tx.get('lists', listId);
+    if (!target || target.type !== 'todo' || target.archivedAt || target.deletedAt) return;
+    for (const id of withoutDescendants((id) => tx.get('items', id), ids)) {
+      const item = tx.get('items', id);
+      if (!item || item.deletedAt || item.listId === listId) continue;
+      const subtasks = descendantIds(itemIndex(tx, item.listId), id);
+      tx.update('items', id, {
+        listId,
+        parentId: null,
+        sortKey: keyAfter(tx, listId, null, undefined),
+      });
+      for (const childId of subtasks) tx.update('items', childId, { listId });
+    }
   });
 }
 

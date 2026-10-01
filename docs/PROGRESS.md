@@ -604,6 +604,28 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   palette has "Add a task to…". The toast ("Added to …", with Undo) is in
   `commands.ts` (`quickAddTask`, `quickAddLines`).
 
+- Select several tasks (after M8): in to-do lists, Today and Upcoming,
+  Ctrl/Cmd+click toggles a task, Shift+click and Shift+↑/↓ select a range,
+  Mod+A selects every shown row, and Escape goes back to the focused row.
+  `useUI.multiSelectedIds` holds the group while it has two or more tasks
+  (`selectedItemId` stays the focused one, `selectionAnchor` starts ranges);
+  `navigate` clears it and each list drops ids that leave the view. A
+  floating `SelectionBar` (`role="toolbar"`, "N selected") offers Complete (or
+  Mark not done), Date, Priority, Move to, Delete and a close button; the
+  details panel is hidden meanwhile. Each action is one undo step and one
+  toast through the many-id actions `setCheckedMany`, `setDueDates`,
+  `setPriorities`, `moveItemsToList` (a task selected with its parent goes
+  with the parent) and their wrappers in `commands.ts`. `keepFocus`
+  (`items/selection.ts`) puts focus on the nearest remaining row, else the
+  quick-add field, when an action removes the focused row. Selected rows carry
+  `aria-current` and `data-multi-selected` (`aria-selected` isn't allowed on a
+  list item). On a focused row E completes, T opens the due-date picker (or
+  the bar's Date popover), 1–4 set the priority, V opens the "Move to…"
+  dialog (`MoveTasksDialog`, built on cmdk, loaded on demand) and, in
+  to-do lists only, Shift+A opens the new-task field at the top. Today's
+  "Move to today" is now "Reschedule" (today, tomorrow, next week or a
+  picked date, one undo step; `DateChoices` is shared with the bar).
+
 ### Accessibility and loading (M8)
 
 - **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)

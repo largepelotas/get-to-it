@@ -3,6 +3,7 @@ import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { restore, unarchive } from '@/commands';
 import { GroceryList } from '@/components/grocery/GroceryList';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
+import { SelectionBar } from '@/components/items/SelectionBar';
 import { TodoList } from '@/components/items/TodoList';
 import { RichTextField } from '@/components/editor/RichTextField';
 import { ListIcon } from '@/components/ListIcon';
@@ -142,8 +143,11 @@ export function ListView({ listId }: { listId: string }) {
             This list is archived.
           </Banner>
         ) : null}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <ListBody list={list} />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ListBody list={list} />
+          </div>
+          {list.type === 'todo' && <SelectionBar />}
         </div>
       </div>
       {list.type === 'todo' && <DetailsPanel listId={list.id} />}

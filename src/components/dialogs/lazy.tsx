@@ -31,8 +31,13 @@ const [ShortcutsDialog, preloadShortcuts] = lazyWithPreload(
   (m) => m.ShortcutsDialog,
 );
 
-export { CommandPalette, SettingsDialog, ShortcutsDialog };
+const [MoveTasksDialog, preloadMoveTasks] = lazyWithPreload(
+  () => import('./MoveTasksDialog'),
+  (m) => m.MoveTasksDialog,
+);
+
+export { CommandPalette, MoveTasksDialog, SettingsDialog, ShortcutsDialog };
 
 export function preloadDialogs(): Promise<unknown> {
-  return Promise.all([preloadPalette(), preloadSettings(), preloadShortcuts()]);
+  return Promise.all([preloadPalette(), preloadSettings(), preloadShortcuts(), preloadMoveTasks()]);
 }

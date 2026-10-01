@@ -1,5 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '@/App';
 import { MemoryRepository } from '@/data/memory';
@@ -17,6 +18,8 @@ const tomorrow = addDaysKey(today, 1);
 const yesterday = addDaysKey(today, -1);
 
 beforeEach(() => {
+  // A toast from an earlier test would give a second Undo button.
+  toast.dismiss();
   resetForTests(new MemoryRepository());
   useUI.setState({
     view: { kind: 'today' },
@@ -71,15 +74,34 @@ describe('Today', () => {
     expect(row('Send invoice')).toBeInTheDocument();
   });
 
-  it('moves overdue tasks to today', async () => {
+  it('reschedules overdue tasks to today, keeping their times', async () => {
     createItem(work, { text: 'Late A', dueDate: addDaysKey(today, -3), dueTime: '09:00' });
     createItem(home, { text: 'Late B', dueDate: yesterday });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Move to today' }));
+    await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+    await user.click(await screen.findByRole('button', { name: 'Today' }));
     expect(find('Late A')).toMatchObject({ dueDate: today, dueTime: '09:00' });
     expect(find('Late B').dueDate).toBe(today);
     expect(screen.queryByRole('region', { name: 'Overdue' })).not.toBeInTheDocument();
+  });
+
+  // Bug it prevents: Reschedule moved overdue tasks one at a time (several undo steps and
+  // toasts), or could only move them to today.
+  it('reschedules all overdue tasks to tomorrow as one undo step', async () => {
+    createItem(work, { text: 'Late A', dueDate: addDaysKey(today, -3), dueTime: '09:00' });
+    createItem(home, { text: 'Late B', dueDate: yesterday });
+    const steps = useData.getState().past.length;
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+    await user.click(await screen.findByRole('button', { name: 'Tomorrow' }));
+    expect(find('Late A')).toMatchObject({ dueDate: tomorrow, dueTime: '09:00' });
+    expect(find('Late B').dueDate).toBe(tomorrow);
+    expect(useData.getState().past.length).toBe(steps + 1);
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+    expect(find('Late A').dueDate).toBe(addDaysKey(today, -3));
+    expect(find('Late B').dueDate).toBe(yesterday);
   });
 });
 
