@@ -131,7 +131,7 @@ describe('SqliteRepository', () => {
     const data = await repo.load();
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', sectionId: null });
     expect(data.tables.sections).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(5);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(6);
     const section = {
       id: 'S1',
       listId: 'L1',
@@ -237,8 +237,8 @@ describe('labels migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect(MIGRATIONS).toHaveLength(5);
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(5);
+    expect(MIGRATIONS).toHaveLength(6);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(6);
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', labelIds: [] });
     expect(data.tables.labels).toEqual({});
     const label = {
@@ -258,5 +258,40 @@ describe('labels migration', () => {
     expect(again.tables.items.OLD.labelIds).toEqual(['B1', 'B2']);
     await repo.write([{ kind: 'delete', table: 'labels', id: 'B1' }]);
     expect((await repo.load()).tables.labels).toEqual({});
+  });
+});
+
+describe('filters migration', () => {
+  // Bug prevented: upgrading a version 5 database failing, or filters not surviving a save and reload.
+  it('adds filters to a version 5 database, with none to start', async () => {
+    const exec = nodeExecutor();
+    exec.raw.exec('BEGIN');
+    for (const sql of MIGRATIONS.slice(0, 5).flat()) exec.raw.exec(sql);
+    exec.raw.exec('PRAGMA user_version = 5');
+    exec.raw.exec('COMMIT');
+    exec.raw.exec(
+      `INSERT INTO items (id, list_id, text, checked, sort_key, created_at, updated_at)
+       VALUES ('OLD', 'L1', 'Old task', 0, 'a0', 1, 1)`,
+    );
+    const repo = new SqliteRepository(exec);
+    const data = await repo.load();
+    expect(MIGRATIONS).toHaveLength(6);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(6);
+    expect(data.tables.items.OLD).toMatchObject({ text: 'Old task' });
+    expect(data.tables.filters).toEqual({});
+    const filter = {
+      id: 'F1',
+      name: 'This week',
+      query: '#Work & 7 days',
+      color: null,
+      sortKey: 'a0',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await repo.write([{ kind: 'put', table: 'filters', row: filter }]);
+    const again = await new SqliteRepository(exec).load();
+    expect(again.tables.filters.F1).toEqual(filter);
+    await repo.write([{ kind: 'delete', table: 'filters', id: 'F1' }]);
+    expect((await repo.load()).tables.filters).toEqual({});
   });
 });

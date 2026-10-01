@@ -7,6 +7,7 @@ import {
   Ellipsis,
   FolderPlus,
   Keyboard,
+  LayoutGrid,
   Monitor,
   Moon,
   PanelLeftClose,
@@ -33,6 +34,7 @@ import { setSetting, useData } from '@/store/data';
 import { openCounts, sidebarModel } from '@/store/sidebar';
 import { dueRows, next7Count, todayCount, tomorrowCount } from '@/store/smart';
 import { navigate, openDialog, openList, startRename, stopRename, useUI } from '@/store/ui';
+import { FilterList } from './FilterList';
 import { LabelList } from './LabelList';
 import { ListTree } from './ListTree';
 import { RenameField } from './RenameField';
@@ -149,6 +151,14 @@ export function Sidebar() {
             onClick={() => navigate({ kind: 'upcoming' })}
           />
         )}
+        {shows('matrix') && (
+          <SidebarItem
+            icon={<LayoutGrid className={navIcon} style={{ color: colorVar('indigo') }} />}
+            label="Eisenhower matrix"
+            active={view.kind === 'matrix'}
+            onClick={() => navigate({ kind: 'matrix' })}
+          />
+        )}
         {shows('reminders') && (
           <SidebarItem
             icon={<Bell className={navIcon} style={{ color: colorVar('purple') }} />}
@@ -213,6 +223,7 @@ export function Sidebar() {
         </SectionHeader>
         <ListTree model={model} counts={counts} />
 
+        <FilterList />
         <LabelList />
       </nav>
 

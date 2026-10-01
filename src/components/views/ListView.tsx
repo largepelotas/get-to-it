@@ -1,7 +1,8 @@
 import { Archive, Ellipsis, Pin, Trash } from 'lucide-react';
-import { useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { addSection, restore, unarchive } from '@/commands';
 import { GroceryList } from '@/components/grocery/GroceryList';
+import { ArrangedTodoList } from '@/components/items/ArrangedTodoList';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { SelectionBar } from '@/components/items/SelectionBar';
 import { TodoList } from '@/components/items/TodoList';
@@ -13,7 +14,10 @@ import type { List } from '@/data/types';
 import { renameList } from '@/store/actions/lists';
 import { setNoteContent } from '@/store/actions/notes';
 import { useData } from '@/store/data';
+import type { View } from '@/store/ui';
 import { ViewHeader } from './ViewHeader';
+import { groupChoices, LIST_SORTS, useViewOptions } from './arrangement';
+import { ViewOptionsMenu } from './viewOptions';
 
 function TitleField({
   list,
@@ -82,14 +86,23 @@ function NoteBody({ list }: { list: List }) {
   );
 }
 
-function ListBody({ list }: { list: List }) {
+function ListBody({ list, view }: { list: List; view: View }) {
+  const { sort, group } = useViewOptions(view);
   if (list.type === 'note') return <NoteBody list={list} />;
   if (list.type === 'grocery') return <GroceryList list={list} />;
+  // A list arranged some other way than its own is drawn flat; a stored list keeps its order.
+  const arranged =
+    (sort !== 'manual' || group !== 'default') && !list.deletedAt && !list.archivedAt;
+  if (arranged) return <ArrangedTodoList list={list} sort={sort} group={group} />;
   return <TodoList list={list} />;
 }
 
 export function ListView({ listId }: { listId: string }) {
   const list = useData((s) => s.tables.lists[listId]);
+  const hasSections = useData((s) =>
+    Object.values(s.tables.sections).some((section) => section.listId === listId),
+  );
+  const view = useMemo<View>(() => ({ kind: 'list', listId }), [listId]);
   const titleRef = useRef<HTMLInputElement>(null);
   if (!list) return null;
 
@@ -112,6 +125,13 @@ export function ListView({ listId }: { listId: string }) {
           actions={
             <>
               {list.pinned && <Pin aria-label="Pinned" className="mr-1 size-4 text-fg-subtle" />}
+              {list.type === 'todo' && !list.deletedAt && !list.archivedAt && (
+                <ViewOptionsMenu
+                  view={view}
+                  sorts={LIST_SORTS}
+                  groups={groupChoices(hasSections ? 'Sections' : null, true)}
+                />
+              )}
               <Menu
                 align="end"
                 entries={() =>
@@ -150,7 +170,7 @@ export function ListView({ listId }: { listId: string }) {
         ) : null}
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <ListBody list={list} />
+            <ListBody list={list} view={view} />
           </div>
           {list.type === 'todo' && <SelectionBar />}
         </div>

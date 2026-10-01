@@ -16,7 +16,14 @@ import {
   Trash,
   Undo2,
 } from 'lucide-react';
-import { COLOR_NAMES, type ColorName, type Folder, type Label, type List } from '@/data/types';
+import {
+  COLOR_NAMES,
+  type ColorName,
+  type Filter,
+  type Folder,
+  type Label,
+  type List,
+} from '@/data/types';
 import { SHORTCUTS } from '@/lib/keymap';
 import { bySortKey } from '@/lib/order';
 import { COLOR_LABEL } from '@/lib/theme';
@@ -26,6 +33,8 @@ import {
   copyAsMarkdown,
   deleteForever,
   duplicate,
+  editFilter,
+  removeFilter,
   removeFolder,
   removeLabel,
   restore,
@@ -33,6 +42,7 @@ import {
   unarchive,
   uncheckCart,
 } from '@/commands';
+import { moveFilterBy, setFilterColor } from '@/store/actions/filters';
 import { setFolderColor } from '@/store/actions/folders';
 import { moveLabelBy, setLabelColor } from '@/store/actions/labels';
 import { moveListToFolder, setListColor, setPinned } from '@/store/actions/lists';
@@ -258,6 +268,51 @@ export function labelMenuEntries(
       icon: <Trash className={icon} />,
       danger: true,
       onSelect: () => removeLabel(label.id),
+    },
+  ];
+}
+
+/** Actions for a saved filter, shown from its sidebar row's context menu and "…" button. */
+export function filterMenuEntries(
+  filter: Filter,
+  { onRename, first, last }: LabelMenuOptions,
+): MenuEntries {
+  return [
+    {
+      label: 'Edit filter…',
+      icon: <Pencil className={icon} />,
+      onSelect: () => editFilter(filter.id),
+    },
+    onRename && {
+      label: 'Rename',
+      icon: <Pencil className={icon} />,
+      movesFocus: true,
+      onSelect: onRename,
+    },
+    {
+      kind: 'sub',
+      label: 'Colour',
+      icon: <Palette className={icon} />,
+      entries: colorEntries(filter.color, (c) => setFilterColor(filter.id, c)),
+    },
+    {
+      label: 'Move up',
+      icon: <ArrowUp className={icon} />,
+      disabled: first,
+      onSelect: () => void moveFilterBy(filter.id, -1),
+    },
+    {
+      label: 'Move down',
+      icon: <ArrowDown className={icon} />,
+      disabled: last,
+      onSelect: () => void moveFilterBy(filter.id, 1),
+    },
+    { kind: 'separator' },
+    {
+      label: 'Delete filter',
+      icon: <Trash className={icon} />,
+      danger: true,
+      onSelect: () => removeFilter(filter.id),
     },
   ];
 }

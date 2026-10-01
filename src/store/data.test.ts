@@ -131,4 +131,30 @@ describe('loading settings', () => {
       dailyReviewTime: '07:00',
     });
   });
+
+  // Bug prevented: a saved sort of a kind this version doesn't know breaking every view.
+  it('keeps well-formed view options and the matrix searches, and falls back for the rest', async () => {
+    await initData(
+      new MemoryRepository({
+        settings: {
+          viewOptions: {
+            upcoming: { sort: 'priority', group: 'label' },
+            'label:X': { sort: 'sideways', group: 'date' },
+            'list:Y': { sort: 'manual', group: 'default' },
+          } as never,
+          matrix: { urgent: 'today', important: 'p1' },
+        },
+      }),
+    );
+    expect(useData.getState().settings.viewOptions).toEqual({
+      upcoming: { sort: 'priority', group: 'label' },
+      'label:X': { sort: 'manual', group: 'date' },
+    });
+    expect(useData.getState().settings.matrix).toEqual({ urgent: 'today', important: 'p1' });
+    await initData(new MemoryRepository({ settings: { matrix: 'nope' as never } }));
+    expect(useData.getState().settings.matrix).toEqual({
+      urgent: 'overdue | today',
+      important: 'p1 | p2',
+    });
+  });
 });

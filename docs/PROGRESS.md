@@ -708,6 +708,50 @@ INTEGER NOT NULL DEFAULT 0`; missing in old localStorage data or exports
   menu's "New label…") and in the selection bar (`selectionLabelsOpen`). The
   task menu has a "Labels" submenu with ticks. Grocery lists and notes have no
   labels.
+- Filters, sorting and grouping, and the Eisenhower matrix (after M8; step 7
+  of `docs/todoist-gap.md`). Data: the `filters` table (`Filter`: `name`,
+  `query`, `color`, `sortKey`), SQLite migration 6; old data and exports load
+  with none, and the snapshot version is unchanged. Two settings came with it:
+  `viewOptions` (sort and group per view, keyed `today`, `list:<id>`,
+  `label:<id>`, `filter:<id>`; only entries that differ from the defaults are
+  kept) and `matrix` (`urgent` and `important`, two queries). Both are
+  normalised on load (`store/viewOptions.ts`) and checked on import. The query
+  language is `lib/filterQuery.ts`: terms (`p1`–`p3`, `no priority`, `today`,
+  `tomorrow`, `overdue`, `no date`, `N days`, `before`/`after`/`on` a date
+  read by chrono, `#List`, `@label`, `no labels`, `search: text`, `"text"`,
+  `recurring`, `subtask`, `all`) joined with `&`, `|`, `!` and brackets.
+  `parseFilter` reads a tree and `compileFilter` turns it into a matcher
+  against today's date and the live to-do lists and labels, so a name that no
+  longer exists is an error the view shows (with "Change the search") rather
+  than an empty list. `filterDefaults` picks the terms the whole query
+  requires (top-level `&`, not inside `|` or `!`): a task added in a filter's
+  view gets that list, those labels, that day and that priority, through new
+  `listId`/`defaultPriority` props on `SmartLayout` and `QuickAdd` and a
+  `defaultPriority` argument on `createItemFromText`. The pure side
+  (`compileQuery`, `filterRows`, `filterCounts`, `resolvedDefaults`,
+  `matrixModel`) is in `store/filters.ts`; actions in `store/actions/filters.ts`
+  (a filter can be saved with a query naming a list that doesn't exist yet).
+  UI: `FilterList.tsx` in the sidebar (shown once a filter exists; rename in
+  place, "…" menu with Edit, Colour, Move, Delete with Undo), `FilterDialog.tsx`
+  (name and search, with the match count or the error as you type and the
+  syntax underneath; it won't save a query that doesn't compile),
+  `FilterView.tsx` on `SmartLayout`, palette entries (`New filter…`, `Go to
+filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
+  has `sortRows` (date with undated last, priority, name, date added; `manual`
+  keeps the given order) and `groupRows` (date, priority, list, label with each
+  task once under its first label, section); `components/views/arrangement.ts`
+  holds the choices and `useViewOptions`, and `viewOptions.tsx` the "Sort and
+  group" popover (two radio groups, in every task view's header; the icon
+  turns accent while a choice differs from the default). Today, Tomorrow, Next
+  7 days and Upcoming keep their own grouping as "default" and sort within it;
+  a list sorted or grouped is drawn flat by `ArrangedTodoList.tsx` (a
+  `SmartList` with `homeListId`, no dragging or nesting; completed tasks stay
+  in list order, a line says so) and goes back to `TodoList` at "List order"
+  with the default grouping. The matrix (`MatrixView.tsx`) is a built-in view
+  (hideable like the others) drawn as four `SmartList` sections in a grid
+  (`grid` prop); its two searches are edited in Settings
+  (`MatrixSettingsFields.tsx`) with errors shown inline, and the view explains
+  which search is broken.
 
 ### Accessibility and loading (M8)
 

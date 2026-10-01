@@ -121,6 +121,13 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - **Next 7 days:** overdue tasks, then each of the next seven days (empty
   days shown).
 - **Upcoming:** future tasks grouped by day.
+- **Eisenhower matrix:** every open task in one of four boxes, by whether it
+  passes the "urgent" and "important" searches set in Settings.
+- **Filters:** saved searches in a small language (`p1 & overdue`,
+  `#Work & 7 days`, `@home | @errands`), kept in the sidebar with a count.
+- Every view that lists tasks can be sorted (date, priority, name, date
+  added; a list also by its own order) and grouped (date, priority, list,
+  label; a list by its sections). The choice is remembered per view.
 - Any built-in view can be hidden from the sidebar in Settings.
 
 ### Grocery lists

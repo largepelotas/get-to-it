@@ -7,14 +7,24 @@ import { QuickAdd } from '@/components/items/QuickAdd';
 import { SelectionBar } from '@/components/items/SelectionBar';
 import { SmartList, type SmartSection } from '@/components/items/SmartList';
 import { Button, Popover } from '@/components/ui';
-import type { List } from '@/data/types';
+import type { List, Priority } from '@/data/types';
 import { useToday } from '@/hooks/useToday';
 import { addDaysKey, formatDateKey, formatLongDate } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { useData } from '@/store/data';
-import { useUI } from '@/store/ui';
-import { dueRows, next7Model, todayModel, tomorrowModel, upcomingModel } from '@/store/smart';
+import { groupRows, sortRows, type GroupContext } from '@/store/arrange';
+import { useUI, type View } from '@/store/ui';
+import {
+  dueRows,
+  next7Model,
+  todayModel,
+  tomorrowModel,
+  upcomingModel,
+  type DueRow,
+} from '@/store/smart';
 import { EmptyState, ViewHeader } from './ViewHeader';
+import { groupChoices, SMART_SORTS, toSmartSections, useViewOptions } from './arrangement';
+import { ViewOptionsMenu } from './viewOptions';
 
 // The calendar is only needed once Reschedule opens, so it loads separately.
 const DateChoices = lazy(() =>
@@ -57,33 +67,66 @@ function useDueRows() {
   return useMemo(() => dueRows(items, lists), [items, lists]);
 }
 
-/** Where quick-add in Today and Upcoming puts tasks: the default list, else any live to-do list. */
-function useQuickAddList(): List | null {
+/**
+ * The view's sort and grouping, and the sections for a grouping other than
+ * the view's own (`null` while the view groups its own way, with `sorted`
+ * for ordering each of its sections).
+ */
+function useArrangement(view: View, rows: DueRow[]) {
+  const { sort, group } = useViewOptions(view);
+  const lists = useData((s) => s.tables.lists);
+  const labels = useData((s) => s.tables.labels);
+  const today = useToday();
+  const sorted = useMemo(() => (rows: DueRow[]) => sortRows(rows, sort), [sort]);
+  const sections = useMemo<SmartSection[] | null>(() => {
+    if (group === 'default') return null;
+    const ctx: GroupContext = { today, lists, labels };
+    return toSmartSections(groupRows(sorted(rows), group, ctx));
+  }, [group, rows, sorted, today, lists, labels]);
+  return { sorted, sections };
+}
+
+/**
+ * Where quick-add in Today and Upcoming puts tasks: the list asked for (a
+ * filter's `#List`), else the default list, else any live to-do list.
+ */
+function useQuickAddList(wantedId?: string | null): List | null {
   const lists = useData((s) => s.tables.lists);
   const defaultId = useData((s) => s.settings.defaultListId);
   return useMemo(() => {
+    const wanted = wantedId ? lists[wantedId] : undefined;
+    if (isLiveTodo(wanted)) return wanted;
     const preferred = defaultId ? lists[defaultId] : undefined;
     if (isLiveTodo(preferred)) return preferred;
     return Object.values(lists).find(isLiveTodo) ?? null;
-  }, [lists, defaultId]);
+  }, [lists, defaultId, wantedId]);
 }
 
 export function SmartLayout({
   header,
   defaultDue,
   labelIds,
+  listId,
+  defaultPriority,
   sections,
   empty,
+  grid,
 }: {
   header: ReactNode;
   /** Due date for tasks added here; none for a view that doesn't date them. */
   defaultDue?: string;
   /** Labels put on every task added here. */
   labelIds?: string[];
+  /** Where tasks added here go, instead of the default list. */
+  listId?: string | null;
+  /** Priority for tasks added here whose text doesn't give one. */
+  defaultPriority?: Priority;
   sections: SmartSection[];
   empty: ReactNode;
+  /** Sections as boxes in two columns. */
+  grid?: boolean;
 }) {
-  const target = useQuickAddList();
+  const target = useQuickAddList(listId);
   // Room under the last row for the selection bar.
   const several = useUI((s) => s.multiSelectedIds.length >= 2);
   const quickAddRef = useRef<HTMLInputElement>(null);
@@ -103,6 +146,7 @@ export function SmartLayout({
                     inputRef={quickAddRef}
                     defaultDue={defaultDue}
                     labelIds={labelIds}
+                    defaultPriority={defaultPriority}
                     hint={target.title}
                     onArrowDown={() =>
                       listRef.current?.querySelector<HTMLElement>('[data-item-id]')?.focus()
@@ -112,7 +156,11 @@ export function SmartLayout({
               )}
               {sections.length ? (
                 <div ref={listRef} className="mt-4 px-2">
-                  <SmartList sections={sections} onExitTop={() => quickAddRef.current?.focus()} />
+                  <SmartList
+                    sections={sections}
+                    grid={grid}
+                    onExitTop={() => quickAddRef.current?.focus()}
+                  />
                 </div>
               ) : (
                 empty
@@ -127,23 +175,33 @@ export function SmartLayout({
   );
 }
 
+const TODAY_VIEW: View = { kind: 'today' };
+const TOMORROW_VIEW: View = { kind: 'tomorrow' };
+const NEXT7_VIEW: View = { kind: 'next7' };
+const UPCOMING_VIEW: View = { kind: 'upcoming' };
+
 export function TodayView() {
   const today = useToday();
   const rows = useDueRows();
   const { overdue, today: dueToday } = useMemo(() => todayModel(rows, today), [rows, today]);
+  const shown = useMemo(() => [...overdue, ...dueToday], [overdue, dueToday]);
+  const { sorted, sections: grouped } = useArrangement(TODAY_VIEW, shown);
 
   const sections: SmartSection[] = [];
-  if (overdue.length) {
-    sections.push({
-      key: 'Overdue',
-      title: 'Overdue',
-      tone: 'danger',
-      rows: overdue,
-      actions: <RescheduleOverdue ids={overdue.map((r) => r.item.id)} />,
-    });
-  }
-  if (dueToday.length) {
-    sections.push({ key: 'Today', title: 'Today', rows: dueToday, timeOnly: true });
+  if (grouped) sections.push(...grouped);
+  else {
+    if (overdue.length) {
+      sections.push({
+        key: 'Overdue',
+        title: 'Overdue',
+        tone: 'danger',
+        rows: sorted(overdue),
+        actions: <RescheduleOverdue ids={overdue.map((r) => r.item.id)} />,
+      });
+    }
+    if (dueToday.length) {
+      sections.push({ key: 'Today', title: 'Today', rows: sorted(dueToday), timeOnly: true });
+    }
   }
 
   const count = overdue.length + dueToday.length;
@@ -167,6 +225,13 @@ export function TodayView() {
               )}
             </>
           }
+          actions={
+            <ViewOptionsMenu
+              view={TODAY_VIEW}
+              sorts={SMART_SORTS}
+              groups={groupChoices('Overdue and today')}
+            />
+          }
         />
       }
       defaultDue={today}
@@ -185,10 +250,13 @@ export function TomorrowView() {
   const today = useToday();
   const rows = useDueRows();
   const tomorrow = addDaysKey(today, 1);
-  const dueTomorrow = tomorrowModel(rows, today);
-  const sections: SmartSection[] = dueTomorrow.length
-    ? [{ key: 'Tomorrow', title: 'Tomorrow', rows: dueTomorrow, timeOnly: true }]
-    : [];
+  const dueTomorrow = useMemo(() => tomorrowModel(rows, today), [rows, today]);
+  const { sorted, sections: grouped } = useArrangement(TOMORROW_VIEW, dueTomorrow);
+  const sections: SmartSection[] =
+    grouped ??
+    (dueTomorrow.length
+      ? [{ key: 'Tomorrow', title: 'Tomorrow', rows: sorted(dueTomorrow), timeOnly: true }]
+      : []);
   const count = dueTomorrow.length;
 
   return (
@@ -210,6 +278,9 @@ export function TomorrowView() {
               )}
             </>
           }
+          actions={
+            <ViewOptionsMenu view={TOMORROW_VIEW} sorts={SMART_SORTS} groups={groupChoices(null)} />
+          }
         />
       }
       defaultDue={tomorrow}
@@ -227,33 +298,38 @@ export function Next7View() {
   const today = useToday();
   const rows = useDueRows();
   const { overdue, days } = useMemo(() => next7Model(rows, today), [rows, today]);
+  const shown = useMemo(() => [...overdue, ...days.flatMap((d) => d.rows)], [overdue, days]);
+  const { sorted, sections: grouped } = useArrangement(NEXT7_VIEW, shown);
 
   const sections: SmartSection[] = [];
-  if (overdue.length) {
-    sections.push({
-      key: 'Overdue',
-      title: 'Overdue',
-      tone: 'danger',
-      rows: overdue,
-      actions: <RescheduleOverdue ids={overdue.map((r) => r.item.id)} />,
-    });
-  }
-  // Every day is shown, even without tasks, so the week can be read at a glance.
-  for (const day of days) {
-    const relative = formatDateKey(day.date);
-    const long = formatLongDate(day.date);
-    sections.push({
-      key: day.date,
-      title:
-        day.date === today
-          ? `Today · ${long}`
-          : relative === 'Tomorrow'
-            ? `Tomorrow · ${long}`
-            : long,
-      rows: day.rows,
-      emptyText: 'Nothing due',
-      timeOnly: true,
-    });
+  if (grouped) sections.push(...grouped);
+  else {
+    if (overdue.length) {
+      sections.push({
+        key: 'Overdue',
+        title: 'Overdue',
+        tone: 'danger',
+        rows: sorted(overdue),
+        actions: <RescheduleOverdue ids={overdue.map((r) => r.item.id)} />,
+      });
+    }
+    // Every day is shown, even without tasks, so the week can be read at a glance.
+    for (const day of days) {
+      const relative = formatDateKey(day.date);
+      const long = formatLongDate(day.date);
+      sections.push({
+        key: day.date,
+        title:
+          day.date === today
+            ? `Today · ${long}`
+            : relative === 'Tomorrow'
+              ? `Tomorrow · ${long}`
+              : long,
+        rows: sorted(day.rows),
+        emptyText: 'Nothing due',
+        timeOnly: true,
+      });
+    }
   }
   const count = overdue.length + days.reduce((sum, d) => sum + d.rows.length, 0);
 
@@ -268,11 +344,14 @@ export function Next7View() {
               <span className="text-fg-subtle">{count === 1 ? '1 task' : `${count} tasks`}</span>
             ) : undefined
           }
+          actions={
+            <ViewOptionsMenu view={NEXT7_VIEW} sorts={SMART_SORTS} groups={groupChoices('Day')} />
+          }
         />
       }
       defaultDue={today}
       sections={sections}
-      empty={null}
+      empty={grouped ? <EmptyState title="Nothing due in the next 7 days" /> : null}
     />
   );
 }
@@ -281,16 +360,20 @@ export function UpcomingView() {
   const today = useToday();
   const rows = useDueRows();
   const groups = useMemo(() => upcomingModel(rows, today), [rows, today]);
-  const sections: SmartSection[] = groups.map((group) => {
-    const relative = formatDateKey(group.date);
-    const long = formatLongDate(group.date);
-    return {
-      key: group.date,
-      title: relative === 'Tomorrow' ? `Tomorrow · ${long}` : long,
-      rows: group.rows,
-      timeOnly: true,
-    };
-  });
+  const shown = useMemo(() => groups.flatMap((g) => g.rows), [groups]);
+  const { sorted, sections: grouped } = useArrangement(UPCOMING_VIEW, shown);
+  const sections: SmartSection[] =
+    grouped ??
+    groups.map((group) => {
+      const relative = formatDateKey(group.date);
+      const long = formatLongDate(group.date);
+      return {
+        key: group.date,
+        title: relative === 'Tomorrow' ? `Tomorrow · ${long}` : long,
+        rows: sorted(group.rows),
+        timeOnly: true,
+      };
+    });
 
   return (
     <SmartLayout
@@ -298,6 +381,13 @@ export function UpcomingView() {
         <ViewHeader
           icon={<CalendarDays className="size-6" style={{ color: colorVar('red') }} />}
           title="Upcoming"
+          actions={
+            <ViewOptionsMenu
+              view={UPCOMING_VIEW}
+              sorts={SMART_SORTS}
+              groups={groupChoices('Day')}
+            />
+          }
         />
       }
       defaultDue={addDaysKey(today, 1)}

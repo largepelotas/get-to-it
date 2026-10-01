@@ -130,13 +130,20 @@ function prepareFromText(
   place: Pick<NewItem, 'parentId' | 'after' | 'sectionId'>,
   defaultDue: string | null,
   extraLabelIds: string[] = [],
+  defaultPriority: Priority = 0,
 ): Prepared | null {
   if (!raw.trim()) return null;
   const { settings, tables } = useData.getState();
   if (!settings.parseDates) {
     return {
       listId,
-      input: { text: raw, dueDate: defaultDue, labelIds: extraLabelIds, ...place },
+      input: {
+        text: raw,
+        dueDate: defaultDue,
+        labelIds: extraLabelIds,
+        priority: defaultPriority,
+        ...place,
+      },
       newLabels: [],
       reminder: null,
     };
@@ -160,7 +167,7 @@ function prepareFromText(
       dueDate,
       dueTime: parsed.dueTime,
       recurrence: parsed.recurrence,
-      priority: parsed.priority,
+      priority: parsed.priority || defaultPriority,
       labelIds: [...new Set([...extraLabelIds, ...parsed.labelIds])],
       ...place,
       ...(parsed.sectionId ? { sectionId: parsed.sectionId } : {}),
@@ -194,8 +201,10 @@ export function createItemFromText(
   defaultDue: string | null = null,
   /** Labels to put on the task whatever the text says (the label view's quick add). */
   extraLabelIds: string[] = [],
+  /** The priority to use when the text doesn't give one (a filter view's quick add). */
+  defaultPriority: Priority = 0,
 ): string | null {
-  const prepared = prepareFromText(listId, raw, place, defaultDue, extraLabelIds);
+  const prepared = prepareFromText(listId, raw, place, defaultDue, extraLabelIds, defaultPriority);
   if (!prepared) return null;
   return commit('New task', (tx) => insertPrepared(tx, prepared));
 }
@@ -209,11 +218,18 @@ export function createItemsFromLines(
   sectionId: string | null = null,
   /** Labels to put on every task whatever the text says. */
   extraLabelIds: string[] = [],
+  defaultPriority: Priority = 0,
 ): string[] {
   const prepared = lines.flatMap(
     (line) =>
-      prepareFromText(listId, line, sectionId ? { sectionId } : {}, defaultDue, extraLabelIds) ??
-      [],
+      prepareFromText(
+        listId,
+        line,
+        sectionId ? { sectionId } : {},
+        defaultDue,
+        extraLabelIds,
+        defaultPriority,
+      ) ?? [],
   );
   if (!prepared.length) return [];
   return commit(prepared.length === 1 ? 'New task' : 'New tasks', (tx) =>

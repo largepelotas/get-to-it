@@ -6,8 +6,10 @@ import { SHORTCUTS } from '@/lib/keymap';
 import { isMac } from '@/platform';
 import { useData } from '@/store/data';
 import { navigate, useUI } from '@/store/ui';
+import { FilterView } from './views/FilterView';
 import { LabelView } from './views/LabelView';
 import { ListView } from './views/ListView';
+import { MatrixView } from './views/MatrixView';
 import { RemindersView } from './views/RemindersView';
 import { Next7View, TodayView, TomorrowView, UpcomingView } from './views/SmartViews';
 import { ArchiveView, TrashView } from './views/StoredLists';
@@ -45,6 +47,8 @@ export function MainPane() {
   const listExists = useData((s) => (listId ? !!s.tables.lists[listId] : true));
   const labelId = view.kind === 'label' ? view.labelId : null;
   const labelExists = useData((s) => (labelId ? !!s.tables.labels[labelId] : true));
+  const filterId = view.kind === 'filter' ? view.filterId : null;
+  const filterExists = useData((s) => (filterId ? !!s.tables.filters[filterId] : true));
   const sidebarHidden = useData((s) => s.settings.sidebarHidden);
 
   // The open list can vanish (undoing its creation, emptying the Trash).
@@ -55,6 +59,10 @@ export function MainPane() {
   useEffect(() => {
     if (!labelExists) navigate(homeView());
   }, [labelExists]);
+  // And the open filter.
+  useEffect(() => {
+    if (!filterExists) navigate(homeView());
+  }, [filterExists]);
 
   return (
     <main data-region="view" className="flex h-full min-w-0 flex-1 flex-col bg-surface">
@@ -65,6 +73,12 @@ export function MainPane() {
         labelExists ? (
           <LabelView key={view.labelId} labelId={view.labelId} />
         ) : null
+      ) : view.kind === 'filter' ? (
+        filterExists ? (
+          <FilterView key={view.filterId} filterId={view.filterId} />
+        ) : null
+      ) : view.kind === 'matrix' ? (
+        <MatrixView />
       ) : view.kind === 'tomorrow' ? (
         <TomorrowView />
       ) : view.kind === 'next7' ? (

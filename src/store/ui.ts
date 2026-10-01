@@ -7,8 +7,10 @@ export type View =
   | { kind: 'next7' }
   | { kind: 'upcoming' }
   | { kind: 'reminders' }
+  | { kind: 'matrix' }
   | { kind: 'list'; listId: string }
   | { kind: 'label'; labelId: string }
+  | { kind: 'filter'; filterId: string }
   | { kind: 'archive' }
   | { kind: 'trash' };
 
@@ -19,6 +21,8 @@ export type DialogState =
   | { kind: 'palette' }
   | { kind: 'shortcuts' }
   | { kind: 'moveTasks'; ids: string[] }
+  /** New filter, or editing the one named. */
+  | { kind: 'filter'; filterId?: string }
   | {
       kind: 'confirm';
       title: string;
@@ -29,7 +33,7 @@ export type DialogState =
     };
 
 export interface Renaming {
-  kind: 'list' | 'folder' | 'label';
+  kind: 'list' | 'folder' | 'label' | 'filter';
   id: string;
   /** Renaming the copy of a list in the Pinned section. */
   pinned?: boolean;
@@ -84,6 +88,7 @@ export const useUI = create<UIState>(() => ({
 export function sameView(a: View, b: View): boolean {
   if (a.kind === 'list') return b.kind === 'list' && a.listId === b.listId;
   if (a.kind === 'label') return b.kind === 'label' && a.labelId === b.labelId;
+  if (a.kind === 'filter') return b.kind === 'filter' && a.filterId === b.filterId;
   return a.kind === b.kind;
 }
 
@@ -104,6 +109,7 @@ export function navigate(view: View): void {
 
 export const openList = (listId: string) => navigate({ kind: 'list', listId });
 export const openLabel = (labelId: string) => navigate({ kind: 'label', labelId });
+export const openFilter = (filterId: string) => navigate({ kind: 'filter', filterId });
 
 /** Selects one task (and drops any group), making it the start of the next range. */
 export function selectItem(id: string | null): void {
