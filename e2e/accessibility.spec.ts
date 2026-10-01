@@ -15,6 +15,12 @@ async function addContent(page: Page) {
   await addTasks(page, 'Done already');
   await row(page, 'Done already').getByRole('checkbox').click();
 
+  // A section with a task, so headings are scanned too.
+  await page.getByRole('button', { name: 'Add section', exact: true }).click();
+  await page.keyboard.type('Errands');
+  await page.keyboard.press('Enter');
+  await addTasks(page, 'Buy stamps /Errands');
+
   await openList(page, 'Groceries');
   const item = page.getByRole('textbox', { name: 'Add an item' });
   for (const text of ['2 lemons', 'milk 1 l']) {
@@ -46,6 +52,7 @@ for (const palette of PALETTES)
 
       await expectAccessible(page);
       await openList(page, 'Inbox');
+      await expectAccessible(page);
       await row(page, 'Review deck').hover();
       await row(page, 'Review deck').getByRole('button', { name: 'Open details' }).click();
       await expectAccessible(page);

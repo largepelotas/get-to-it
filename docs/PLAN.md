@@ -76,6 +76,9 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - Select several tasks (Ctrl/Shift+click, Shift+↑/↓, Ctrl+A) and complete,
   reschedule, set the priority of, move or delete them together; E, T, 1–4, V
   and Shift+A work on a focused task.
+- Sections: headings that group a list's tasks. Collapse, rename, reorder and
+  delete them (the tasks stay), move tasks between them by dragging or from
+  the task menu, and type `/Section` in quick add to file a task in one.
 - Priority P1–P3.
 - Finished items go to a collapsible "Completed" section.
 - A details panel for the selected task holds the title, rich-text notes, due

@@ -155,6 +155,17 @@ export function duplicateList(id: string): string | null {
       updatedAt: tx.now,
     };
     tx.put('lists', copy);
+    const sectionIds = new Map<string, string>();
+    for (const section of tx.all('sections').filter((s) => s.listId === id)) {
+      sectionIds.set(section.id, newId());
+      tx.put('sections', {
+        ...section,
+        id: sectionIds.get(section.id)!,
+        listId: copy.id,
+        createdAt: tx.now,
+        updatedAt: tx.now,
+      });
+    }
     const ids = new Map<string, string>();
     const items = tx.all('items').filter((i) => i.listId === id && !i.deletedAt);
     for (const item of items) ids.set(item.id, newId());
@@ -164,6 +175,7 @@ export function duplicateList(id: string): string | null {
         id: ids.get(item.id)!,
         listId: copy.id,
         parentId: item.parentId ? (ids.get(item.parentId) ?? null) : null,
+        sectionId: item.sectionId ? (sectionIds.get(item.sectionId) ?? null) : null,
         createdAt: tx.now,
         updatedAt: tx.now,
       });

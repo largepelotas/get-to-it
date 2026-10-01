@@ -36,10 +36,19 @@ import {
   snoozeReminder,
   type ReminderSpec,
 } from './store/actions/reminders';
+import { createSection, deleteSection, UNTITLED_SECTION } from './store/actions/sections';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
 import { listToMarkdown } from './store/markdown';
-import { confirmAction, navigate, openList, startRename, useUI, type View } from './store/ui';
+import {
+  confirmAction,
+  navigate,
+  openList,
+  setRenamingSection,
+  startRename,
+  useUI,
+  type View,
+} from './store/ui';
 
 /*
  * User-facing commands: store actions plus the navigation and toasts that go
@@ -213,6 +222,20 @@ export function confirmEmptyTrash(): void {
       toast.dismiss();
     },
   });
+}
+
+/** Adds a section to the end of a to-do list and opens its heading for naming. */
+export function addSection(listId: string): void {
+  const id = createSection(listId, UNTITLED_SECTION);
+  if (id) setRenamingSection(id);
+}
+
+/** Deletes a section (its tasks stay in the list, unsectioned) and offers Undo. */
+export function removeSection(id: string): void {
+  const section = useData.getState().tables.sections[id];
+  if (!section) return;
+  deleteSection(id);
+  toastWithUndo(`Deleted section ${section.title}`);
 }
 
 /** Deletes tasks (with their subtasks) and offers Undo. */

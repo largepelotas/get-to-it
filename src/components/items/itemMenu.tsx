@@ -13,6 +13,7 @@ import {
   IndentIncrease,
   ListPlus,
   PanelRight,
+  Rows3,
   SkipForward,
   Sun,
   Sunrise,
@@ -44,6 +45,11 @@ export interface ItemMenuActions {
   moveDown?: () => void;
   /** Opens the task's list, for views that gather tasks from many lists. */
   goToList?: () => void;
+  /** The list's sections, for the "Move to section" submenu (absent: no submenu). */
+  sections?: { id: string; title: string }[];
+  /** The section the task is shown in (null = none), to tick it. */
+  currentSectionId?: string | null;
+  moveToSection?: (sectionId: string | null) => void;
   remove: () => void;
 }
 
@@ -104,6 +110,29 @@ function moveToEntries(item: Item): MenuEntries {
   }));
 }
 
+/** "No section" and each section of the list, with the current one ticked. */
+function sectionEntries(
+  sections: { id: string; title: string }[],
+  current: string | null,
+  move: (sectionId: string | null) => void,
+): MenuEntries {
+  return [
+    {
+      label: 'No section',
+      checked: current === null,
+      disabled: current === null,
+      onSelect: () => move(null),
+    },
+    { kind: 'separator' },
+    ...sections.map((s): MenuEntry => ({
+      label: s.title,
+      checked: current === s.id,
+      disabled: current === s.id,
+      onSelect: () => move(s.id),
+    })),
+  ];
+}
+
 /** The right-click menu of a task. */
 export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntries {
   const inCompleted = item.checked && !item.parentId;
@@ -151,6 +180,17 @@ export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntri
       icon: <FolderInput className={icon} />,
       entries: moveToEntries(item),
     },
+    !!actions.sections?.length &&
+      !!actions.moveToSection && {
+        kind: 'sub',
+        label: 'Move to section',
+        icon: <Rows3 className={icon} />,
+        entries: sectionEntries(
+          actions.sections,
+          actions.currentSectionId ?? null,
+          actions.moveToSection,
+        ),
+      },
     !item.checked &&
       !item.recurrence && {
         label: "Won't do",

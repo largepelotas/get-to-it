@@ -5,6 +5,7 @@ import { backupDue, backupName, backUp, backUpIfDue } from './backup';
 import { createItem, setItemNotes } from './actions/items';
 import { addReminder } from './actions/reminders';
 import { createList, deleteList } from './actions/lists';
+import { createSection, setSectionCollapsed } from './actions/sections';
 import { replaceData, resetForTests, setSetting, useData } from './data';
 import {
   describeContents,
@@ -236,5 +237,47 @@ describe('backups', () => {
     const write = vi.fn(async () => {});
     await backUp(write, new Date(2026, 8, 30, 9, 0), 'before-import');
     expect(useData.getState().settings.lastBackupAt).toBe(DEFAULT_SETTINGS.lastBackupAt);
+  });
+});
+
+describe('snapshots with sections', () => {
+  // Bug prevented: sections lost on export and import, or tasks coming back in the wrong section.
+  it('round-trips an export with sections and sectioned tasks', () => {
+    const list = createList({ type: 'todo', title: 'Home' });
+    const section = createSection(list, 'Kitchen')!;
+    setSectionCollapsed(section, true);
+    const task = createItem(list, { text: 'Paint', sectionId: section })!;
+    const { tables } = useData.getState();
+    const parsed = parseSnapshot(exportNow());
+    expect(parsed.tables).toEqual(tables);
+    expect(parsed.tables.sections[section]).toMatchObject({ title: 'Kitchen', collapsed: true });
+    expect(parsed.tables.items[task].sectionId).toBe(section);
+    expect(JSON.parse(exportNow()).version).toBe(1);
+  });
+
+  // Bug prevented: an export made before sections existed being refused, or loading with undefined fields.
+  it('reads an old export with no sections table or sectionId as having none', () => {
+    const json = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: {
+        lists: [{ id: 'L', type: 'todo', title: 'T', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+        items: [{ id: 'I', listId: 'L', text: 'x', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+      },
+      settings: {},
+    });
+    const { tables } = parseSnapshot(json);
+    expect(tables.sections).toEqual({});
+    expect(tables.items.I.sectionId).toBeNull();
+  });
+
+  it('points at the section row that is wrong', () => {
+    const bad = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: { sections: [{ id: 'S', title: 'x', sortKey: 'a0', createdAt: 1, updatedAt: 1 }] },
+      settings: {},
+    });
+    expect(() => parseSnapshot(bad)).toThrow(/section 1, listId should be an id/);
   });
 });

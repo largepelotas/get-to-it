@@ -19,6 +19,8 @@ export interface QuickAddResult {
   priority: Priority;
   /** The list named with `#List`, if it matched one of `options.lists`. */
   listId: string | null;
+  /** The section named with `/Section` in the target list, if it matched one of `options.sections`. */
+  sectionId: string | null;
   /** From a `!` token. A relative one only means something on a task with a due date. */
   reminder: ReminderSpec | null;
   /** Short labels for what was understood, shown as a preview. */
@@ -162,13 +164,21 @@ function resolveHour(s: Parsed, now: Date): Date {
 export interface QuickAddOptions {
   /** Lists a `#List` token can name. */
   lists?: { id: string; title: string }[];
+  /** Sections a `/Section` token can name, when they are in the target list. */
+  sections?: { id: string; listId: string; title: string }[];
+  /** The list the task goes to when no `#List` is typed; decides which sections `/Section` can name. */
+  listId?: string | null;
   /** The due date the caller will give a task without one; lets a relative reminder show. */
   defaultDue?: string | null;
 }
 
-/** A `#List` token: the longest list title right after a `#` that starts a word. */
-function findList(
+/**
+ * A token made of a marker and a title: the longest title right after a marker character
+ * that starts a word and ending at whitespace or the end of the text.
+ */
+function findToken(
   text: string,
+  marker: string,
   lists: { id: string; title: string }[],
 ): { id: string; title: string; start: number; end: number } | null {
   const candidates = lists
@@ -177,7 +187,7 @@ function findList(
     .sort((a, b) => b.key.length - a.key.length);
   const lower = text.toLowerCase();
   for (let i = 0; i < text.length; i++) {
-    if (text[i] !== '#' || (i > 0 && !/\s/.test(text[i - 1]))) continue;
+    if (text[i] !== marker || (i > 0 && !/\s/.test(text[i - 1]))) continue;
     for (const l of candidates) {
       const end = i + 1 + l.key.length;
       if (!lower.startsWith(l.key, i + 1)) continue;
@@ -186,6 +196,22 @@ function findList(
     }
   }
   return null;
+}
+
+/** A `#List` token. */
+function findList(
+  text: string,
+  lists: { id: string; title: string }[],
+): { id: string; title: string; start: number; end: number } | null {
+  return findToken(text, '#', lists);
+}
+
+/** A `/Section` token: the longest title of a section in the target list right after a `/` that starts a word. */
+function findSection(
+  text: string,
+  sections: { id: string; title: string }[],
+): { id: string; title: string; start: number; end: number } | null {
+  return findToken(text, '/', sections);
 }
 
 const REMINDER_UNIT = /^(\d+)\s*(m|mins?|minutes?|h|hrs?|hours?|d|days?)(?:\s+before)?(?=\s|$)/i;
@@ -278,6 +304,8 @@ export function parseQuickAdd(
   let text = input;
   let listId: string | null = null;
   let listTitle = '';
+  let sectionId: string | null = null;
+  let sectionTitle = '';
   let reminder: ReminderSpec | null = null;
   let priority: Priority = 0;
   let recurrence: Recurrence | null = null;
@@ -289,6 +317,16 @@ export function parseQuickAdd(
     listId = l.id;
     listTitle = l.title;
     text = cut(text, l.start, l.end);
+  }
+
+  const sectionPool = (options.sections ?? []).filter(
+    (s) => s.listId === (listId ?? options.listId ?? null),
+  );
+  const sec = sectionPool.length ? findSection(text, sectionPool) : null;
+  if (sec) {
+    sectionId = sec.id;
+    sectionTitle = sec.title;
+    text = cut(text, sec.start, sec.end);
   }
 
   const p = findPriority(text);
@@ -342,6 +380,7 @@ export function parseQuickAdd(
   if (recurrence) chips.push(describeRecurrence(recurrence, dueDate));
   if (priority) chips.push(`P${priority}`);
   if (listId) chips.push(`#${listTitle}`);
+  if (sectionId) chips.push(`/${sectionTitle}`);
   if (reminder && (reminder.kind === 'absolute' || dueDate || options.defaultDue)) {
     chips.push(describeReminder(reminder, now));
   }
@@ -355,6 +394,7 @@ export function parseQuickAdd(
     recurrence,
     priority,
     listId,
+    sectionId,
     reminder,
     chips,
   };

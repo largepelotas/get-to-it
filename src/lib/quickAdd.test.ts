@@ -244,3 +244,101 @@ describe('parseQuickAdd with a "!word" that is not a reminder', () => {
     });
   });
 });
+
+describe('parseQuickAdd /Section', () => {
+  const SECTIONS = [
+    { id: 'k', listId: 'home', title: 'Kitchen' },
+    { id: 'ks', listId: 'home', title: 'Kitchen sink' },
+    { id: 'gar', listId: 'home', title: 'Garden' },
+    { id: 'wk', listId: 'work', title: 'Kitchen' },
+    { id: 'plan', listId: 'work', title: 'Planning' },
+  ];
+  const opts = {
+    lists: [...LISTS, { id: 'home', title: 'Home' }],
+    sections: SECTIONS,
+    listId: 'home',
+  };
+
+  // Bug prevented: "/Kitchen" staying in the title and the task never reaching its section.
+  it('files the task in the section of the target list and shows a chip', () => {
+    const r = parseQuickAdd('Buy paint /Kitchen', NOW, opts);
+    expect(r).toMatchObject({ text: 'Buy paint', sectionId: 'k', listId: null });
+    expect(r.chips).toContain('/Kitchen');
+  });
+
+  it('ignores case and matches mid-sentence', () => {
+    expect(parseQuickAdd('Buy /garden seeds', NOW, opts)).toMatchObject({
+      text: 'Buy seeds',
+      sectionId: 'gar',
+    });
+  });
+
+  it('prefers the longest title and allows spaces in titles', () => {
+    expect(parseQuickAdd('/Kitchen sink Fix tap', NOW, opts)).toMatchObject({
+      text: 'Fix tap',
+      sectionId: 'ks',
+    });
+  });
+
+  // Bug prevented: filing into a same-named section of a different list.
+  it('only matches sections of the target list', () => {
+    expect(parseQuickAdd('Plan it /Planning', NOW, opts)).toMatchObject({
+      text: 'Plan it /Planning',
+      sectionId: null,
+    });
+    expect(parseQuickAdd('Buy paint /Kitchen', NOW, { ...opts, listId: 'work' })).toMatchObject({
+      sectionId: 'wk',
+    });
+  });
+
+  it('uses the #List list, whether #List comes before or after', () => {
+    for (const text of [
+      'Plan it /Planning #Work',
+      '#Work /Planning Plan it',
+      'Plan it #Work /Planning',
+    ]) {
+      expect(parseQuickAdd(text, NOW, opts)).toMatchObject({
+        text: 'Plan it',
+        listId: 'work',
+        sectionId: 'plan',
+      });
+    }
+    expect(
+      parseQuickAdd('Buy paint /Kitchen #Home', NOW, { ...opts, listId: 'work' }),
+    ).toMatchObject({ text: 'Buy paint', sectionId: 'k' });
+    expect(parseQuickAdd('#Home /Kitchen Buy paint', NOW, opts)).toMatchObject({
+      text: 'Buy paint',
+      sectionId: 'k',
+    });
+  });
+
+  // Bug prevented: ordinary slashes being eaten from titles.
+  it('leaves text as typed when nothing matches, and never reads other slashes as tokens', () => {
+    const odd = [
+      { id: 'o', listId: 'home', title: 'or' },
+      { id: 'h', listId: 'home', title: '2' },
+      { id: 'x', listId: 'home', title: '/' },
+    ];
+    for (const text of [
+      'Fix /Roof',
+      'Choose this and/or that',
+      'Add 1/2 cup',
+      'See http://x.com',
+      'a / b',
+      'Lone /',
+    ]) {
+      const r = parseQuickAdd(text, NOW, { sections: odd, listId: 'home' });
+      expect(r).toMatchObject({ text, sectionId: null });
+    }
+  });
+
+  it('does nothing without sections or a target list', () => {
+    expect(parseQuickAdd('Buy paint /Kitchen', NOW)).toMatchObject({
+      text: 'Buy paint /Kitchen',
+      sectionId: null,
+    });
+    expect(parseQuickAdd('Buy paint /Kitchen', NOW, { sections: SECTIONS })).toMatchObject({
+      sectionId: null,
+    });
+  });
+});

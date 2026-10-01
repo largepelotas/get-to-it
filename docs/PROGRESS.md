@@ -660,6 +660,31 @@ INTEGER NOT NULL DEFAULT 0`; missing in old localStorage data or exports
   the app was closed. The scheduler subscription also watches
   `dailyReviewTime`.
 
+- Sections (after M8): headings inside a to-do list. Data: the `sections`
+  table (`Section`: `listId`, `title`, `sortKey`, `collapsed`), `Item.sectionId`
+  (top-level tasks only; a subtask follows its top-level ancestor), SQLite
+  migration 4; old data and exports load with none. Actions are in
+  `store/actions/sections.ts` (`setSectionCollapsed` isn't an undo step, like
+  collapsing a task) and `todoModel(items, listId, sections)` returns
+  `unsectioned` and `sections` beside `open`. The screen draws groups
+  (`TodoList.tsx`): the unsectioned tasks, then each `SectionHeading`
+  (`role="heading"`, level 2, named "Title, N tasks", with an
+  `aria-expanded` toggle) and its tasks. Headings are focusable and take part
+  in Up/Down; Left/Right/Space collapse, Enter or F2 renames, Alt+Up/Down
+  reorders; task keys do nothing on them. Selection ids are task rows only, so
+  Ctrl+A and Shift ranges skip headings. Drag: one `DndContext` with headings
+  as sortable ids (`section:<id>`); `planDrop` (`items/dropPlan.ts`) turns a
+  drop into parent, "after" and section. A drop on an open heading goes to the
+  section's start, on a collapsed one to its end; a drop on a task in another
+  group lands after that task. While a heading is dragged the sections' tasks
+  are hidden so headings reorder alone. In a trashed or archived list headings
+  are static apart from collapsing. "Add section" is in the list menu and under
+  the tasks (`addSection` in `commands.ts` opens the new heading for naming via
+  `useUI.renamingSectionId`); deleting goes through `removeSection` (toast with
+  Undo). The task menu has "Move to section" when the list has sections.
+  `/section` is parsed with `#List` (see Quick add); `QuickAdd` passes the
+  sections and its list so the chip shows `/Title`.
+
 ### Accessibility and loading (M8)
 
 - **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)

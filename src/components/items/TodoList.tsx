@@ -1,6 +1,8 @@
 import {
   closestCenter,
   DndContext,
+  MeasuringStrategy,
+  useDroppable,
   PointerSensor,
   useSensor,
   useSensors,
@@ -18,7 +20,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { toggleItem, trashItems } from '@/commands';
+import { addSection, removeSection, toggleItem, trashItems } from '@/commands';
 import { ListIcon } from '@/components/ListIcon';
 import type { MenuEntries } from '@/components/ui';
 import { EmptyState } from '@/components/views/ViewHeader';
@@ -38,9 +40,16 @@ import {
   setItemCollapsed,
 } from '@/store/actions/items';
 import { setShowCompleted } from '@/store/actions/lists';
+import {
+  moveItemsToSection,
+  moveSection,
+  moveSectionBy,
+  renameSection,
+  setSectionCollapsed,
+} from '@/store/actions/sections';
 import { useData } from '@/store/data';
 import { endOfSubtree, todoModel } from '@/store/todo';
-import { MAX_DEPTH, projectDrop, type FlatRow } from '@/store/tree';
+import { MAX_DEPTH, type FlatRow } from '@/store/tree';
 import {
   clearReveal,
   closeDetails,
@@ -50,25 +59,33 @@ import {
   pickDueDate,
   selectItem,
   selectRange,
+  setRenamingSection,
   toggleSelected,
   useUI,
 } from '@/store/ui';
 import { itemMenuEntries } from './itemMenu';
-import {
-  DraftRow,
-  INDENT,
-  ItemRow,
-  type DragBits,
-  type RowClickKind,
-  type RowKeyMode,
-} from './ItemRow';
+import { DraftRow, ItemRow, type DragBits, type RowClickKind, type RowKeyMode } from './ItemRow';
 import { QuickAdd } from './QuickAdd';
-import { handleSelectionKey } from './selection';
+import {
+  isSectionKey,
+  NO_SECTION_ID,
+  planDrop,
+  SECTION_PREFIX,
+  sectionKey,
+  type Group,
+} from './dropPlan';
+import { SectionHeading } from './SectionHeading';
+import type { SectionActions } from './sectionMenu';
+import { handleSelectionKey, keepFocus } from './selection';
 
-/** Where the inline new-task field sits: under `parentId`, after the sibling `after` (null = first). */
+/**
+ * Where the inline new-task field sits: under `parentId`, after the sibling `after` (null = first).
+ * With neither, `sectionId` says which group's start it opens at (null or absent = no section).
+ */
 interface Draft {
   parentId: string | null;
   after: string | null;
+  sectionId?: string | null;
 }
 
 /** Something to focus after the next render. A new object each time, so repeats still apply. */
@@ -79,6 +96,7 @@ interface FocusRequest {
 }
 
 interface DragState {
+  /** A task id, or `section:<id>` for a section heading. */
   activeId: string;
   overId: string;
   offsetX: number;
@@ -107,6 +125,23 @@ function lastChild(rows: FlatRow[], index: number): string | null {
   return last;
 }
 
+/** The drop target for "no section": the start of the tasks that sit above the first heading. */
+function NoSectionZone({ over }: { over: boolean }) {
+  const { setNodeRef } = useDroppable({ id: NO_SECTION_ID });
+  return (
+    <div
+      ref={setNodeRef}
+      data-testid="no-section-zone"
+      className={clsx(
+        'mb-1 flex h-8 items-center justify-center rounded-md border border-dashed text-xs',
+        over ? 'border-accent bg-hover text-fg' : 'border-line-strong text-fg-muted',
+      )}
+    >
+      No section
+    </div>
+  );
+}
+
 function SortableRow({
   id,
   disabled,
@@ -131,10 +166,15 @@ function SortableRow({
 
 export function TodoList({ list }: { list: List }) {
   const items = useData((s) => s.tables.items);
-  const model = useMemo(() => todoModel(items, list.id), [items, list.id]);
+  const sectionTable = useData((s) => s.tables.sections);
+  const model = useMemo(
+    () => todoModel(items, list.id, sectionTable),
+    [items, list.id, sectionTable],
+  );
   const selectedId = useUI((s) => s.selectedItemId);
   const multiIds = useUI((s) => s.multiSelectedIds);
   const reveal = useUI((s) => s.reveal);
+  const renamingSectionId = useUI((s) => s.renamingSectionId);
   const reminded = useItemsWithReminders();
   const readOnly = !!(list.deletedAt || list.archivedAt);
 
@@ -151,10 +191,41 @@ export function TodoList({ list }: { list: List }) {
     latest.current = { draft, draftText };
   });
 
+  const groups = useMemo<Group[]>(
+    () => [
+      {
+        id: null,
+        section: null,
+        rows: model.unsectioned,
+        shown: model.unsectioned,
+        count: model.unsectioned.filter((r) => r.depth === 0).length,
+      },
+      ...model.sections.map(({ section, rows, openCount }) => ({
+        id: section.id,
+        section,
+        rows,
+        shown: section.collapsed ? [] : rows,
+        count: openCount,
+      })),
+    ],
+    [model],
+  );
+  const hasSections = model.sections.length > 0;
   const doneRows = list.showCompleted ? model.done : [];
-  /** Every row in keyboard order. */
-  const visible = [...model.open, ...doneRows];
-  const inDone = (index: number) => index >= model.open.length;
+  /** The open rows on screen, in order (a collapsed section hides its own). */
+  const openShown = useMemo(() => groups.flatMap((g) => g.shown), [groups]);
+  /** Every task row in order. Headings are never in it, so selection skips them. */
+  const visible = [...openShown, ...doneRows];
+  const visibleIndex = new Map(visible.map((r, i) => [r, i]));
+  const inDone = (index: number) => index >= openShown.length;
+  /** What the arrow keys step through: task ids and `section:<id>` headings. */
+  const navKeys = [
+    ...groups.flatMap((g) => [
+      ...(g.section ? [sectionKey(g.section.id)] : []),
+      ...g.shown.map((r) => r.item.id),
+    ]),
+    ...doneRows.map((r) => r.item.id),
+  ];
   const selectionShown = visible.some((r) => r.item.id === selectedId);
   const visibleKey = visible.map((r) => r.item.id).join('|');
 
@@ -168,7 +239,9 @@ export function TodoList({ list }: { list: List }) {
     if (focus.target === 'draft') return draftRef.current?.focus();
     if (focus.target === 'quick-add') return quickAddRef.current?.focus();
     const row = containerRef.current?.querySelector<HTMLElement>(
-      `[data-item-id="${focus.target}"]`,
+      isSectionKey(focus.target)
+        ? `[data-section-id="${focus.target.slice(SECTION_PREFIX.length)}"]`
+        : `[data-item-id="${focus.target}"]`,
     );
     if (!row) return;
     if (focus.mode !== 'text') return row.focus();
@@ -190,6 +263,8 @@ export function TodoList({ list }: { list: List }) {
     setFocus({ target: id, mode, caretAtEnd });
   };
   const focusQuickAdd = () => setFocus({ target: 'quick-add' });
+  /** Focuses a task row (selecting it) or a section heading, by its navigation key. */
+  const goTo = (key: string) => (isSectionKey(key) ? setFocus({ target: key }) : focusRow(key));
 
   // Inline new-task field.
   const openDraft = (next: Draft) => {
@@ -203,24 +278,45 @@ export function TodoList({ list }: { list: List }) {
   };
   const leaveDraft = (mode: RowKeyMode) => {
     const back = draft?.after ?? draft?.parentId;
+    const section = draft?.sectionId;
     closeDraft();
     if (back) focusRow(back, mode, true);
+    else if (section) setFocus({ target: sectionKey(section) });
     else focusQuickAdd();
   };
 
+  /** Which group's rows the draft sits among, and where. */
   const draftPlace = useMemo(() => {
     if (!draft || drag) return null;
-    const rows = model.open;
+    const find = (id: string) => {
+      for (const group of groups) {
+        const index = group.shown.findIndex((r) => r.item.id === id);
+        if (index >= 0) return { group, index };
+      }
+      return null;
+    };
     if (draft.after) {
-      const i = rows.findIndex((r) => r.item.id === draft.after);
-      return i < 0 ? null : { index: endOfSubtree(rows, i), depth: rows[i].depth };
+      const at = find(draft.after);
+      if (!at) return null;
+      const { group, index } = at;
+      return {
+        groupId: group.id,
+        index: endOfSubtree(group.shown, index),
+        depth: group.shown[index].depth,
+      };
     }
     if (draft.parentId) {
-      const i = rows.findIndex((r) => r.item.id === draft.parentId);
-      return i < 0 ? null : { index: i + 1, depth: rows[i].depth + 1 };
+      const at = find(draft.parentId);
+      if (!at) return null;
+      return {
+        groupId: at.group.id,
+        index: at.index + 1,
+        depth: at.group.shown[at.index].depth + 1,
+      };
     }
-    return { index: 0, depth: 0 };
-  }, [draft, drag, model.open]);
+    const group = groups.find((g) => g.id === (draft.sectionId ?? null)) ?? groups[0];
+    return { groupId: group.id, index: 0, depth: 0 };
+  }, [draft, drag, groups]);
 
   const submitDraft = () => {
     if (!draft) return;
@@ -232,7 +328,7 @@ export function TodoList({ list }: { list: List }) {
   const onDraftKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing || !draft) return;
     const is = (shortcut: string) => matchesShortcut(e, shortcut, isMac);
-    const rows = model.open;
+    const rows = openShown;
     if (is('Enter')) {
       e.preventDefault();
       submitDraft();
@@ -286,17 +382,25 @@ export function TodoList({ list }: { list: List }) {
   };
 
   const addSubtask = (index: number) => {
-    const row = model.open[index];
+    const row = openShown[index];
     if (row.item.collapsed) setItemCollapsed(row.item.id, false);
     openDraft({
       parentId: row.item.id,
-      after: row.item.collapsed ? null : lastChild(model.open, index),
+      after: row.item.collapsed ? null : lastChild(openShown, index),
     });
+  };
+
+  /** Opens the new-task field at the end of a section, expanding it if it is collapsed. */
+  const addTaskTo = (group: Group) => {
+    if (!group.section) return;
+    if (group.section.collapsed) setSectionCollapsed(group.section.id, false);
+    const last = [...group.rows].reverse().find((r) => r.depth === 0);
+    openDraft({ parentId: null, after: last?.item.id ?? null, sectionId: group.section.id });
   };
 
   const openDraftAfter = (index: number) => {
     if (inDone(index)) {
-      const lastTop = [...model.open].reverse().find((r) => r.depth === 0);
+      const lastTop = [...openShown].reverse().find((r) => r.depth === 0);
       openDraft({ parentId: null, after: lastTop?.item.id ?? null });
     } else {
       const row = visible[index];
@@ -308,6 +412,15 @@ export function TodoList({ list }: { list: List }) {
     const { detailsOpen, selectedItemId } = useUI.getState();
     if (detailsOpen && selectedItemId === id) closeDetails();
     else openDetails(id);
+  };
+
+  /** Alt+Up/Down. A task that crosses into a collapsed section opens it, so it stays on screen. */
+  const moveBy = (id: string, direction: -1 | 1) => {
+    moveItemBy(id, direction);
+    const { items: now, sections } = useData.getState().tables;
+    const sectionId = now[id]?.sectionId;
+    const into = sectionId ? sections[sectionId] : undefined;
+    if (into?.collapsed) setSectionCollapsed(into.id, false);
   };
 
   const onRowKey = (e: KeyboardEvent<HTMLElement>, index: number, mode: RowKeyMode) => {
@@ -322,7 +435,7 @@ export function TodoList({ list }: { list: List }) {
       readOnly,
       focusRow: (target) => setFocus({ target, mode: 'row' }),
       toggleOne: () => toggle(index),
-      addAtTop: () => openDraft({ parentId: null, after: null }),
+      addAtTop: () => openDraft({ parentId: null, after: null, sectionId: null }),
     });
     if (handled) return;
 
@@ -334,8 +447,9 @@ export function TodoList({ list }: { list: List }) {
       toggleDetails(id);
     } else if (is('ArrowUp') || is('ArrowDown')) {
       e.preventDefault();
-      const next = visible[index + (e.key === 'ArrowUp' ? -1 : 1)];
-      if (next) focusRow(next.item.id, mode, true);
+      const next = navKeys[navKeys.indexOf(id) + (e.key === 'ArrowUp' ? -1 : 1)];
+      if (next && isSectionKey(next)) setFocus({ target: next });
+      else if (next) focusRow(next, mode, true);
       else if (e.key === 'ArrowUp' && !readOnly) focusQuickAdd();
     } else if (is('Escape')) {
       e.preventDefault();
@@ -352,7 +466,7 @@ export function TodoList({ list }: { list: List }) {
       return;
     } else if (is('Alt+ArrowUp') || is('Alt+ArrowDown')) {
       e.preventDefault();
-      moveItemBy(id, e.key === 'ArrowUp' ? -1 : 1);
+      moveBy(id, e.key === 'ArrowUp' ? -1 : 1);
       focusRow(id, mode);
     } else if (is('Tab') || is('Shift+Tab')) {
       e.preventDefault();
@@ -403,40 +517,134 @@ export function TodoList({ list }: { list: List }) {
         },
       ];
     }
+    const known = new Set(model.sections.map((s) => s.section.id));
+    const current = inDone(index)
+      ? row.item.sectionId && known.has(row.item.sectionId)
+        ? row.item.sectionId
+        : null
+      : (groups.find((g) => g.rows.includes(row))?.id ?? null);
     return itemMenuEntries(row.item, {
       openDetails: () => openDetails(id),
       addSubtask: !inDone(index) && row.depth < MAX_DEPTH ? () => addSubtask(index) : undefined,
       indent: () => indentItem(id),
       outdent: () => outdentItem(id),
-      moveUp: () => moveItemBy(id, -1),
-      moveDown: () => moveItemBy(id, 1),
+      moveUp: () => moveBy(id, -1),
+      moveDown: () => moveBy(id, 1),
+      sections: model.sections.map((s) => ({ id: s.section.id, title: s.section.title })),
+      currentSectionId: current,
+      moveToSection: (sectionId) => keepFocus(() => moveItemsToSection([id], sectionId)),
       remove: () => trashItems([id]),
     });
   };
 
+  // Section headings.
+  const sectionIds = model.sections.map((s) => s.section.id);
+  const headingActions = (group: Group): SectionActions => {
+    const id = group.id!;
+    const at = sectionIds.indexOf(id);
+    return {
+      addTask: () => addTaskTo(group),
+      rename: () => setRenamingSection(id),
+      moveUp: at > 0 ? () => moveSectionBy(id, -1) : undefined,
+      moveDown: at < sectionIds.length - 1 ? () => moveSectionBy(id, 1) : undefined,
+      remove: () => keepFocus(() => removeSection(id)),
+    };
+  };
+
+  const onHeadingKey = (e: KeyboardEvent<HTMLElement>, group: Group) => {
+    const section = group.section;
+    // Keys typed in the rename field or on a button inside the heading are theirs.
+    if (!section || e.nativeEvent.isComposing || e.target !== e.currentTarget) return;
+    const is = (shortcut: string) => matchesShortcut(e, shortcut, isMac);
+    const key = sectionKey(section.id);
+    if (is('ArrowUp') || is('ArrowDown')) {
+      e.preventDefault();
+      const next = navKeys[navKeys.indexOf(key) + (e.key === 'ArrowUp' ? -1 : 1)];
+      if (next && isSectionKey(next)) setFocus({ target: next });
+      else if (next) focusRow(next);
+      else if (e.key === 'ArrowUp' && !readOnly) focusQuickAdd();
+    } else if (is('ArrowLeft') || is('ArrowRight') || is(' ')) {
+      e.preventDefault();
+      const collapsed = is('ArrowLeft') ? true : is('ArrowRight') ? false : !section.collapsed;
+      if (collapsed !== section.collapsed) setSectionCollapsed(section.id, collapsed);
+    } else if (is('Escape')) {
+      e.preventDefault();
+      containerRef.current?.focus();
+    } else if (readOnly) {
+      return;
+    } else if (is('Enter') || is('F2')) {
+      e.preventDefault();
+      setRenamingSection(section.id);
+    } else if (is('Alt+ArrowUp') || is('Alt+ArrowDown')) {
+      e.preventDefault();
+      moveSectionBy(section.id, e.key === 'ArrowUp' ? -1 : 1);
+      setFocus({ target: key });
+    }
+  };
+
+  const onRenameDone = (group: Group, title: string | null) => {
+    if (title !== null) return renameSection(group.id!, title);
+    setRenamingSection(null);
+    setFocus({ target: sectionKey(group.id!) });
+  };
+
   // Dragging.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const projection = drag
-    ? projectDrop(model.open, drag.activeId, drag.overId, drag.offsetX, INDENT)
-    : null;
-  const shownOpen = useMemo(() => {
-    if (!drag) return model.open;
-    // The dragged task's subtasks travel with it, so hide them for now.
-    const i = model.open.findIndex((r) => r.item.id === drag.activeId);
-    return i < 0
-      ? model.open
-      : [...model.open.slice(0, i + 1), ...model.open.slice(endOfSubtree(model.open, i))];
-  }, [drag, model.open]);
+  const draggingSection = !!drag && isSectionKey(drag.activeId);
+  const projection =
+    drag && !draggingSection ? planDrop(groups, drag.activeId, drag.overId, drag.offsetX) : null;
+  /** The dragged task's subtasks travel with it, so they are hidden for now. */
+  const hiddenIds = useMemo(() => {
+    const hidden = new Set<string>();
+    if (!drag || isSectionKey(drag.activeId)) return hidden;
+    const i = openShown.findIndex((r) => r.item.id === drag.activeId);
+    if (i >= 0) {
+      for (let j = i + 1; j < endOfSubtree(openShown, i); j++) hidden.add(openShown[j].item.id);
+    }
+    return hidden;
+  }, [drag, openShown]);
+  /** The rows to draw for a group. While a heading is dragged, only headings (and unsectioned tasks) show. */
+  const rowsFor = (group: Group) =>
+    draggingSection && group.section ? [] : group.shown.filter((r) => !hiddenIds.has(r.item.id));
+  /** While a task is dragged in a sectioned list, a target for "no section" shows at the top. */
+  const showZone = !readOnly && hasSections && !!drag && !draggingSection;
+  const sortIds = groups.flatMap((g) => [
+    ...(g.section ? [sectionKey(g.section.id)] : []),
+    ...rowsFor(g).map((r) => r.item.id),
+  ]);
 
   const onDragEnd = ({ active, over, delta }: DragEndEvent) => {
     setDrag(null);
     if (!over) return;
-    const rows = model.open;
-    const target = projectDrop(rows, String(active.id), String(over.id), delta.x, INDENT);
-    const i = rows.findIndex((r) => r.item.id === active.id);
-    if (!target || i < 0) return;
-    if (target.parentId === shownParent(rows[i]) && target.afterId === prevSibling(rows, i)) return;
-    moveItem(String(active.id), target.parentId, target.afterId);
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (isSectionKey(activeId)) {
+      if (activeId === overId) return;
+      const ordered = sectionIds.map(sectionKey);
+      const from = ordered.indexOf(activeId);
+      // Over a heading, or over an unsectioned task (the start of the list).
+      const overSection = ordered.indexOf(overId);
+      const others = ordered.filter((id) => id !== activeId);
+      const toIndex = isSectionKey(overId)
+        ? others.indexOf(overId) + (from < overSection ? 1 : 0)
+        : 0;
+      if (from < 0 || toIndex === from) return;
+      moveSection(activeId.slice(SECTION_PREFIX.length), toIndex);
+      return;
+    }
+    const plan = planDrop(groups, activeId, overId, delta.x);
+    const group = groups.find((g) => g.rows.some((r) => r.item.id === activeId));
+    const i = group ? group.rows.findIndex((r) => r.item.id === activeId) : -1;
+    if (!plan || !group || i < 0) return;
+    const row = group.rows[i];
+    if (
+      plan.parentId === shownParent(row) &&
+      plan.afterId === prevSibling(group.rows, i) &&
+      (plan.parentId !== null || plan.sectionId === group.id)
+    ) {
+      return;
+    }
+    moveItem(activeId, plan.parentId, plan.afterId, plan.parentId ? undefined : plan.sectionId);
   };
 
   const clickRow = (id: string, kind: RowClickKind) => {
@@ -468,32 +676,37 @@ export function TodoList({ list }: { list: List }) {
     />
   );
 
-  const openRows: ReactNode[] = shownOpen.map((row) => {
-    const index = model.open.indexOf(row);
-    const isActive = drag?.activeId === row.item.id;
-    return (
-      <SortableRow key={row.item.id} id={row.item.id} disabled={readOnly}>
-        {(bits) => renderRow(row, index, bits, isActive ? projection?.depth : undefined)}
-      </SortableRow>
-    );
-  });
-  if (draftPlace) {
-    openRows.splice(
-      draftPlace.index,
-      0,
-      <DraftRow
-        key="draft"
-        depth={draftPlace.depth}
-        inputRef={draftRef}
-        value={draftText}
-        onChange={setDraftText}
-        onKeyDown={onDraftKey}
-        onBlur={onDraftBlur}
-      />,
-    );
-  }
+  /** The rows of one group, with the new-task field among them if it is there. */
+  const rowsOf = (group: Group): ReactNode[] => {
+    const nodes: ReactNode[] = rowsFor(group).map((row) => {
+      const index = visibleIndex.get(row)!;
+      const isActive = drag?.activeId === row.item.id;
+      return (
+        <SortableRow key={row.item.id} id={row.item.id} disabled={readOnly}>
+          {(bits) => renderRow(row, index, bits, isActive ? projection?.depth : undefined)}
+        </SortableRow>
+      );
+    });
+    if (draftPlace && draftPlace.groupId === group.id) {
+      nodes.splice(
+        draftPlace.index,
+        0,
+        <DraftRow
+          key="draft"
+          depth={draftPlace.depth}
+          inputRef={draftRef}
+          value={draftText}
+          onChange={setDraftText}
+          onKeyDown={onDraftKey}
+          onBlur={onDraftBlur}
+        />,
+      );
+    }
+    return nodes;
+  };
 
-  const isEmpty = !model.open.length && !model.doneCount && !draftPlace;
+  const unsectioned = rowsOf(groups[0]);
+  const isEmpty = !model.open.length && !model.doneCount && !draftPlace && !hasSections;
 
   return (
     <div
@@ -506,7 +719,7 @@ export function TodoList({ list }: { list: List }) {
           <QuickAdd
             listId={list.id}
             inputRef={quickAddRef}
-            onArrowDown={() => visible[0] && focusRow(visible[0].item.id)}
+            onArrowDown={() => navKeys[0] && goTo(navKeys[0])}
           />
         </div>
       )}
@@ -525,7 +738,7 @@ export function TodoList({ list }: { list: List }) {
             collisionDetection={closestCenter}
             onDragStart={({ active }) => {
               closeDraft();
-              selectItem(String(active.id));
+              if (!isSectionKey(String(active.id))) selectItem(String(active.id));
               setDrag({ activeId: String(active.id), overId: String(active.id), offsetX: 0 });
             }}
             onDragMove={({ delta }) => setDrag((d) => d && { ...d, offsetX: delta.x })}
@@ -534,16 +747,55 @@ export function TodoList({ list }: { list: List }) {
             }
             onDragEnd={onDragEnd}
             onDragCancel={() => setDrag(null)}
+            measuring={showZone ? { droppable: { strategy: MeasuringStrategy.Always } } : undefined}
           >
-            <SortableContext
-              items={shownOpen.map((r) => r.item.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div role="list" aria-label="Tasks">
-                {openRows}
-              </div>
+            {showZone && <NoSectionZone over={drag?.overId === NO_SECTION_ID} />}
+            <SortableContext items={sortIds} strategy={verticalListSortingStrategy}>
+              {(!hasSections || unsectioned.length > 0) && (
+                <div role="list" aria-label="Tasks">
+                  {unsectioned}
+                </div>
+              )}
+              {groups.slice(1).map((group) => {
+                const section = group.section!;
+                const nodes = rowsOf(group);
+                const first = group === groups[1];
+                return (
+                  <div key={section.id} className="mt-2">
+                    <SortableRow id={sectionKey(section.id)} disabled={readOnly}>
+                      {(bits) => (
+                        <SectionHeading
+                          section={section}
+                          count={group.count}
+                          readOnly={readOnly}
+                          tabbable={first && !visible.length}
+                          renaming={renamingSectionId === section.id}
+                          drag={bits}
+                          actions={headingActions(group)}
+                          onRenameDone={(title) => onRenameDone(group, title)}
+                          onKeyDown={(e) => onHeadingKey(e, group)}
+                        />
+                      )}
+                    </SortableRow>
+                    {nodes.length > 0 && (
+                      <div role="list" aria-label={`${section.title} tasks`}>
+                        {nodes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </SortableContext>
           </DndContext>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => addSection(list.id)}
+              className="mt-2 rounded-md px-2 py-1 text-xs text-fg-muted hover:bg-hover hover:text-fg"
+            >
+              Add section
+            </button>
+          )}
           {!model.open.length && model.doneCount > 0 && !draftPlace && (
             <p className="px-2 py-3 text-sm text-fg-subtle">All done.</p>
           )}
@@ -567,7 +819,7 @@ export function TodoList({ list }: { list: List }) {
               </button>
               {list.showCompleted && (
                 <div role="list" aria-label="Completed tasks">
-                  {doneRows.map((row, i) => renderRow(row, model.open.length + i))}
+                  {doneRows.map((row) => renderRow(row, visibleIndex.get(row)!))}
                 </div>
               )}
             </section>
