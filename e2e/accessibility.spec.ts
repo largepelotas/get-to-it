@@ -81,11 +81,32 @@ for (const palette of PALETTES)
       await page.keyboard.press('Escape');
       await expect(page.getByRole('group', { name: 'Labels' })).toBeHidden();
 
+      // The filter dialog, a filter's view, and the sort-and-group popover.
+      await page.keyboard.press('ControlOrMeta+k');
+      const commands = page.getByRole('dialog', { name: 'Search and commands' });
+      await commands.getByRole('combobox').fill('new filter');
+      await commands.getByRole('option', { name: 'New filter…' }).click();
+      const filterDialog = page.getByRole('dialog', { name: 'New filter' });
+      await filterDialog.getByRole('textbox', { name: 'Name' }).fill('Phone calls');
+      await filterDialog.getByRole('textbox', { name: 'Search' }).fill('@phone | p1');
+      await settled(page);
+      await expectAccessible(page);
+      await filterDialog.getByRole('button', { name: 'Create' }).click();
+      await expect(page.getByRole('heading', { level: 1, name: 'Phone calls' })).toBeVisible();
+      await expectAccessible(page);
+      await page.getByRole('button', { name: 'Sort and group' }).click();
+      await expect(page.getByRole('dialog', { name: 'Sort and group' })).toBeVisible();
+      await settled(page);
+      await expectAccessible(page);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog', { name: 'Sort and group' })).toBeHidden();
+
       for (const view of [
         'Today',
         'Tomorrow',
         'Next 7 days',
         'Upcoming',
+        'Eisenhower matrix',
         'Reminders',
         'Archive',
         'Trash',

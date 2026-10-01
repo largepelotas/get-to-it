@@ -61,6 +61,8 @@ describe('LocalStorageRepository labels', () => {
     const { tables } = await new LocalStorageRepository().load();
     expect(tables.labels).toEqual({});
     expect(tables.items.I1.labelIds).toEqual([]);
+    // Nor a filters table.
+    expect(tables.filters).toEqual({});
     window.localStorage.removeItem('checklist:data:v1');
   });
 });

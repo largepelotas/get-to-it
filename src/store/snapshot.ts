@@ -14,6 +14,7 @@ import {
 import { isDateKey, isTimeString } from '@/lib/dates';
 import { isPaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
+import { cleanMatrix, cleanViewOptions } from './viewOptions';
 
 /*
  * The JSON export format (`Snapshot`), used for export, import and backups.
@@ -37,6 +38,7 @@ export function makeSnapshot(tables: Tables, settings: Settings, now = Date.now(
       items: Object.values(tables.items),
       sections: Object.values(tables.sections),
       labels: Object.values(tables.labels),
+      filters: Object.values(tables.filters),
       reminders: Object.values(tables.reminders),
       completions: Object.values(tables.completions),
       notes: Object.values(tables.notes),
@@ -151,6 +153,15 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     createdAt: num,
     updatedAt: num,
   },
+  filters: {
+    id,
+    name: str,
+    query: str,
+    color,
+    sortKey: str,
+    createdAt: num,
+    updatedAt: num,
+  },
   reminders: {
     id,
     itemId: id,
@@ -174,6 +185,7 @@ const TABLE_LABEL: Record<TableName, string> = {
   items: 'item',
   sections: 'section',
   labels: 'label',
+  filters: 'filter',
   reminders: 'reminder',
   completions: 'completion',
   notes: 'note',
@@ -227,6 +239,11 @@ function checkSettings(raw: unknown): Partial<Settings> {
         out[key] = BUILT_IN_VIEWS.filter((v) => (value as unknown[]).includes(v));
     } else if (key === 'dailyReviewTime') {
       if (value === null || isTimeString(value)) out[key] = value;
+    } else if (key === 'viewOptions') {
+      out[key] = cleanViewOptions(value);
+    } else if (key === 'matrix') {
+      const matrix = cleanMatrix(value);
+      if (matrix) out[key] = matrix;
     } else if (key === 'theme') {
       if (['system', 'light', 'dark'].includes(value as string)) out[key] = value;
     } else if (key === 'palette') {

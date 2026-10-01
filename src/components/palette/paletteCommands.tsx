@@ -8,6 +8,8 @@ import {
   FileDown,
   FolderOpen,
   FolderPlus,
+  Funnel,
+  LayoutGrid,
   HardDriveDownload,
   Keyboard,
   Monitor,
@@ -30,6 +32,7 @@ import {
 import {
   confirmEmptyTrash,
   copyAsMarkdown,
+  newFilter,
   newFolder,
   newLabel,
   redoCommand,
@@ -42,10 +45,11 @@ import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { SHORTCUTS } from '@/lib/keymap';
 import { PALETTES } from '@/lib/theme';
 import { canBackUp } from '@/platform';
+import { sortedFilters } from '@/store/filters';
 import { sortedLabels } from '@/store/labels';
 import { queryTerms, scoreText } from '@/store/search';
 import { setSetting } from '@/store/data';
-import { navigate, openDialog, openLabel, type View } from '@/store/ui';
+import { navigate, openDialog, openFilter, openLabel, type View } from '@/store/ui';
 
 export interface PaletteCommand {
   id: string;
@@ -67,7 +71,7 @@ export interface PaletteCommand {
 
 export interface PaletteContext {
   view: View;
-  tables: Pick<Tables, 'lists'> & Partial<Pick<Tables, 'labels'>>;
+  tables: Pick<Tables, 'lists'> & Partial<Pick<Tables, 'labels' | 'filters'>>;
   theme: Settings['theme'];
   palette: Settings['palette'];
   sidebarHidden: boolean;
@@ -98,7 +102,9 @@ export function paletteCommands({
     view.kind === 'tomorrow' ||
     view.kind === 'next7' ||
     view.kind === 'upcoming' ||
+    view.kind === 'matrix' ||
     view.kind === 'label' ||
+    view.kind === 'filter' ||
     (editable && list.type !== 'note');
   const hasTrash = Object.values(tables.lists).some((l) => l.deletedAt);
   const goTo = (target: View['kind'], label: string, icon: LucideIcon, shortcut?: string) =>
@@ -149,10 +155,18 @@ export function paletteCommands({
       icon: Tag,
       run: newLabel,
     },
+    {
+      id: 'new-filter',
+      label: 'New filter…',
+      keywords: 'add create search saved query',
+      icon: Funnel,
+      run: newFilter,
+    },
     goTo('today', 'Today', CalendarDays, SHORTCUTS.today),
     goTo('tomorrow', 'Tomorrow', Sunrise),
     goTo('next7', 'Next 7 days', CalendarRange),
     goTo('upcoming', 'Upcoming', CalendarDays, SHORTCUTS.upcoming),
+    goTo('matrix', 'Eisenhower matrix', LayoutGrid),
     goTo('reminders', 'Reminders', Bell, SHORTCUTS.reminders),
     goTo('archive', 'Archive', Archive),
     goTo('trash', 'Trash', Trash),
@@ -165,6 +179,16 @@ export function paletteCommands({
         keywords: 'tag',
         icon: Tag,
         run: () => openLabel(l.id),
+      })),
+    ...sortedFilters(tables.filters ?? {})
+      .filter((f) => !(view.kind === 'filter' && view.filterId === f.id))
+      .map((f): PaletteCommand => ({
+        id: `go-filter-${f.id}`,
+        label: `Go to filter “${f.name}”`,
+        matchLabel: `Go to filter ${f.name}`,
+        keywords: 'search saved',
+        icon: Funnel,
+        run: () => openFilter(f.id),
       })),
     list && {
       id: 'copy-markdown',

@@ -8,7 +8,7 @@ import {
   restoreList,
   setShowCompleted,
 } from './store/actions/lists';
-import type { Priority } from './data/types';
+import type { Priority, ViewOptions } from './data/types';
 import { formatDateKey, formatDue, formatTimestamp } from './lib/dates';
 import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
 import { copyText, notify, requestNotificationPermission } from './platform';
@@ -36,15 +36,20 @@ import {
   snoozeReminder,
   type ReminderSpec,
 } from './store/actions/reminders';
+import { createFilter, deleteFilter, renameFilter, updateFilter } from './store/actions/filters';
 import { createLabel, deleteLabel, renameLabel } from './store/actions/labels';
 import { createSection, deleteSection, UNTITLED_SECTION } from './store/actions/sections';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
 import { normalizeLabelName, sameLabelName } from './store/labels';
+import { DEFAULT_VIEW_OPTIONS, sameViewOptions, viewKey } from './store/viewOptions';
 import { listToMarkdown } from './store/markdown';
 import {
+  closeDialog,
   confirmAction,
   navigate,
+  openDialog,
+  openFilter,
   openList,
   setRenamingSection,
   startRename,
@@ -276,6 +281,67 @@ export function removeLabel(id: string): void {
   toastWithUndo(`Deleted label ${label.name}`);
 }
 
+/** Where to go if the filter whose view is open goes away: home. */
+function leaveFilter(id: string): void {
+  const { view } = useUI.getState();
+  if (view.kind === 'filter' && view.filterId === id) navigate(homeView());
+}
+
+/** Opens the dialog for a new filter. */
+export function newFilter(): void {
+  openDialog({ kind: 'filter' });
+}
+
+/** Opens a filter in the dialog to change its name or query. */
+export function editFilter(id: string): void {
+  if (useData.getState().tables.filters[id]) openDialog({ kind: 'filter', filterId: id });
+}
+
+/**
+ * Saves the filter dialog: makes the filter (and opens its view, showing the
+ * sidebar first if it is hidden) or changes the one being edited. Returns
+ * false, leaving the dialog open, if the name or query is blank.
+ */
+export function saveFilter(filterId: string | undefined, name: string, query: string): boolean {
+  if (filterId) {
+    if (!updateFilter(filterId, { name, query })) return false;
+    closeDialog();
+    return true;
+  }
+  const id = createFilter({ name, query });
+  if (!id) return false;
+  closeDialog();
+  if (useData.getState().settings.sidebarHidden) setSetting('sidebarHidden', false);
+  openFilter(id);
+  return true;
+}
+
+/** Renames a filter from the sidebar. A blank name is ignored. */
+export function renameFilterTo(id: string, name: string): void {
+  if (!useData.getState().tables.filters[id]) return;
+  renameFilter(id, name);
+}
+
+/** Deletes a filter and offers Undo. Leaves its view if it is open. */
+export function removeFilter(id: string): void {
+  const filter = useData.getState().tables.filters[id];
+  if (!filter) return;
+  deleteFilter(id);
+  leaveFilter(id);
+  toastWithUndo(`Deleted filter ${filter.name}`);
+}
+
+/** Saves how a view is sorted and grouped. Back at the defaults, its entry is dropped. */
+export function setViewOptions(view: View, options: ViewOptions): void {
+  const key = viewKey(view);
+  if (!key) return;
+  const { viewOptions } = useData.getState().settings;
+  const next = { ...viewOptions };
+  if (sameViewOptions(options, DEFAULT_VIEW_OPTIONS)) delete next[key];
+  else next[key] = options;
+  setSetting('viewOptions', next);
+}
+
 /** Deletes tasks (with their subtasks) and offers Undo. */
 export function trashItems(ids: string[]): void {
   const { items } = useData.getState().tables;
@@ -402,15 +468,17 @@ interface QuickAddOptions {
   announce?: boolean;
   /** Labels put on every task added, besides any typed with `@`. */
   labelIds?: string[];
+  /** Priority for tasks whose text doesn't give one. */
+  priority?: Priority;
 }
 
 /** Adds a task from quick-add text; a `#List` in it may file it elsewhere, which a toast says. */
 export function quickAddTask(
   listId: string,
   raw: string,
-  { defaultDue = null, announce = false, labelIds = [] }: QuickAddOptions = {},
+  { defaultDue = null, announce = false, labelIds = [], priority = 0 }: QuickAddOptions = {},
 ): boolean {
-  const id = createItemFromText(listId, raw, {}, defaultDue, labelIds);
+  const id = createItemFromText(listId, raw, {}, defaultDue, labelIds, priority);
   if (!id) return false;
   afterQuickAdd([id], listId, announce);
   return true;
@@ -420,9 +488,9 @@ export function quickAddTask(
 export function quickAddLines(
   listId: string,
   lines: string[],
-  { defaultDue = null, announce = false, labelIds = [] }: QuickAddOptions = {},
+  { defaultDue = null, announce = false, labelIds = [], priority = 0 }: QuickAddOptions = {},
 ): boolean {
-  const ids = createItemsFromLines(listId, lines, defaultDue, null, labelIds);
+  const ids = createItemsFromLines(listId, lines, defaultDue, null, labelIds, priority);
   if (!ids.length) return false;
   afterQuickAdd(ids, listId, announce);
   return true;

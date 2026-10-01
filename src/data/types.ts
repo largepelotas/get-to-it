@@ -124,6 +124,20 @@ export interface Label {
   updatedAt: number;
 }
 
+/**
+ * A saved search over every to-do list, kept in the sidebar. `query` is in
+ * the small language of `lib/filterQuery.ts` ("p1 & overdue", "#Work & @home").
+ */
+export interface Filter {
+  id: string;
+  name: string;
+  query: string;
+  color: ColorName | null;
+  sortKey: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Reminder {
   id: string;
   itemId: string;
@@ -164,6 +178,7 @@ export interface Tables {
   items: Record<string, Item>;
   sections: Record<string, Section>;
   labels: Record<string, Label>;
+  filters: Record<string, Filter>;
   reminders: Record<string, Reminder>;
   completions: Record<string, Completion>;
   notes: Record<string, Note>;
@@ -179,6 +194,7 @@ export const TABLE_NAMES: TableName[] = [
   'items',
   'sections',
   'labels',
+  'filters',
   'reminders',
   'completions',
   'notes',
@@ -191,6 +207,7 @@ export function emptyTables(): Tables {
     items: {},
     sections: {},
     labels: {},
+    filters: {},
     reminders: {},
     completions: {},
     notes: {},
@@ -203,8 +220,43 @@ export interface GroceryCategory {
 }
 
 /** The built-in views the sidebar can hide. */
-export const BUILT_IN_VIEWS = ['today', 'tomorrow', 'next7', 'upcoming', 'reminders'] as const;
+export const BUILT_IN_VIEWS = [
+  'today',
+  'tomorrow',
+  'next7',
+  'upcoming',
+  'matrix',
+  'reminders',
+] as const;
 export type BuiltInView = (typeof BUILT_IN_VIEWS)[number];
+
+/** How a view orders its tasks. `manual` is the list's own order (a smart view treats it as `date`). */
+export const SORT_KEYS = ['manual', 'date', 'priority', 'name', 'added'] as const;
+export type SortKey = (typeof SORT_KEYS)[number];
+
+/** How a view groups its tasks. `default` is the view's own grouping (days in Upcoming, sections in a list). */
+export const GROUP_KEYS = [
+  'default',
+  'none',
+  'date',
+  'priority',
+  'list',
+  'label',
+  'section',
+] as const;
+export type GroupKey = (typeof GROUP_KEYS)[number];
+
+/** A view's sort and grouping, kept per view in `Settings.viewOptions`. */
+export interface ViewOptions {
+  sort: SortKey;
+  group: GroupKey;
+}
+
+/** The two searches the Eisenhower matrix is built from. */
+export interface MatrixSettings {
+  urgent: string;
+  important: string;
+}
 
 export interface Settings {
   theme: 'system' | 'light' | 'dark';
@@ -230,7 +282,16 @@ export interface Settings {
   hiddenViews: BuiltInView[];
   /** When the "Plan your day" reminder goes off, HH:mm. Null is off. */
   dailyReviewTime: string | null;
+  /**
+   * Sort and grouping per view, by view key (`today`, `list:<id>`, `label:<id>`,
+   * `filter:<id>`). A view that isn't here uses its defaults.
+   */
+  viewOptions: Record<string, ViewOptions>;
+  /** What counts as urgent and as important in the Eisenhower matrix. */
+  matrix: MatrixSettings;
 }
+
+export const DEFAULT_MATRIX: MatrixSettings = { urgent: 'overdue | today', important: 'p1 | p2' };
 
 export const DEFAULT_GROCERY_CATEGORIES: GroceryCategory[] = [
   { id: 'produce', name: 'Produce' },
@@ -260,6 +321,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarHidden: false,
   hiddenViews: [],
   dailyReviewTime: null,
+  viewOptions: {},
+  matrix: DEFAULT_MATRIX,
 };
 
 /** A complete copy of the data, used for export, import and backups. */

@@ -9,6 +9,7 @@ import { BACKUPS_KEPT } from '@/store/backup';
 import { setSetting, useData } from '@/store/data';
 import { closeDialog } from '@/store/ui';
 import { GroceryCategoriesEditor } from './GroceryCategoriesEditor';
+import { MatrixSettingsFields } from './MatrixSettingsFields';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -138,6 +139,7 @@ const VIEW_NAME: Record<BuiltInView, string> = {
   tomorrow: 'Tomorrow',
   next7: 'Next 7 days',
   upcoming: 'Upcoming',
+  matrix: 'Eisenhower matrix',
   reminders: 'Reminders',
 };
 
@@ -317,6 +319,10 @@ export function SettingsDialog() {
 
         <Section title="Sidebar">
           <SidebarViews />
+        </Section>
+
+        <Section title="Eisenhower matrix">
+          <MatrixSettingsFields />
         </Section>
 
         <Section title="Reminders">

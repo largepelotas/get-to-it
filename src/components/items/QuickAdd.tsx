@@ -13,6 +13,7 @@ import {
 import { quickAddLines, quickAddTask } from '@/commands';
 import { Button } from '@/components/ui';
 import { parseQuickAdd, splitLines } from '@/lib/quickAdd';
+import type { Priority } from '@/data/types';
 import { liveTodoLists } from '@/store/sidebar';
 import { useData } from '@/store/data';
 
@@ -28,6 +29,8 @@ export interface QuickAddProps {
   defaultDue?: string | null;
   /** Labels put on every task added here (the label view's field), besides any typed with `@`. */
   labelIds?: string[];
+  /** Priority for tasks whose text doesn't give one (a filter view's field). */
+  defaultPriority?: Priority;
   placeholder?: string;
   /** Shown at the end of the field, e.g. which list new tasks go to. */
   hint?: ReactNode;
@@ -62,6 +65,7 @@ export function QuickAdd({
   onArrowDown,
   defaultDue = null,
   labelIds,
+  defaultPriority,
   placeholder = 'Add a task',
   hint,
   onAdded,
@@ -108,7 +112,14 @@ export function QuickAdd({
 
   const addPasted = () => {
     if (!pasted || tooMany) return;
-    if (quickAddLines(listId, pasted.tasks, { defaultDue, announce, labelIds })) {
+    if (
+      quickAddLines(listId, pasted.tasks, {
+        defaultDue,
+        announce,
+        labelIds,
+        priority: defaultPriority,
+      })
+    ) {
       setPasted(null);
       field.current?.focus();
       onAdded?.();
@@ -157,7 +168,9 @@ export function QuickAdd({
     }
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (quickAddTask(listId, text, { defaultDue, announce, labelIds })) {
+      if (
+        quickAddTask(listId, text, { defaultDue, announce, labelIds, priority: defaultPriority })
+      ) {
         setText('');
         onAdded?.();
       }

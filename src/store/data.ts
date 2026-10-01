@@ -9,6 +9,7 @@ import {
   type Tables,
 } from '@/data/types';
 import { applyChanges, mergeEntries, Tx, type Change, type HistoryEntry } from './history';
+import { cleanMatrix, cleanViewOptions } from './viewOptions';
 
 interface DataState {
   ready: boolean;
@@ -52,6 +53,8 @@ function normalizeSettings(stored: Partial<Settings>): Settings {
   if (settings.dailyReviewTime !== null && !isTimeString(settings.dailyReviewTime)) {
     settings.dailyReviewTime = null;
   }
+  settings.viewOptions = cleanViewOptions(settings.viewOptions);
+  settings.matrix = cleanMatrix(settings.matrix) ?? DEFAULT_SETTINGS.matrix;
   return settings;
 }
 

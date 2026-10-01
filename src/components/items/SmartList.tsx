@@ -26,6 +26,8 @@ import { handleSelectionKey } from './selection';
 export interface SmartSection {
   key: string;
   title: ReactNode;
+  /** The section's accessible name when `title` isn't plain text. */
+  label?: string;
   /** Buttons at the end of the heading. */
   actions?: ReactNode;
   tone?: 'danger';
@@ -47,6 +49,10 @@ export interface SmartListProps {
   sections: SmartSection[];
   /** ArrowUp from the first row. */
   onExitTop?: () => void;
+  /** Lay the sections out as boxes in two columns (the Eisenhower matrix). */
+  grid?: boolean;
+  /** The list this view is of: its own top-level tasks don't say which list they're in. */
+  homeListId?: string;
 }
 
 /**
@@ -54,7 +60,7 @@ export interface SmartListProps {
  * checked and deleted, but not nested or reordered, since the order here is
  * by date rather than the list's own.
  */
-export function SmartList({ sections, onExitTop }: SmartListProps) {
+export function SmartList({ sections, onExitTop, grid = false, homeListId }: SmartListProps) {
   const selectedId = useUI((s) => s.selectedItemId);
   const multiIds = useUI((s) => s.multiSelectedIds);
   const reminded = useItemsWithReminders();
@@ -171,18 +177,25 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
     sections.slice(0, i).reduce((sum, s) => sum + s.rows.length, 0),
   );
   return (
-    <div ref={containerRef} tabIndex={-1} className="outline-none">
+    <div
+      ref={containerRef}
+      tabIndex={-1}
+      className={clsx('outline-none', grid && 'grid gap-4 md:grid-cols-2')}
+    >
       {sections.map((section, sectionIndex) => (
         <section
           key={section.key}
-          aria-label={typeof section.title === 'string' ? section.title : section.key}
-          className="mb-5"
+          aria-label={
+            section.label ?? (typeof section.title === 'string' ? section.title : section.key)
+          }
+          className={grid ? 'min-w-0 rounded-lg border border-line px-2 pb-2' : 'mb-5'}
         >
           {!section.bare && (
             <h2
               className={clsx(
                 'flex h-8 items-center gap-2 border-b border-line px-2 text-[13px] font-semibold',
                 section.tone === 'danger' ? 'text-danger' : 'text-fg',
+                grid && 'h-9',
               )}
             >
               <span className="min-w-0 flex-1 truncate">{section.title}</span>
@@ -200,7 +213,11 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
                 <ItemRow
                   key={id}
                   row={row}
-                  origin={{ list: row.list, parentText: row.parent?.text }}
+                  origin={
+                    row.list.id === homeListId && !row.parent
+                      ? undefined
+                      : { list: row.list, parentText: row.parent?.text }
+                  }
                   timeOnly={section.timeOnly}
                   readOnly={false}
                   selected={id === selectedId}

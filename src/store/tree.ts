@@ -45,12 +45,18 @@ export function countDone(node: TreeNode): { total: number; done: number } {
   };
 }
 
-/** Depth-first rows, skipping the subtasks of collapsed items. */
-export function flatten(nodes: TreeNode[], depth = 0, out: FlatRow[] = []): FlatRow[] {
+/** Depth-first rows, skipping the subtasks of collapsed items unless `showCollapsed`. */
+export function flatten(
+  nodes: TreeNode[],
+  depth = 0,
+  out: FlatRow[] = [],
+  showCollapsed = false,
+): FlatRow[] {
   for (const node of nodes) {
     const { total, done } = countDone(node);
     out.push({ item: node.item, depth, childCount: total, doneCount: done });
-    if (!node.item.collapsed) flatten(node.children, depth + 1, out);
+    if (showCollapsed || !node.item.collapsed)
+      flatten(node.children, depth + 1, out, showCollapsed);
   }
   return out;
 }

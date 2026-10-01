@@ -94,6 +94,15 @@ const SCHEMA: Record<TableName, Column[]> = {
     createdAt: 'int',
     updatedAt: 'int',
   }),
+  filters: columns({
+    id: 'text',
+    name: 'text',
+    query: 'text',
+    color: 'text',
+    sortKey: 'text',
+    createdAt: 'int',
+    updatedAt: 'int',
+  }),
   reminders: columns({
     id: 'text',
     itemId: 'text',
@@ -238,6 +247,18 @@ export const MIGRATIONS: string[][] = [
       updated_at INTEGER NOT NULL
     )`,
     `ALTER TABLE items ADD COLUMN label_ids TEXT`,
+  ],
+  // Filters: saved searches.
+  [
+    `CREATE TABLE filters (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      query TEXT NOT NULL,
+      color TEXT,
+      sort_key TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
   ],
 ];
 

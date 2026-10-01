@@ -36,8 +36,19 @@ const [MoveTasksDialog, preloadMoveTasks] = lazyWithPreload(
   (m) => m.MoveTasksDialog,
 );
 
-export { CommandPalette, MoveTasksDialog, SettingsDialog, ShortcutsDialog };
+const [FilterDialog, preloadFilter] = lazyWithPreload(
+  () => import('./FilterDialog'),
+  (m) => m.FilterDialog,
+);
+
+export { CommandPalette, FilterDialog, MoveTasksDialog, SettingsDialog, ShortcutsDialog };
 
 export function preloadDialogs(): Promise<unknown> {
-  return Promise.all([preloadPalette(), preloadSettings(), preloadShortcuts(), preloadMoveTasks()]);
+  return Promise.all([
+    preloadPalette(),
+    preloadSettings(),
+    preloadShortcuts(),
+    preloadMoveTasks(),
+    preloadFilter(),
+  ]);
 }

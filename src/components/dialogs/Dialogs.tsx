@@ -13,6 +13,7 @@ import { liveTodoLists } from '@/store/sidebar';
 import { closeDialog, openList, useUI, type DialogState } from '@/store/ui';
 import {
   CommandPalette,
+  FilterDialog,
   MoveTasksDialog,
   preloadDialogs,
   SettingsDialog,
@@ -234,6 +235,8 @@ export function Dialogs() {
         <ShortcutsDialog />
       ) : dialog.kind === 'moveTasks' ? (
         <MoveTasksDialog />
+      ) : dialog.kind === 'filter' ? (
+        <FilterDialog />
       ) : (
         <CommandPalette />
       )}

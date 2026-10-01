@@ -5,6 +5,7 @@ import { backupDue, backupName, backUp, backUpIfDue } from './backup';
 import { createItem, setItemNotes } from './actions/items';
 import { addReminder } from './actions/reminders';
 import { createList, deleteList } from './actions/lists';
+import { createFilter } from './actions/filters';
 import { createLabel } from './actions/labels';
 import { createSection, setSectionCollapsed } from './actions/sections';
 import { replaceData, resetForTests, setSetting, useData } from './data';
@@ -280,6 +281,60 @@ describe('snapshots with sections', () => {
       settings: {},
     });
     expect(() => parseSnapshot(bad)).toThrow(/section 1, listId should be an id/);
+  });
+});
+
+describe('snapshots with filters', () => {
+  // Bug prevented: saved filters, or the sort and group choices, lost on export and import.
+  it('round-trips filters and the view and matrix settings, without changing the version', () => {
+    const list = createList({ type: 'todo', title: 'Home' });
+    const f = createFilter({ name: 'Week', query: '#Home & 7 days', color: 'teal' })!;
+    setSetting('viewOptions', { today: { sort: 'priority', group: 'list' } });
+    setSetting('matrix', { urgent: '3 days', important: 'p1' });
+    const { tables } = useData.getState();
+    const parsed = parseSnapshot(exportNow());
+    expect(parsed.tables).toEqual(tables);
+    expect(parsed.tables.filters[f]).toMatchObject({ name: 'Week', query: '#Home & 7 days' });
+    expect(parsed.settings).toMatchObject({
+      viewOptions: { today: { sort: 'priority', group: 'list' } },
+      matrix: { urgent: '3 days', important: 'p1' },
+    });
+    expect(parsed.tables.lists[list]).toBeTruthy();
+    expect(JSON.parse(exportNow()).version).toBe(1);
+  });
+
+  // Bug prevented: an export made before filters existed being refused, or a hand-edited
+  // viewOptions with nonsense in it crashing the views.
+  it('reads an old export with no filters table, and drops malformed view options', () => {
+    const json = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: {
+        lists: [{ id: 'L', type: 'todo', title: 'T', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+      },
+      settings: {
+        viewOptions: {
+          today: { sort: 'name', group: 'bogus' },
+          'list:L': { sort: 'manual', group: 'default' },
+          broken: 'nope',
+        },
+        matrix: { urgent: 'p1' },
+      },
+    });
+    const { tables, settings } = parseSnapshot(json);
+    expect(tables.filters).toEqual({});
+    expect(settings.viewOptions).toEqual({ today: { sort: 'name', group: 'default' } });
+    expect(settings.matrix).toBeUndefined();
+  });
+
+  it('points at a filter row that is wrong', () => {
+    const bad = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: { filters: [{ id: 'F', name: 'X', sortKey: 'a0', createdAt: 1, updatedAt: 1 }] },
+      settings: {},
+    });
+    expect(() => parseSnapshot(bad)).toThrow(/filter 1, query should be text/);
   });
 });
 
