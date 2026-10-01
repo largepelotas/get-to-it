@@ -1,8 +1,9 @@
-import type { GroceryCategory, Item, List, Section, Tables } from '@/data/types';
+import type { GroceryCategory, Item, Label, List, Section, Tables } from '@/data/types';
 import { bySortKey } from '@/lib/order';
 import { describeRecurrence } from '@/lib/recurrence';
 import { docToMarkdown, escapeMarkdown, parseDoc } from '@/lib/richText';
 import { groceryModel } from './grocery';
+import { itemLabels } from './labels';
 import { buildTree, type TreeNode } from './tree';
 
 /*
@@ -11,7 +12,7 @@ import { buildTree, type TreeNode } from './tree';
  * by category, and notes use the editor's own Markdown.
  */
 
-type Source = Pick<Tables, 'items' | 'notes'> & Partial<Pick<Tables, 'sections'>>;
+type Source = Pick<Tables, 'items' | 'notes'> & Partial<Pick<Tables, 'sections' | 'labels'>>;
 
 const PRIORITY = ['', 'P1', 'P2', 'P3'];
 
@@ -22,6 +23,13 @@ function taskMeta(item: Item): string {
   if (item.recurrence) parts.push(describeRecurrence(item.recurrence, item.dueDate));
   if (item.priority) parts.push(PRIORITY[item.priority]);
   return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
+/** A task's labels, each as " @Name", in label order. Labels that no longer exist are left out. */
+function labelSuffix(item: Item, labels: Record<string, Label>): string {
+  return itemLabels(item, labels)
+    .map((l) => ` @${escapeMarkdown(l.name)}`)
+    .join('');
 }
 
 /** A task's notes, indented to sit under its bullet. */
@@ -37,13 +45,13 @@ function taskText(item: Item): string {
   return item.checked && item.wontDo ? `~~${text}~~` : text;
 }
 
-function taskLines(node: TreeNode, depth: number): string[] {
+function taskLines(node: TreeNode, depth: number, labels: Record<string, Label>): string[] {
   const pad = '  '.repeat(depth);
   const { item } = node;
   return [
-    `${pad}- [${item.checked ? 'x' : ' '}] ${taskText(item)}${taskMeta(item)}`,
+    `${pad}- [${item.checked ? 'x' : ' '}] ${taskText(item)}${labelSuffix(item, labels)}${taskMeta(item)}`,
     ...notesBlock(item, `${pad}  `),
-    ...node.children.flatMap((child) => taskLines(child, depth + 1)),
+    ...node.children.flatMap((child) => taskLines(child, depth + 1, labels)),
   ];
 }
 
@@ -51,6 +59,7 @@ function todoMarkdown(
   items: Record<string, Item>,
   listId: string,
   sectionRows: Record<string, Section> = {},
+  labels: Record<string, Label> = {},
 ): string {
   const live = Object.values(items).filter((i) => i.listId === listId && !i.deletedAt);
   const tree = buildTree(live);
@@ -62,15 +71,15 @@ function todoMarkdown(
   const known = new Set(ordered.map((s) => s.id));
   const loose = open.filter((n) => !n.item.sectionId || !known.has(n.item.sectionId));
   const sections: string[] = [];
-  if (loose.length) sections.push(loose.flatMap((n) => taskLines(n, 0)).join('\n'));
+  if (loose.length) sections.push(loose.flatMap((n) => taskLines(n, 0, labels)).join('\n'));
   // Each section is a heading one level below the list's title, with its open tasks under it.
   for (const section of ordered) {
     const nodes = open.filter((n) => n.item.sectionId === section.id);
-    const lines = nodes.flatMap((n) => taskLines(n, 0)).join('\n');
+    const lines = nodes.flatMap((n) => taskLines(n, 0, labels)).join('\n');
     sections.push(`## ${escapeMarkdown(section.title)}${lines ? `\n\n${lines}` : ''}`);
   }
   if (done.length) {
-    sections.push(`## Completed\n\n${done.flatMap((n) => taskLines(n, 0)).join('\n')}`);
+    sections.push(`## Completed\n\n${done.flatMap((n) => taskLines(n, 0, labels)).join('\n')}`);
   }
   return sections.join('\n\n');
 }
@@ -104,7 +113,7 @@ export function listBodyMarkdown(
 ): string {
   switch (list.type) {
     case 'todo':
-      return todoMarkdown(source.items, list.id, source.sections);
+      return todoMarkdown(source.items, list.id, source.sections, source.labels);
     case 'grocery':
       return groceryMarkdown(source.items, list.id, categories);
     case 'note':
@@ -149,7 +158,8 @@ export interface MarkdownFile {
  * that clash get a number.
  */
 export function markdownFiles(
-  tables: Pick<Tables, 'folders' | 'lists' | 'items' | 'notes'>,
+  tables: Pick<Tables, 'folders' | 'lists' | 'items' | 'notes'> &
+    Partial<Pick<Tables, 'sections' | 'labels'>>,
   categories: GroceryCategory[],
 ): MarkdownFile[] {
   const used = new Set<string>();

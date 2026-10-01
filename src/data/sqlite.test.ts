@@ -49,6 +49,7 @@ const item: Item = {
   listId: 'L1',
   parentId: null,
   sectionId: null,
+  labelIds: [],
   text: 'Write plan',
   checked: false,
   wontDo: false,
@@ -130,7 +131,7 @@ describe('SqliteRepository', () => {
     const data = await repo.load();
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', sectionId: null });
     expect(data.tables.sections).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(4);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(5);
     const section = {
       id: 'S1',
       listId: 'L1',
@@ -218,5 +219,44 @@ describe('SqliteRepository', () => {
     expect(data.settings).toEqual({ weekStartsOn: 0 });
     const tombstones = await exec.select('SELECT entity, id FROM tombstones');
     expect(tombstones).toEqual([{ entity: 'items', id: 'I1' }]);
+  });
+});
+
+describe('labels migration', () => {
+  // Bug prevented: upgrading a version 4 database losing tasks or reading them with labelIds
+  // missing (which later code would call .includes on); labels not surviving a save and reload.
+  it('adds labels to a version 4 database, with every task unlabelled', async () => {
+    const exec = nodeExecutor();
+    exec.raw.exec('BEGIN');
+    for (const sql of MIGRATIONS.slice(0, 4).flat()) exec.raw.exec(sql);
+    exec.raw.exec('PRAGMA user_version = 4');
+    exec.raw.exec('COMMIT');
+    exec.raw.exec(
+      `INSERT INTO items (id, list_id, text, checked, sort_key, created_at, updated_at)
+       VALUES ('OLD', 'L1', 'Old task', 0, 'a0', 1, 1)`,
+    );
+    const repo = new SqliteRepository(exec);
+    const data = await repo.load();
+    expect(MIGRATIONS).toHaveLength(5);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(5);
+    expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', labelIds: [] });
+    expect(data.tables.labels).toEqual({});
+    const label = {
+      id: 'B1',
+      name: 'Errands',
+      color: 'teal' as const,
+      sortKey: 'a0',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await repo.write([
+      { kind: 'put', table: 'labels', row: label },
+      { kind: 'put', table: 'items', row: { ...data.tables.items.OLD, labelIds: ['B1', 'B2'] } },
+    ]);
+    const again = await new SqliteRepository(exec).load();
+    expect(again.tables.labels.B1).toEqual(label);
+    expect(again.tables.items.OLD.labelIds).toEqual(['B1', 'B2']);
+    await repo.write([{ kind: 'delete', table: 'labels', id: 'B1' }]);
+    expect((await repo.load()).tables.labels).toEqual({});
   });
 });

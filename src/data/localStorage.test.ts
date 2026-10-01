@@ -45,3 +45,22 @@ describe('LocalStorageRepository', () => {
     window.localStorage.removeItem('checklist:data:v1');
   });
 });
+
+describe('LocalStorageRepository labels', () => {
+  // Bug prevented: data saved before labels existed loading with labelIds undefined.
+  it('reads data saved before labels as having none, with tasks unlabelled', async () => {
+    window.localStorage.setItem(
+      'checklist:data:v1',
+      JSON.stringify({
+        tables: {
+          items: { I1: { id: 'I1', listId: 'L1', parentId: null, text: 'Old' } },
+        },
+        settings: {},
+      }),
+    );
+    const { tables } = await new LocalStorageRepository().load();
+    expect(tables.labels).toEqual({});
+    expect(tables.items.I1.labelIds).toEqual([]);
+    window.localStorage.removeItem('checklist:data:v1');
+  });
+});

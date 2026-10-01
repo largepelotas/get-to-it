@@ -14,6 +14,8 @@ export class MemoryRepository implements Repository {
     // Items saved before sections existed don't have the field, and old data has no table.
     this.tables = { ...emptyTables(), ...this.tables };
     for (const i of Object.values(this.tables.items)) i.sectionId = i.sectionId ?? null;
+    // Items saved before labels existed don't have the field.
+    for (const i of Object.values(this.tables.items)) i.labelIds = i.labelIds ?? [];
   }
 
   async load(): Promise<LoadResult> {
@@ -23,6 +25,7 @@ export class MemoryRepository implements Repository {
   async replaceAll(data: LoadResult): Promise<void> {
     this.tables = { ...emptyTables(), ...structuredClone(data.tables) };
     for (const i of Object.values(this.tables.items)) i.sectionId = i.sectionId ?? null;
+    for (const i of Object.values(this.tables.items)) i.labelIds = i.labelIds ?? [];
     this.settings = structuredClone(data.settings);
   }
 

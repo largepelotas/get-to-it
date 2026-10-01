@@ -20,6 +20,7 @@ import {
   Settings as SettingsIcon,
   Sun,
   Sunrise,
+  Tag,
   Trash,
   Trash2,
   Undo2,
@@ -30,6 +31,7 @@ import {
   confirmEmptyTrash,
   copyAsMarkdown,
   newFolder,
+  newLabel,
   redoCommand,
   toggleSidebar,
   undoCommand,
@@ -40,9 +42,10 @@ import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { SHORTCUTS } from '@/lib/keymap';
 import { PALETTES } from '@/lib/theme';
 import { canBackUp } from '@/platform';
+import { sortedLabels } from '@/store/labels';
 import { queryTerms, scoreText } from '@/store/search';
 import { setSetting } from '@/store/data';
-import { navigate, openDialog, type View } from '@/store/ui';
+import { navigate, openDialog, openLabel, type View } from '@/store/ui';
 
 export interface PaletteCommand {
   id: string;
@@ -64,7 +67,7 @@ export interface PaletteCommand {
 
 export interface PaletteContext {
   view: View;
-  tables: Pick<Tables, 'lists'>;
+  tables: Pick<Tables, 'lists'> & Partial<Pick<Tables, 'labels'>>;
   theme: Settings['theme'];
   palette: Settings['palette'];
   sidebarHidden: boolean;
@@ -95,6 +98,7 @@ export function paletteCommands({
     view.kind === 'tomorrow' ||
     view.kind === 'next7' ||
     view.kind === 'upcoming' ||
+    view.kind === 'label' ||
     (editable && list.type !== 'note');
   const hasTrash = Object.values(tables.lists).some((l) => l.deletedAt);
   const goTo = (target: View['kind'], label: string, icon: LucideIcon, shortcut?: string) =>
@@ -138,6 +142,13 @@ export function paletteCommands({
       icon: FolderPlus,
       run: newFolder,
     },
+    {
+      id: 'new-label',
+      label: 'New label',
+      keywords: 'add create tag',
+      icon: Tag,
+      run: newLabel,
+    },
     goTo('today', 'Today', CalendarDays, SHORTCUTS.today),
     goTo('tomorrow', 'Tomorrow', Sunrise),
     goTo('next7', 'Next 7 days', CalendarRange),
@@ -145,6 +156,16 @@ export function paletteCommands({
     goTo('reminders', 'Reminders', Bell, SHORTCUTS.reminders),
     goTo('archive', 'Archive', Archive),
     goTo('trash', 'Trash', Trash),
+    ...sortedLabels(tables.labels ?? {})
+      .filter((l) => !(view.kind === 'label' && view.labelId === l.id))
+      .map((l): PaletteCommand => ({
+        id: `go-label-${l.id}`,
+        label: `Go to label “${l.name}”`,
+        matchLabel: `Go to label ${l.name}`,
+        keywords: 'tag',
+        icon: Tag,
+        run: () => openLabel(l.id),
+      })),
     list && {
       id: 'copy-markdown',
       label: `Copy “${list.title}” as Markdown`,

@@ -24,7 +24,7 @@ export interface TodayModel {
  * Timed tasks first, by time, then the rest by priority (P1 first, none
  * last), then by list and position in the list.
  */
-function compareDue(a: DueRow, b: DueRow): number {
+export function compareDue(a: DueRow, b: DueRow): number {
   const ia = a.item;
   const ib = b.item;
   if (ia.dueDate !== ib.dueDate) return (ia.dueDate ?? '') < (ib.dueDate ?? '') ? -1 : 1;
@@ -40,6 +40,18 @@ function compareDue(a: DueRow, b: DueRow): number {
 
 /** Open tasks with a due date from every to-do list that isn't archived or in the Trash. */
 export function dueRows(items: Record<string, Item>, lists: Record<string, List>): DueRow[] {
+  return openRows(items, lists, (i) => !!i.dueDate);
+}
+
+/**
+ * Rows for the open tasks that pass `wanted`, from every to-do list that isn't
+ * archived or in the Trash, in the order Today uses.
+ */
+export function openRows(
+  items: Record<string, Item>,
+  lists: Record<string, List>,
+  wanted: (item: Item) => boolean,
+): DueRow[] {
   const live = Object.values(items).filter((i) => {
     const list = lists[i.listId];
     return !i.deletedAt && list && list.type === 'todo' && !list.deletedAt && !list.archivedAt;
@@ -53,7 +65,7 @@ export function dueRows(items: Record<string, Item>, lists: Record<string, List>
   }
   const byId = new Map(live.map((i) => [i.id, i]));
   return live
-    .filter((i) => i.dueDate && !i.checked)
+    .filter((i) => wanted(i) && !i.checked)
     .map((item) => {
       const subs = children.get(item.id) ?? [];
       return {

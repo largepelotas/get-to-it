@@ -21,6 +21,10 @@ export interface QuickAddResult {
   listId: string | null;
   /** The section named with `/Section` in the target list, if it matched one of `options.sections`. */
   sectionId: string | null;
+  /** Existing labels named with `@name`, each once, in the order typed. */
+  labelIds: string[];
+  /** Names from `@name` tokens that match no existing label, as typed, each once. */
+  newLabels: string[];
   /** From a `!` token. A relative one only means something on a task with a due date. */
   reminder: ReminderSpec | null;
   /** Short labels for what was understood, shown as a preview. */
@@ -166,6 +170,11 @@ export interface QuickAddOptions {
   lists?: { id: string; title: string }[];
   /** Sections a `/Section` token can name, when they are in the target list. */
   sections?: { id: string; listId: string; title: string }[];
+  /**
+   * Labels an `@name` token can name. Left out, `@` is never a token (a caller
+   * that doesn't do labels, such as grocery).
+   */
+  labels?: { id: string; name: string }[];
   /** The list the task goes to when no `#List` is typed; decides which sections `/Section` can name. */
   listId?: string | null;
   /** The due date the caller will give a task without one; lets a relative reminder show. */
@@ -212,6 +221,50 @@ function findSection(
   sections: { id: string; title: string }[],
 ): { id: string; title: string; start: number; end: number } | null {
   return findToken(text, '/', sections);
+}
+
+interface LabelToken {
+  start: number;
+  end: number;
+  /** The id of an existing label; null for a new one. */
+  id: string | null;
+  /** The stored spelling of an existing label, or the word as typed. */
+  name: string;
+}
+
+const LABEL_WORD = /^[\p{L}\p{N}_-]+/u;
+
+/**
+ * Every `@label` token: an `@` that starts a word, followed by the longest existing
+ * label name (any case) ending at whitespace or the end, or else by a single word.
+ */
+function findLabels(text: string, labels: { id: string; name: string }[]): LabelToken[] {
+  const candidates = labels
+    .map((l) => ({ ...l, key: l.name.trim().toLowerCase() }))
+    .filter((l) => l.key)
+    .sort((a, b) => b.key.length - a.key.length);
+  const lower = text.toLowerCase();
+  const found: LabelToken[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '@' || (i > 0 && !/\s/.test(text[i - 1]))) continue;
+    const atBoundary = (end: number) => end >= text.length || /\s/.test(text[end]);
+    const existing = candidates.find(
+      (l) => lower.startsWith(l.key, i + 1) && atBoundary(i + 1 + l.key.length),
+    );
+    if (existing) {
+      const end = i + 1 + existing.key.length;
+      found.push({ start: i, end, id: existing.id, name: existing.name.trim() });
+      i = end - 1;
+      continue;
+    }
+    const word = LABEL_WORD.exec(text.slice(i + 1))?.[0];
+    if (word && atBoundary(i + 1 + word.length)) {
+      const end = i + 1 + word.length;
+      found.push({ start: i, end, id: null, name: word });
+      i = end - 1;
+    }
+  }
+  return found;
 }
 
 const REMINDER_UNIT = /^(\d+)\s*(m|mins?|minutes?|h|hrs?|hours?|d|days?)(?:\s+before)?(?=\s|$)/i;
@@ -329,6 +382,26 @@ export function parseQuickAdd(
     text = cut(text, sec.start, sec.end);
   }
 
+  // Labels: every `@name`, taken out of the title. The same one twice counts once.
+  const labelIds: string[] = [];
+  const newLabels: string[] = [];
+  const labelChips: string[] = [];
+  if (options.labels) {
+    const tokens = findLabels(text, options.labels);
+    for (const t of tokens) {
+      if (t.id !== null) {
+        if (labelIds.includes(t.id)) continue;
+        labelIds.push(t.id);
+        labelChips.push(`@${t.name}`);
+      } else {
+        if (newLabels.some((n) => n.toLowerCase() === t.name.toLowerCase())) continue;
+        newLabels.push(t.name);
+        labelChips.push(`@${t.name} (new)`);
+      }
+    }
+    for (const t of [...tokens].reverse()) text = cut(text, t.start, t.end);
+  }
+
   const p = findPriority(text);
   if (p) {
     priority = p.priority;
@@ -381,6 +454,7 @@ export function parseQuickAdd(
   if (priority) chips.push(`P${priority}`);
   if (listId) chips.push(`#${listTitle}`);
   if (sectionId) chips.push(`/${sectionTitle}`);
+  chips.push(...labelChips);
   if (reminder && (reminder.kind === 'absolute' || dueDate || options.defaultDue)) {
     chips.push(describeReminder(reminder, now));
   }
@@ -395,6 +469,8 @@ export function parseQuickAdd(
     priority,
     listId,
     sectionId,
+    labelIds,
+    newLabels,
     reminder,
     chips,
   };

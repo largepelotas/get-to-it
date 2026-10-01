@@ -74,6 +74,16 @@ const SCHEMA: Record<TableName, Column[]> = {
     wontDo: 'bool',
     // Added in migration 4.
     sectionId: 'text',
+    // Added in migration 5.
+    labelIds: 'json',
+  }),
+  labels: columns({
+    id: 'text',
+    name: 'text',
+    color: 'text',
+    sortKey: 'text',
+    createdAt: 'int',
+    updatedAt: 'int',
   }),
   sections: columns({
     id: 'text',
@@ -217,6 +227,18 @@ export const MIGRATIONS: string[][] = [
     `CREATE INDEX sections_list_id ON sections (list_id)`,
     `ALTER TABLE items ADD COLUMN section_id TEXT`,
   ],
+  // Labels, and the labels on a task (a JSON array of ids).
+  [
+    `CREATE TABLE labels (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      color TEXT,
+      sort_key TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `ALTER TABLE items ADD COLUMN label_ids TEXT`,
+  ],
 ];
 
 function toColumnValue(value: unknown, type: ColumnType): unknown {
@@ -255,6 +277,8 @@ export function rowToRecord(table: TableName, row: AnyRow): unknown[] {
 export function recordToRow(table: TableName, record: Record<string, unknown>): AnyRow {
   const row: Record<string, unknown> = {};
   for (const c of SCHEMA[table]) row[c.field] = fromColumnValue(record[c.column], c.type);
+  // A task saved before labels existed has no value.
+  if (table === 'items' && !Array.isArray(row.labelIds)) row.labelIds = [];
   return row as unknown as AnyRow;
 }
 

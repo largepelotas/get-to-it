@@ -68,14 +68,18 @@ function useQuickAddList(): List | null {
   }, [lists, defaultId]);
 }
 
-function SmartLayout({
+export function SmartLayout({
   header,
   defaultDue,
+  labelIds,
   sections,
   empty,
 }: {
   header: ReactNode;
-  defaultDue: string;
+  /** Due date for tasks added here; none for a view that doesn't date them. */
+  defaultDue?: string;
+  /** Labels put on every task added here. */
+  labelIds?: string[];
   sections: SmartSection[];
   empty: ReactNode;
 }) {
@@ -98,6 +102,7 @@ function SmartLayout({
                     listId={target.id}
                     inputRef={quickAddRef}
                     defaultDue={defaultDue}
+                    labelIds={labelIds}
                     hint={target.title}
                     onArrowDown={() =>
                       listRef.current?.querySelector<HTMLElement>('[data-item-id]')?.focus()

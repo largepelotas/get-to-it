@@ -685,6 +685,30 @@ INTEGER NOT NULL DEFAULT 0`; missing in old localStorage data or exports
   `/section` is parsed with `#List` (see Quick add); `QuickAdd` passes the
   sections and its list so the chip shows `/Title`.
 
+- Labels (after M8): tags that cut across lists. Data: the `labels` table
+  (`Label`: `name`, `color`, `sortKey`), `Item.labelIds` (a `json` column,
+  `label_ids`; ids naming no label are ignored), SQLite migration 5; old data
+  and exports load with none, and the snapshot version is unchanged. Names are
+  trimmed, lose a leading `@`, and are unique ignoring case. Actions are in
+  `store/actions/labels.ts` (create, rename, colour, move, delete, set a
+  task's labels, toggle one on several tasks, and `createLabelOnItems` for the
+  picker's "Create"); the pure side (`itemLabels`, `labelRows`,
+  `labelCounts`) is in `store/labels.ts`. Deleting a label takes it off every
+  task in one undo step; there is no trash for labels. `@name` is parsed with
+  `#List` and `/section`; new names are created in the same undo step as the
+  task. The sidebar's Labels area (`LabelList.tsx`) shows once a label exists;
+  the view (`LabelView.tsx`) is built on `SmartLayout` and puts its label on
+  every task added there. Row chips (`LabelChips.tsx`) are neutral with a
+  coloured dot, so contrast holds in every colour scheme; they open the label's
+  view and are not tab stops. One picker (`LabelPicker.tsx`) serves every
+  place labels are edited: a filter field, a checklist (ticked, or mixed when
+  only some of several tasks have it) and `Create "name"`. Down/Up move, Enter
+  or Space toggles, Escape closes. It opens in the details panel's "Labels"
+  field (`useUI.labelPickerFor`, set by `pickLabels` from the L key and the
+  menu's "New label…") and in the selection bar (`selectionLabelsOpen`). The
+  task menu has a "Labels" submenu with ticks. Grocery lists and notes have no
+  labels.
+
 ### Accessibility and loading (M8)
 
 - **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)

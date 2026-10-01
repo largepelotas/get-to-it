@@ -20,6 +20,8 @@ async function addContent(page: Page) {
   await page.keyboard.type('Errands');
   await page.keyboard.press('Enter');
   await addTasks(page, 'Buy stamps /Errands');
+  // Labelled tasks, so chips are scanned too.
+  await addTasks(page, 'Call the bank @errands @phone', 'Book dentist @phone');
 
   await openList(page, 'Groceries');
   const item = page.getByRole('textbox', { name: 'Add an item' });
@@ -28,6 +30,11 @@ async function addContent(page: Page) {
     await item.press('Enter');
   }
   await row(page, 'milk').getByRole('checkbox').click();
+}
+
+/** Waits for fades to finish, so axe does not read colours mid-transition. */
+async function settled(page: Page) {
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
 }
 
 const PALETTES = ['Graphite and cobalt', 'Stone and moss', 'Sage study', 'Midnight ink', 'Dusk'];
@@ -59,6 +66,20 @@ for (const palette of PALETTES)
       await openList(page, 'Welcome');
       await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
       await expectAccessible(page);
+
+      // The label view, and the label picker open on a labelled task.
+      await sidebarButton(page, 'errands').click();
+      await expect(page.getByRole('heading', { level: 1, name: 'errands' })).toBeVisible();
+      await expectAccessible(page);
+      await openList(page, 'Inbox');
+      await row(page, 'Call the bank').hover();
+      await row(page, 'Call the bank').getByRole('button', { name: 'Open details' }).click();
+      await page.getByRole('button', { name: 'Add label' }).click();
+      await expect(page.getByRole('group', { name: 'Labels' })).toBeVisible();
+      await settled(page);
+      await expectAccessible(page);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('group', { name: 'Labels' })).toBeHidden();
 
       for (const view of [
         'Today',

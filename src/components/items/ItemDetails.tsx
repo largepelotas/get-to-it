@@ -1,5 +1,15 @@
 import clsx from 'clsx';
-import { CalendarDays, ChevronUp, Flag, Plus, Repeat, SkipForward, Trash, X } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronUp,
+  Flag,
+  Plus,
+  Repeat,
+  SkipForward,
+  Tag,
+  Trash,
+  X,
+} from 'lucide-react';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { skipTask, toggleItem, trashItems } from '@/commands';
 import { RichTextField } from '@/components/editor/RichTextField';
@@ -17,8 +27,12 @@ import {
 } from '@/store/actions/items';
 import { useData } from '@/store/data';
 import { childrenIndex, depthOf, MAX_DEPTH } from '@/store/tree';
-import { closeDetails, openDetails, setDuePickerFor, useUI } from '@/store/ui';
+import { setItemLabels } from '@/store/actions/labels';
+import { itemLabels } from '@/store/labels';
+import { closeDetails, openDetails, setDuePickerFor, setLabelPickerFor, useUI } from '@/store/ui';
 import { Checkbox } from './Checkbox';
+import { LabelChips } from './LabelChips';
+import { LabelDot, LabelPicker } from './LabelPicker';
 import { PRIORITIES, PRIORITY_COLOR, PRIORITY_LABEL } from './priority';
 import { ReminderField } from './ReminderField';
 
@@ -167,6 +181,69 @@ function DueField({ item, readOnly }: { item: Item; readOnly: boolean }) {
           onClick={() => clearDue(item.id)}
         />
       )}
+    </div>
+  );
+}
+
+/** The task's labels, each with a remove button, and a button that opens the picker. */
+function LabelsField({ item, readOnly }: { item: Item; readOnly: boolean }) {
+  const labelTable = useData((s) => s.tables.labels);
+  const open = useUI((s) => s.labelPickerFor === item.id);
+  const labels = itemLabels(item, labelTable);
+  if (readOnly) {
+    if (!labels.length) return null;
+    return (
+      <div>
+        <SectionLabel>Labels</SectionLabel>
+        <LabelChips labels={labels} />
+      </div>
+    );
+  }
+  return (
+    <div>
+      <SectionLabel>Labels</SectionLabel>
+      <div className="flex flex-wrap items-center gap-1">
+        {labels.map((label) => (
+          <span
+            key={label.id}
+            className="flex max-w-full items-center gap-1 rounded-full border border-line py-px pr-0.5 pl-1.5 text-xs text-fg-muted"
+          >
+            <LabelDot color={label.color} />
+            <span className="min-w-0 truncate">{label.name}</span>
+            <button
+              type="button"
+              aria-label={`Remove label ${label.name}`}
+              onClick={() =>
+                setItemLabels(
+                  item.id,
+                  (item.labelIds ?? []).filter((id) => id !== label.id),
+                )
+              }
+              className="flex size-4 shrink-0 items-center justify-center rounded-full hover:bg-line hover:text-fg"
+            >
+              <X aria-hidden className="size-3" />
+            </button>
+          </span>
+        ))}
+        <Popover
+          open={open}
+          onOpenChange={(next) => setLabelPickerFor(next ? item.id : null)}
+          className="p-2"
+          label="Choose labels"
+          trigger={
+            <button
+              type="button"
+              aria-label="Add label"
+              className="flex h-6 items-center gap-1 rounded-full border border-dashed border-line-control px-2 text-xs text-fg-muted hover:bg-hover"
+            >
+              <Tag aria-hidden className="size-3" />
+              Add label
+            </button>
+          }
+        >
+          <LabelPicker ids={[item.id]} />
+        </Popover>
+      </div>
     </div>
   );
 }
@@ -328,6 +405,8 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
             ))}
           </div>
         </div>
+
+        <LabelsField item={item} readOnly={readOnly} />
 
         <div>
           <SectionLabel>Notes</SectionLabel>

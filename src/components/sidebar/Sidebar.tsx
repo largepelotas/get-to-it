@@ -33,6 +33,7 @@ import { setSetting, useData } from '@/store/data';
 import { openCounts, sidebarModel } from '@/store/sidebar';
 import { dueRows, next7Count, todayCount, tomorrowCount } from '@/store/smart';
 import { navigate, openDialog, openList, startRename, stopRename, useUI } from '@/store/ui';
+import { LabelList } from './LabelList';
 import { ListTree } from './ListTree';
 import { RenameField } from './RenameField';
 import { SectionHeader, SidebarItem } from './SidebarItem';
@@ -211,6 +212,8 @@ export function Sidebar() {
           />
         </SectionHeader>
         <ListTree model={model} counts={counts} />
+
+        <LabelList />
       </nav>
 
       <div className="shrink-0 border-t border-line px-2 py-2">

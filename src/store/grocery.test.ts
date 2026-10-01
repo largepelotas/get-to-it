@@ -11,6 +11,7 @@ function item(id: string, fields: Partial<Item> = {}): Item {
     checked: false,
     wontDo: false,
     sectionId: null,
+    labelIds: [],
     completedAt: null,
     sortKey: 'a0',
     collapsed: false,

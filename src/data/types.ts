@@ -78,6 +78,11 @@ export interface Item {
    * One that names a missing section (or one in another list) means no section.
    */
   sectionId: string | null;
+  /**
+   * The labels on this task, in the order they were added. Only to-do tasks carry
+   * any. An id that names a missing label is ignored.
+   */
+  labelIds: string[];
   /** Subtasks hidden. */
   collapsed: boolean;
   /** Rich-text notes as TipTap JSON, or null. */
@@ -105,6 +110,16 @@ export interface Section {
   sortKey: string;
   /** The section's tasks are hidden. */
   collapsed: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A tag that cuts across lists. Names are unique ignoring case. */
+export interface Label {
+  id: string;
+  name: string;
+  color: ColorName | null;
+  sortKey: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -148,6 +163,7 @@ export interface Tables {
   lists: Record<string, List>;
   items: Record<string, Item>;
   sections: Record<string, Section>;
+  labels: Record<string, Label>;
   reminders: Record<string, Reminder>;
   completions: Record<string, Completion>;
   notes: Record<string, Note>;
@@ -162,6 +178,7 @@ export const TABLE_NAMES: TableName[] = [
   'lists',
   'items',
   'sections',
+  'labels',
   'reminders',
   'completions',
   'notes',
@@ -173,6 +190,7 @@ export function emptyTables(): Tables {
     lists: {},
     items: {},
     sections: {},
+    labels: {},
     reminders: {},
     completions: {},
     notes: {},

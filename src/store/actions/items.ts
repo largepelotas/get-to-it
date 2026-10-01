@@ -11,6 +11,7 @@ import type { Tx } from '../history';
 import { depthOf, descendantIds, MAX_DEPTH, subtreeHeight } from '../tree';
 import { itemIndex, keyAt, listItems, listSections, sectionOf, siblings } from './helpers';
 import { liveTodoLists } from '../sidebar';
+import { ensureLabel } from './labels';
 import { clearSnoozes, insertReminder } from './reminders';
 
 export interface NewItem {
@@ -28,6 +29,8 @@ export interface NewItem {
    */
   sectionId?: string | null;
   priority?: Priority;
+  /** Labels to put on a to-do task. Unknown ids and repeats are dropped; ignored on other lists. */
+  labelIds?: string[];
   dueDate?: string | null;
   dueTime?: string | null;
   recurrence?: Recurrence | null;
@@ -72,11 +75,16 @@ export function insertItem(tx: Tx, listId: string, input: NewItem): string {
       input.sectionId !== undefined ? input.sectionId : afterItem ? sectionOf(tx, afterItem) : null;
     if (wanted && tx.get('sections', wanted)?.listId === listId) sectionId = wanted;
   }
+  const labelIds =
+    tx.get('lists', listId)?.type === 'todo'
+      ? [...new Set(input.labelIds ?? [])].filter((l) => tx.get('labels', l))
+      : [];
   const item: Item = {
     id: newId(),
     listId,
     parentId,
     sectionId,
+    labelIds,
     text: input.text.trim(),
     checked: false,
     wontDo: false,
@@ -111,6 +119,8 @@ export function createItem(listId: string, input: NewItem): string | null {
 interface Prepared {
   listId: string;
   input: NewItem;
+  /** Names of labels to create (or find) when the task is added. */
+  newLabels: string[];
   reminder: ReminderSpec | null;
 }
 
@@ -119,17 +129,24 @@ function prepareFromText(
   raw: string,
   place: Pick<NewItem, 'parentId' | 'after' | 'sectionId'>,
   defaultDue: string | null,
+  extraLabelIds: string[] = [],
 ): Prepared | null {
   if (!raw.trim()) return null;
   const { settings, tables } = useData.getState();
   if (!settings.parseDates) {
-    return { listId, input: { text: raw, dueDate: defaultDue, ...place }, reminder: null };
+    return {
+      listId,
+      input: { text: raw, dueDate: defaultDue, labelIds: extraLabelIds, ...place },
+      newLabels: [],
+      reminder: null,
+    };
   }
   // `#List` only applies to a plain add; a subtask or an insert at a spot stays where it is.
   const plain = !place.parentId && place.after === undefined;
   const parsed = parseQuickAdd(raw, new Date(), {
     lists: plain ? liveTodoLists(tables) : [],
     sections: plain ? Object.values(tables.sections) : [],
+    labels: tables.lists[listId]?.type === 'todo' ? Object.values(tables.labels) : undefined,
     listId,
     defaultDue,
   });
@@ -144,15 +161,22 @@ function prepareFromText(
       dueTime: parsed.dueTime,
       recurrence: parsed.recurrence,
       priority: parsed.priority,
+      labelIds: [...new Set([...extraLabelIds, ...parsed.labelIds])],
       ...place,
       ...(parsed.sectionId ? { sectionId: parsed.sectionId } : {}),
     },
+    newLabels: parsed.newLabels,
     reminder,
   };
 }
 
 function insertPrepared(tx: Tx, p: Prepared): string {
-  const id = insertItem(tx, p.listId, p.input);
+  // New labels are made in this same step; one named on several lines is made once.
+  const made = p.newLabels.flatMap((name) => ensureLabel(tx, name) ?? []);
+  const input = made.length
+    ? { ...p.input, labelIds: [...(p.input.labelIds ?? []), ...made] }
+    : p.input;
+  const id = insertItem(tx, p.listId, input);
   if (p.reminder) insertReminder(tx, id, p.reminder);
   return id;
 }
@@ -168,8 +192,10 @@ export function createItemFromText(
   place: Pick<NewItem, 'parentId' | 'after' | 'sectionId'> = {},
   /** The due date to use when the text doesn't give one (e.g. today, in the Today view). */
   defaultDue: string | null = null,
+  /** Labels to put on the task whatever the text says (the label view's quick add). */
+  extraLabelIds: string[] = [],
 ): string | null {
-  const prepared = prepareFromText(listId, raw, place, defaultDue);
+  const prepared = prepareFromText(listId, raw, place, defaultDue, extraLabelIds);
   if (!prepared) return null;
   return commit('New task', (tx) => insertPrepared(tx, prepared));
 }
@@ -181,9 +207,13 @@ export function createItemsFromLines(
   defaultDue: string | null = null,
   /** The section for lines that don't name one with `/section`. */
   sectionId: string | null = null,
+  /** Labels to put on every task whatever the text says. */
+  extraLabelIds: string[] = [],
 ): string[] {
   const prepared = lines.flatMap(
-    (line) => prepareFromText(listId, line, sectionId ? { sectionId } : {}, defaultDue) ?? [],
+    (line) =>
+      prepareFromText(listId, line, sectionId ? { sectionId } : {}, defaultDue, extraLabelIds) ??
+      [],
   );
   if (!prepared.length) return [];
   return commit(prepared.length === 1 ? 'New task' : 'New tasks', (tx) =>
@@ -654,6 +684,7 @@ export function duplicateItem(id: string): string | null {
         checked: false,
         wontDo: false,
         completedAt: null,
+        labelIds: [...(source.labelIds ?? [])],
         createdAt: tx.now,
         updatedAt: tx.now,
       });

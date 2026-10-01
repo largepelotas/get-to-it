@@ -14,7 +14,7 @@ mobile.
 | Data              | Stored on the computer in SQLite. Built so sync can be added later without a rewrite.              |
 | Structure         | Each list is one type: to-do, grocery or note                                                      |
 | v1 extras         | Due dates, reminders, recurring tasks, subtasks with task details, folders                         |
-| Grouping          | Folders (one folder per list, shown in the sidebar). Tags may come later.                          |
+| Grouping          | Folders (one folder per list, shown in the sidebar), and labels that cut across lists.             |
 
 ## Stack
 
@@ -79,6 +79,9 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - Sections: headings that group a list's tasks. Collapse, rename, reorder and
   delete them (the tasks stay), move tasks between them by dragging or from
   the task menu, and type `/Section` in quick add to file a task in one.
+- Labels: tag a task with any number of labels from the details panel, the task
+  menu, the L key or the selection bar; type `@name` in quick add. The sidebar
+  has a Labels area, and each label has a view of its open tasks.
 - Priority P1–P3.
 - Finished items go to a collapsible "Completed" section.
 - A details panel for the selected task holds the title, rich-text notes, due
@@ -161,4 +164,4 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 ## Not in v1
 
 Sync and shared lists, a quick-capture hotkey, templates, grocery suggestions,
-images in notes, tags, mobile or web builds, code signing and auto-update.
+images in notes, mobile or web builds, code signing and auto-update.
