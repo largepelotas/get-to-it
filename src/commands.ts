@@ -40,6 +40,7 @@ import { createFilter, deleteFilter, renameFilter, updateFilter } from './store/
 import { createLabel, deleteLabel, renameLabel } from './store/actions/labels';
 import { createSection, deleteSection, UNTITLED_SECTION } from './store/actions/sections';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
+import { stopTimerForItems } from './store/focus';
 import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
 import { normalizeLabelName, sameLabelName } from './store/labels';
 import { DEFAULT_VIEW_OPTIONS, sameViewOptions, viewKey } from './store/viewOptions';
@@ -348,6 +349,7 @@ export function trashItems(ids: string[]): void {
   // A subtask selected with its parent goes with the parent, so it isn't counted twice.
   const live = withoutDescendants((id) => items[id], liveIds(ids));
   if (!live.length) return;
+  stopTimerForItems(live);
   deleteItems(live);
   toastWithUndo(
     live.length === 1 ? `Deleted ${quote(items[live[0]].text)}` : `Deleted ${live.length} tasks`,
@@ -412,6 +414,7 @@ export function toggleItems(ids: string[]): void {
   }
   const allDone = live.every((id) => items[id].checked);
   const target = !allDone;
+  if (target) stopTimerForItems(live);
   // Only tasks that change count (and a subtask selected with its parent goes with the parent).
   const changing = (target ? withoutDescendants((id) => items[id], live) : live).filter(
     (id) => items[id].checked !== target,
@@ -525,6 +528,7 @@ export function skipTask(id: string): void {
 
 /** Closes a task without doing it. */
 export function closeAsWontDo(id: string): void {
+  stopTimerForItems([id]);
   setWontDo(id);
 }
 
@@ -556,6 +560,7 @@ function dueOn(date: string): string {
 export function toggleItem(id: string, checked: boolean, { announce = false } = {}): void {
   const item = useData.getState().tables.items[id];
   if (!item) return;
+  if (checked) stopTimerForItems([id]);
   const next = setChecked(id, checked);
   if (next) toastWithUndo(`${quote(item.text)} is next due ${dueOn(next)}`);
   else if (checked && announce) toastWithUndo(`Completed ${quote(item.text)}`);

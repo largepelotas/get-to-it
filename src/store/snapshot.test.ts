@@ -8,7 +8,7 @@ import { createList, deleteList } from './actions/lists';
 import { createFilter } from './actions/filters';
 import { createLabel } from './actions/labels';
 import { createSection, setSectionCollapsed } from './actions/sections';
-import { replaceData, resetForTests, setSetting, useData } from './data';
+import { commit, replaceData, resetForTests, setSetting, useData } from './data';
 import {
   describeContents,
   ImportError,
@@ -450,5 +450,52 @@ describe('snapshots of end times and deadlines', () => {
       endTime: '15:30',
       deadline: '2026-10-10',
     });
+  });
+});
+
+describe('focus sessions in snapshots', () => {
+  const session = {
+    id: 'S1',
+    itemId: 'I1',
+    kind: 'stopwatch',
+    startedAt: 1000,
+    endedAt: 91000,
+    seconds: 90,
+  } as const;
+
+  const withSessions = (rows: unknown[], settings: unknown = {}) =>
+    JSON.stringify({ app: 'checklist', version: 1, tables: { focusSessions: rows }, settings });
+
+  // Bug prevented: logged focus time lost in an export and import.
+  it('round-trips a focus session', () => {
+    commit('Log focus', (tx) => tx.put('focusSessions', session), { undoable: false });
+    const parsed = parseSnapshot(exportNow());
+    expect(parsed.tables.focusSessions).toEqual({ S1: session });
+  });
+
+  // Bug prevented: a session of an unknown kind (hand-edited file) loading and breaking totals.
+  it('refuses a session with an unknown kind, naming it', () => {
+    expect(() => parseSnapshot(withSessions([{ ...session, kind: 'nap' }]))).toThrow(
+      /focus session 1/,
+    );
+  });
+
+  // Bug prevented: a file exported before the focus timer existed being refused.
+  it('parses a file without the table as having no sessions', () => {
+    const old = JSON.stringify({ app: 'checklist', version: 1, tables: {}, settings: {} });
+    expect(parseSnapshot(old).tables.focusSessions).toEqual({});
+  });
+
+  // Bug prevented: a nonsense timer length (0, text, huge, fractional) imported as a setting.
+  it('drops invalid timer lengths and keeps a valid one', () => {
+    for (const bad of [0, '25', 1000, 2.5]) {
+      const { settings } = parseSnapshot(
+        withSessions([], { focusMinutes: bad, breakMinutes: bad }),
+      );
+      expect(settings.focusMinutes).toBeUndefined();
+      expect(settings.breakMinutes).toBeUndefined();
+    }
+    const { settings } = parseSnapshot(withSessions([], { focusMinutes: 45, breakMinutes: 10 }));
+    expect(settings).toMatchObject({ focusMinutes: 45, breakMinutes: 10 });
   });
 });

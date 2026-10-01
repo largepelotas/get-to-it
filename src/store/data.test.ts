@@ -158,3 +158,18 @@ describe('loading settings', () => {
     });
   });
 });
+
+describe('loading timer lengths', () => {
+  // Bug prevented: a stored focus or break length of 0, text, or an absurd number making a
+  // timer that ends instantly or never.
+  it('falls back to 25 and 5 for invalid lengths and keeps a valid one', async () => {
+    for (const bad of [0, '25', 1000, 2.5]) {
+      await initData(
+        new MemoryRepository({ settings: { focusMinutes: bad, breakMinutes: bad } as never }),
+      );
+      expect(useData.getState().settings).toMatchObject({ focusMinutes: 25, breakMinutes: 5 });
+    }
+    await initData(new MemoryRepository({ settings: { focusMinutes: 45 } }));
+    expect(useData.getState().settings).toMatchObject({ focusMinutes: 45, breakMinutes: 5 });
+  });
+});

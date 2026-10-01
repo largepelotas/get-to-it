@@ -1,10 +1,15 @@
 import { create } from 'zustand';
 import { opKey, type LoadResult, type Repository, type WriteOp } from '@/data/repository';
 import { isTimeString } from '@/lib/dates';
+import { cleanMinutes } from '@/lib/focus';
 import {
   BUILT_IN_VIEWS,
+  DEFAULT_BREAK_MINUTES,
+  DEFAULT_FOCUS_MINUTES,
   DEFAULT_SETTINGS,
   emptyTables,
+  MAX_BREAK_MINUTES,
+  MAX_FOCUS_MINUTES,
   type Settings,
   type Tables,
 } from '@/data/types';
@@ -55,6 +60,16 @@ function normalizeSettings(stored: Partial<Settings>): Settings {
   }
   settings.viewOptions = cleanViewOptions(settings.viewOptions);
   settings.matrix = cleanMatrix(settings.matrix) ?? DEFAULT_SETTINGS.matrix;
+  settings.focusMinutes = cleanMinutes(
+    settings.focusMinutes,
+    DEFAULT_FOCUS_MINUTES,
+    MAX_FOCUS_MINUTES,
+  );
+  settings.breakMinutes = cleanMinutes(
+    settings.breakMinutes,
+    DEFAULT_BREAK_MINUTES,
+    MAX_BREAK_MINUTES,
+  );
   return settings;
 }
 

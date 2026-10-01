@@ -4,6 +4,8 @@ import {
   COLOR_NAMES,
   DEFAULT_SETTINGS,
   emptyTables,
+  MAX_BREAK_MINUTES,
+  MAX_FOCUS_MINUTES,
   TABLE_NAMES,
   type AnyRow,
   type Settings,
@@ -11,6 +13,7 @@ import {
   type TableName,
   type Tables,
 } from '@/data/types';
+import { cleanMinutes } from '@/lib/focus';
 import { isDateKey, isTimeAfter, isTimeString } from '@/lib/dates';
 import { isPaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
@@ -42,6 +45,7 @@ export function makeSnapshot(tables: Tables, settings: Settings, now = Date.now(
       reminders: Object.values(tables.reminders),
       completions: Object.values(tables.completions),
       notes: Object.values(tables.notes),
+      focusSessions: Object.values(tables.focusSessions),
     },
     settings: exported,
   };
@@ -179,6 +183,14 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
   },
   completions: { id, itemId: id, dueDate: date, completedAt: num },
   notes: { id, content: str, plainText: or(str, ''), updatedAt: num },
+  focusSessions: {
+    id,
+    itemId: id,
+    kind: oneOf(['pomodoro', 'stopwatch']),
+    startedAt: num,
+    endedAt: num,
+    seconds: num,
+  },
 };
 
 const TABLE_LABEL: Record<TableName, string> = {
@@ -191,6 +203,7 @@ const TABLE_LABEL: Record<TableName, string> = {
   reminders: 'reminder',
   completions: 'completion',
   notes: 'note',
+  focusSessions: 'focus session',
 };
 
 function checkRow(table: TableName, raw: unknown, index: number): AnyRow {
@@ -252,6 +265,9 @@ function checkSettings(raw: unknown): Partial<Settings> {
     } else if (key === 'matrix') {
       const matrix = cleanMatrix(value);
       if (matrix) out[key] = matrix;
+    } else if (key === 'focusMinutes' || key === 'breakMinutes') {
+      const max = key === 'focusMinutes' ? MAX_FOCUS_MINUTES : MAX_BREAK_MINUTES;
+      if (cleanMinutes(value, 0, max)) out[key] = value;
     } else if (key === 'theme') {
       if (['system', 'light', 'dark'].includes(value as string)) out[key] = value;
     } else if (key === 'palette') {

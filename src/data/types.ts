@@ -179,6 +179,21 @@ export interface Note {
   updatedAt: number;
 }
 
+export type FocusKind = 'pomodoro' | 'stopwatch';
+
+/** Time spent on a task with the focus timer, logged when the timer stops. */
+export interface FocusSession {
+  id: string;
+  itemId: string;
+  kind: FocusKind;
+  /** When the timer was started, ms. */
+  startedAt: number;
+  /** When it stopped, ms. */
+  endedAt: number;
+  /** Seconds actually focused: the span without the pauses. At least 1. */
+  seconds: number;
+}
+
 export interface Tables {
   folders: Record<string, Folder>;
   lists: Record<string, List>;
@@ -189,6 +204,7 @@ export interface Tables {
   reminders: Record<string, Reminder>;
   completions: Record<string, Completion>;
   notes: Record<string, Note>;
+  focusSessions: Record<string, FocusSession>;
 }
 
 export type TableName = keyof Tables;
@@ -205,6 +221,7 @@ export const TABLE_NAMES: TableName[] = [
   'reminders',
   'completions',
   'notes',
+  'focusSessions',
 ];
 
 export function emptyTables(): Tables {
@@ -218,6 +235,7 @@ export function emptyTables(): Tables {
     reminders: {},
     completions: {},
     notes: {},
+    focusSessions: {},
   };
 }
 
@@ -296,9 +314,18 @@ export interface Settings {
   viewOptions: Record<string, ViewOptions>;
   /** What counts as urgent and as important in the Eisenhower matrix. */
   matrix: MatrixSettings;
+  /** Length of a Pomodoro, in minutes. */
+  focusMinutes: number;
+  /** Length of a break, in minutes. */
+  breakMinutes: number;
 }
 
 export const DEFAULT_MATRIX: MatrixSettings = { urgent: 'overdue | today', important: 'p1 | p2' };
+
+export const DEFAULT_FOCUS_MINUTES = 25;
+export const DEFAULT_BREAK_MINUTES = 5;
+export const MAX_FOCUS_MINUTES = 180;
+export const MAX_BREAK_MINUTES = 60;
 
 export const DEFAULT_GROCERY_CATEGORIES: GroceryCategory[] = [
   { id: 'produce', name: 'Produce' },
@@ -330,6 +357,8 @@ export const DEFAULT_SETTINGS: Settings = {
   dailyReviewTime: null,
   viewOptions: {},
   matrix: DEFAULT_MATRIX,
+  focusMinutes: DEFAULT_FOCUS_MINUTES,
+  breakMinutes: DEFAULT_BREAK_MINUTES,
 };
 
 /** A complete copy of the data, used for export, import and backups. */

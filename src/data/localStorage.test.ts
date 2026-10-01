@@ -85,3 +85,17 @@ describe('LocalStorageRepository deadlines', () => {
     window.localStorage.removeItem('checklist:data:v1');
   });
 });
+
+describe('LocalStorageRepository focus sessions', () => {
+  // Bug prevented: data saved before the focus timer existed loading with no focusSessions table,
+  // so the first read of it throws.
+  it('reads data saved without focusSessions as having none', async () => {
+    window.localStorage.setItem(
+      'checklist:data:v1',
+      JSON.stringify({ tables: { items: {} }, settings: {} }),
+    );
+    const { tables } = await new LocalStorageRepository().load();
+    expect(tables.focusSessions).toEqual({});
+    window.localStorage.removeItem('checklist:data:v1');
+  });
+});

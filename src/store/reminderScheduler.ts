@@ -11,10 +11,14 @@ import {
 import type { ScheduledReminder } from '@/platform';
 import { markFired, markSkipped } from './actions/reminders';
 import { useData } from './data';
+import { useFocus } from './focus';
+import { endsAt } from '@/lib/focus';
 import { dueRows, todayModel } from './smart';
 
 /** Id of the daily review's notification. */
 export const DAILY_REVIEW_ID = 'daily-review';
+/** Id of the focus timer's end-of-countdown notification. */
+export const FOCUS_END_ID = 'focus-end';
 /** Added to a reminder's id for its repeat notification. */
 const AGAIN = ':again';
 
@@ -41,6 +45,8 @@ export interface SchedulerDeps {
   onMissed: (entries: ReminderEntry[]) => void;
   /** The daily review went off while the app was running. */
   onDailyReview?: () => void;
+  /** The focus timer's countdown reached zero while the app was running. */
+  onFocusEnd?: () => void;
   now?: () => number;
 }
 
@@ -100,6 +106,21 @@ export function startReminderScheduler(deps: SchedulerDeps): () => void {
         body: reviewBody(todayKey(new Date(at))),
       });
     }
+    const { timer } = useFocus.getState();
+    const focusEnd = timer ? endsAt(timer) : null;
+    if (timer && focusEnd !== null) {
+      if (timer.kind === 'break') {
+        entries.push({ id: FOCUS_END_ID, at: focusEnd, title: 'Break over', body: 'Back to it' });
+      } else {
+        const text = timer.itemId ? tables.items[timer.itemId]?.text : undefined;
+        entries.push({
+          id: FOCUS_END_ID,
+          at: focusEnd,
+          title: 'Focus done',
+          body: `${timer.minutes} min on “${text ?? ''}”`,
+        });
+      }
+    }
     void Promise.resolve(deps.setSchedule(entries)).catch((err: unknown) =>
       console.error('Could not schedule reminders', err),
     );
@@ -131,10 +152,16 @@ export function startReminderScheduler(deps: SchedulerDeps): () => void {
       sync();
     }
   });
+  const unsubscribeFocus = useFocus.subscribe((state, prev) => {
+    if (state.timer !== prev.timer) sync();
+  });
   const stopListening = deps.onFired((fired) => {
     firedFloor = Math.max(firedFloor, fired.at);
     if (fired.id === DAILY_REVIEW_ID) {
       deps.onDailyReview?.();
+      sync();
+    } else if (fired.id === FOCUS_END_ID) {
+      deps.onFocusEnd?.();
       sync();
     } else if (fired.id.endsWith(AGAIN)) {
       // A repeat isn't a new delivery: nothing is stored, but the next one needs queueing.
@@ -145,6 +172,7 @@ export function startReminderScheduler(deps: SchedulerDeps): () => void {
 
   return () => {
     unsubscribe();
+    unsubscribeFocus();
     stopListening();
     void Promise.resolve(deps.setSchedule([])).catch(() => {});
   };
