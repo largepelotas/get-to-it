@@ -590,6 +590,20 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   "Show sidebar" button (on macOS in its own drag strip, clear of the
   traffic lights).
 
+- Quick add, finished (after M8): `parseQuickAdd` also reads `#List` (longest
+  matching live to-do list title wins, any case; no match leaves the text
+  alone) and `!` reminders (`!30min`, `!2 hours before`, `!due`, or a time
+  like `!fri 9am`; a bare `!`, `!!`, `!!!` is still priority). A relative
+  reminder is dropped when the task has no due date. `createItemFromText`
+  files the task and its reminder in one undo step (`insertReminder` is the
+  `Tx`-level half of `addReminder`); `createItemsFromLines` makes one task
+  per line in one step. Pasting two or more lines into the field shows "Add N
+  tasks" / "Paste as one task" (200-line cap). Mod+Shift+A, and Mod+N in a
+  view with no field, open the "Add a task" dialog with a list picker (open
+  list, else default list, else Inbox; Today gives today's date), and the
+  palette has "Add a task to…". The toast ("Added to …", with Undo) is in
+  `commands.ts` (`quickAddTask`, `quickAddLines`).
+
 ### Accessibility and loading (M8)
 
 - **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)

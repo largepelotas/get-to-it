@@ -3,13 +3,15 @@ import { isDateKey, isTimeString, todayKey } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { keyBetween } from '@/lib/order';
 import { parseQuickAdd } from '@/lib/quickAdd';
+import type { ReminderSpec } from '@/lib/reminders';
 import { firstOccurrence, nextDueDate, sanitizeRecurrence, skipDueDate } from '@/lib/recurrence';
 import { docFromText, docToPlainText, isDocEmpty, parseDoc, type RichNode } from '@/lib/richText';
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
 import { depthOf, descendantIds, MAX_DEPTH, subtreeHeight } from '../tree';
 import { itemIndex, keyAt, listItems, siblings } from './helpers';
-import { clearSnoozes } from './reminders';
+import { liveTodoLists } from '../sidebar';
+import { clearSnoozes, insertReminder } from './reminders';
 
 export interface NewItem {
   text: string;
@@ -91,9 +93,57 @@ export function createItem(listId: string, input: NewItem): string | null {
   return commit('New task', (tx) => insertItem(tx, listId, input));
 }
 
+/** What typed text turns into: where it goes, the task's fields and an optional reminder. */
+interface Prepared {
+  listId: string;
+  input: NewItem;
+  reminder: ReminderSpec | null;
+}
+
+function prepareFromText(
+  listId: string,
+  raw: string,
+  place: Pick<NewItem, 'parentId' | 'after'>,
+  defaultDue: string | null,
+): Prepared | null {
+  if (!raw.trim()) return null;
+  const { settings, tables } = useData.getState();
+  if (!settings.parseDates) {
+    return { listId, input: { text: raw, dueDate: defaultDue, ...place }, reminder: null };
+  }
+  // `#List` only applies to a plain add; a subtask or an insert at a spot stays where it is.
+  const plain = !place.parentId && place.after === undefined;
+  const parsed = parseQuickAdd(raw, new Date(), {
+    lists: plain ? liveTodoLists(tables) : [],
+    defaultDue,
+  });
+  const dueDate = parsed.dueDate ?? defaultDue;
+  // A relative reminder counts from the due date, so it needs one.
+  const reminder = parsed.reminder?.kind === 'relative' && !dueDate ? null : parsed.reminder;
+  return {
+    listId: parsed.listId ?? listId,
+    input: {
+      text: parsed.text,
+      dueDate,
+      dueTime: parsed.dueTime,
+      recurrence: parsed.recurrence,
+      priority: parsed.priority,
+      ...place,
+    },
+    reminder,
+  };
+}
+
+function insertPrepared(tx: Tx, p: Prepared): string {
+  const id = insertItem(tx, p.listId, p.input);
+  if (p.reminder) insertReminder(tx, id, p.reminder);
+  return id;
+}
+
 /**
- * Adds a task from typed text. Dates, repeats and priority are read out of
- * the text when the "parse dates" setting is on.
+ * Adds a task from typed text. Dates, repeats, priority, `#List` and `!`
+ * reminders are read out of the text when the "parse dates" setting is on.
+ * The task and its reminder are one undo step.
  */
 export function createItemFromText(
   listId: string,
@@ -102,19 +152,22 @@ export function createItemFromText(
   /** The due date to use when the text doesn't give one (e.g. today, in the Today view). */
   defaultDue: string | null = null,
 ): string | null {
-  if (!raw.trim()) return null;
-  if (!useData.getState().settings.parseDates) {
-    return createItem(listId, { text: raw, dueDate: defaultDue, ...place });
-  }
-  const { text, dueDate, dueTime, recurrence, priority } = parseQuickAdd(raw);
-  return createItem(listId, {
-    text,
-    dueDate: dueDate ?? defaultDue,
-    dueTime,
-    recurrence,
-    priority,
-    ...place,
-  });
+  const prepared = prepareFromText(listId, raw, place, defaultDue);
+  if (!prepared) return null;
+  return commit('New task', (tx) => insertPrepared(tx, prepared));
+}
+
+/** Adds one task per line, in order, as a single undo step. Returns the new ids. */
+export function createItemsFromLines(
+  listId: string,
+  lines: string[],
+  defaultDue: string | null = null,
+): string[] {
+  const prepared = lines.flatMap((line) => prepareFromText(listId, line, {}, defaultDue) ?? []);
+  if (!prepared.length) return [];
+  return commit(prepared.length === 1 ? 'New task' : 'New tasks', (tx) =>
+    prepared.map((p) => insertPrepared(tx, p)),
+  );
 }
 
 export function setItemText(id: string, text: string): void {

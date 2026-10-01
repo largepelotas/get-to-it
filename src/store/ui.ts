@@ -11,6 +11,7 @@ export type View =
 
 export type DialogState =
   | { kind: 'newList'; folderId: string | null; type?: ListType }
+  | { kind: 'quickAdd' }
   | { kind: 'settings' }
   | { kind: 'palette' }
   | { kind: 'shortcuts' }

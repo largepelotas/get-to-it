@@ -13,6 +13,8 @@ import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
 import { copyText, notify, requestNotificationPermission } from './platform';
 import { clearChecked, uncheckAll } from './store/actions/grocery';
 import {
+  createItemFromText,
+  createItemsFromLines,
   deleteItems,
   duplicateItem,
   moveItemToList,
@@ -216,6 +218,49 @@ export function moveTaskToList(id: string, listId: string): void {
     useUI.setState({ selectedItemId: null, detailsOpen: false, duePickerFor: null });
   }
   toastWithUndo(`Moved to ${list.title}`);
+}
+
+/**
+ * Toasts after quick add, and asks for notification permission if a reminder
+ * was set. Stays quiet when the tasks went to `fieldListId`, the list the
+ * field belongs to, unless `announce` is set (the dialog always confirms).
+ */
+function afterQuickAdd(ids: string[], fieldListId: string, announce: boolean): void {
+  const { items, lists, reminders } = useData.getState().tables;
+  const made = ids.filter((id) => items[id]);
+  if (!made.length) return;
+  if (Object.values(reminders).some((r) => made.includes(r.itemId))) {
+    void requestNotificationPermission();
+  }
+  const destinations = [...new Set(made.map((id) => items[id].listId))];
+  if (!announce && destinations.every((id) => id === fieldListId)) return;
+  const where = destinations.length === 1 ? lists[destinations[0]]?.title : undefined;
+  const what = made.length === 1 ? 'Added' : `Added ${made.length} tasks`;
+  toastWithUndo(where ? `${what} to ${where}` : what);
+}
+
+/** Adds a task from quick-add text; a `#List` in it may file it elsewhere, which a toast says. */
+export function quickAddTask(
+  listId: string,
+  raw: string,
+  { defaultDue = null, announce = false }: { defaultDue?: string | null; announce?: boolean } = {},
+): boolean {
+  const id = createItemFromText(listId, raw, {}, defaultDue);
+  if (!id) return false;
+  afterQuickAdd([id], listId, announce);
+  return true;
+}
+
+/** Adds one task per pasted line, as one undo step. */
+export function quickAddLines(
+  listId: string,
+  lines: string[],
+  { defaultDue = null, announce = false }: { defaultDue?: string | null; announce?: boolean } = {},
+): boolean {
+  const ids = createItemsFromLines(listId, lines, defaultDue);
+  if (!ids.length) return false;
+  afterQuickAdd(ids, listId, announce);
+  return true;
 }
 
 /** Copies a task and its subtasks, and selects the copy. */

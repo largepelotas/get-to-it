@@ -5,6 +5,7 @@ export const SHORTCUTS = {
   palette: 'Mod+K',
   search: 'Mod+F',
   newTask: 'Mod+N',
+  quickAddDialog: 'Mod+Shift+A',
   newList: 'Mod+Shift+N',
   today: 'Mod+1',
   upcoming: 'Mod+2',
@@ -35,7 +36,8 @@ export const SHORTCUT_HELP: { title: string; entries: ShortcutHelp[] }[] = [
     title: 'Everywhere',
     entries: [
       { keys: [SHORTCUTS.palette], label: 'Search and run commands' },
-      { keys: [SHORTCUTS.newTask], label: 'Add a task or item to the open list' },
+      { keys: [SHORTCUTS.newTask], label: 'Add a task or item to the open list (or any list)' },
+      { keys: [SHORTCUTS.quickAddDialog], label: 'Add a task to any list' },
       { keys: [SHORTCUTS.newList], label: 'New list' },
       { keys: [SHORTCUTS.today], label: 'Go to Today' },
       { keys: [SHORTCUTS.upcoming], label: 'Go to Upcoming' },

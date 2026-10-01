@@ -27,7 +27,7 @@ import { colorVar } from '@/lib/theme';
 import { closeAsWontDo, duplicateTask, moveTaskToList, skipTask } from '@/commands';
 import { setDue, setPriority } from '@/store/actions/items';
 import { useData } from '@/store/data';
-import { sidebarModel } from '@/store/sidebar';
+import { liveTodoLists } from '@/store/sidebar';
 import { pickDueDate } from '@/store/ui';
 import { PRIORITIES, PRIORITY_COLOR } from './priority';
 
@@ -95,16 +95,13 @@ function dueEntries(item: Item): MenuEntries {
 /** Every live to-do list, in the order the sidebar shows them. */
 function moveToEntries(item: Item): MenuEntries {
   const { lists, folders } = useData.getState().tables;
-  const model = sidebarModel({ lists, folders });
-  return [...model.unfiled, ...model.folders.flatMap((f) => f.lists)]
-    .filter((list) => list.type === 'todo')
-    .map((list): MenuEntry => ({
-      label: list.title,
-      icon: <ListIcon type="todo" color={list.color} className={icon} />,
-      checked: item.listId === list.id,
-      disabled: item.listId === list.id,
-      onSelect: () => moveTaskToList(item.id, list.id),
-    }));
+  return liveTodoLists({ lists, folders }).map((list): MenuEntry => ({
+    label: list.title,
+    icon: <ListIcon type="todo" color={list.color} className={icon} />,
+    checked: item.listId === list.id,
+    disabled: item.listId === list.id,
+    onSelect: () => moveTaskToList(item.id, list.id),
+  }));
 }
 
 /** The right-click menu of a task. */

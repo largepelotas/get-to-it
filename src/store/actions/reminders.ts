@@ -1,11 +1,10 @@
 import type { Reminder } from '@/data/types';
 import { newId } from '@/lib/id';
-import { fireTime, snoozeUntil, type SnoozeChoice } from '@/lib/reminders';
+import { fireTime, snoozeUntil, type ReminderSpec, type SnoozeChoice } from '@/lib/reminders';
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
 
-export type ReminderSpec =
-  { kind: 'relative'; offsetMinutes: number } | { kind: 'absolute'; at: number };
+export type { ReminderSpec };
 
 const allDayTime = () => useData.getState().settings.allDayReminderTime;
 
@@ -13,32 +12,39 @@ export function itemReminders(tx: Tx, itemId: string): Reminder[] {
   return tx.all('reminders').filter((r) => r.itemId === itemId);
 }
 
-/** Adds a reminder to a task. An identical one isn't added twice. Returns its id. */
-export function addReminder(itemId: string, spec: ReminderSpec): string | null {
+/**
+ * Adds a reminder inside an existing transaction. An identical one isn't
+ * added twice. Returns its id, or null if the task is missing or the time is invalid.
+ */
+export function insertReminder(tx: Tx, itemId: string, spec: ReminderSpec): string | null {
   const offset = spec.kind === 'relative' ? Math.max(0, Math.round(spec.offsetMinutes)) : null;
   const at = spec.kind === 'absolute' ? spec.at : null;
   if (at !== null && !Number.isFinite(at)) return null;
-  return commit('Add reminder', (tx) => {
-    if (!tx.get('items', itemId)) return null;
-    const same = itemReminders(tx, itemId).find(
-      (r) => r.kind === spec.kind && r.offsetMinutes === offset && r.at === at,
-    );
-    if (same) return same.id;
-    const reminder: Reminder = {
-      id: newId(),
-      itemId,
-      kind: spec.kind,
-      offsetMinutes: offset,
-      at,
-      firedFor: null,
-      dismissedFor: null,
-      snoozedUntil: null,
-      createdAt: tx.now,
-      updatedAt: tx.now,
-    };
-    tx.put('reminders', reminder);
-    return reminder.id;
-  });
+  if (offset !== null && !Number.isFinite(offset)) return null;
+  if (!tx.get('items', itemId)) return null;
+  const same = itemReminders(tx, itemId).find(
+    (r) => r.kind === spec.kind && r.offsetMinutes === offset && r.at === at,
+  );
+  if (same) return same.id;
+  const reminder: Reminder = {
+    id: newId(),
+    itemId,
+    kind: spec.kind,
+    offsetMinutes: offset,
+    at,
+    firedFor: null,
+    dismissedFor: null,
+    snoozedUntil: null,
+    createdAt: tx.now,
+    updatedAt: tx.now,
+  };
+  tx.put('reminders', reminder);
+  return reminder.id;
+}
+
+/** Adds a reminder to a task. An identical one isn't added twice. Returns its id. */
+export function addReminder(itemId: string, spec: ReminderSpec): string | null {
+  return commit('Add reminder', (tx) => insertReminder(tx, itemId, spec));
 }
 
 export function removeReminder(id: string): void {

@@ -3,6 +3,10 @@ import { addDaysKey, formatDue, formatTimestamp, todayKey, toTimestamp } from '.
 
 const MINUTE = 60_000;
 
+/** A reminder to add: some minutes before the due moment, or at a fixed time (epoch ms). */
+export type ReminderSpec =
+  { kind: 'relative'; offsetMinutes: number } | { kind: 'absolute'; at: number };
+
 /**
  * Where a reminder stands for its current fire time. Fired and dismissed
  * are stored per fire time, so when the time moves (a repeating task was
