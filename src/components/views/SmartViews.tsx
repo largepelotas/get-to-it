@@ -116,13 +116,27 @@ export function TodayView() {
     sections.push({ key: 'Today', title: 'Today', rows: dueToday, timeOnly: true });
   }
 
+  const count = overdue.length + dueToday.length;
+
   return (
     <SmartLayout
       header={
         <ViewHeader
           icon={<Sun className="size-6" style={{ color: colorVar('amber') }} />}
           title="Today"
-          subtitle={formatLongDate(today)}
+          subtitle={
+            <>
+              {formatLongDate(today)}
+              {count > 0 && (
+                <>
+                  <span aria-hidden> · </span>
+                  <span className="text-fg-subtle">
+                    {count === 1 ? '1 task' : `${count} tasks`}
+                  </span>
+                </>
+              )}
+            </>
+          }
         />
       }
       defaultDue={today}

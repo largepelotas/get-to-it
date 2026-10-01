@@ -1,11 +1,13 @@
 import clsx from 'clsx';
-import { Check } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import type { Priority } from '@/data/types';
 import { colorVar } from '@/lib/theme';
 import { PRIORITY_COLOR } from './priority';
 
 export interface CheckboxProps {
   checked: boolean;
+  /** Closed without being done: a cross instead of a tick. */
+  wontDo?: boolean;
   onChange: (checked: boolean) => void;
   /** Accessible name, e.g. the task text. */
   label: string;
@@ -22,6 +24,7 @@ export interface CheckboxProps {
  */
 export function Checkbox({
   checked,
+  wontDo = false,
   onChange,
   label,
   priority = 0,
@@ -41,12 +44,19 @@ export function Checkbox({
       onClick={() => onChange(!checked)}
       className={clsx(
         'flex size-4 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors disabled:opacity-50',
-        checked ? 'border-accent bg-accent text-accent-fg' : 'border-line-control hover:bg-hover',
+        checked && wontDo && 'border-fg-subtle bg-fg-subtle text-surface',
+        checked && !wontDo && 'border-accent bg-accent text-accent-fg',
+        !checked && 'border-line-control hover:bg-hover',
         className,
       )}
       style={!checked && color ? { borderColor: color } : undefined}
     >
-      {checked && <Check aria-hidden strokeWidth={3} className="size-2.5" />}
+      {checked &&
+        (wontDo ? (
+          <X aria-hidden strokeWidth={3} className="size-2.5" />
+        ) : (
+          <Check aria-hidden strokeWidth={3} className="size-2.5" />
+        ))}
     </button>
   );
 }

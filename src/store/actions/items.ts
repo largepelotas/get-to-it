@@ -3,7 +3,7 @@ import { isDateKey, isTimeString, todayKey } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { keyBetween } from '@/lib/order';
 import { parseQuickAdd } from '@/lib/quickAdd';
-import { firstOccurrence, nextDueDate, sanitizeRecurrence } from '@/lib/recurrence';
+import { firstOccurrence, nextDueDate, sanitizeRecurrence, skipDueDate } from '@/lib/recurrence';
 import { docFromText, docToPlainText, isDocEmpty, parseDoc, type RichNode } from '@/lib/richText';
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
@@ -47,7 +47,9 @@ function keyAfter(
 function reopenAncestors(tx: Tx, item: Item): void {
   let parent = tx.get('items', item.parentId);
   for (let guard = 0; parent && guard < 50; guard++) {
-    if (parent.checked) tx.update('items', parent.id, { checked: false, completedAt: null });
+    if (parent.checked) {
+      tx.update('items', parent.id, { checked: false, wontDo: false, completedAt: null });
+    }
     parent = tx.get('items', parent.parentId);
   }
 }
@@ -61,6 +63,7 @@ export function insertItem(tx: Tx, listId: string, input: NewItem): string {
     parentId,
     text: input.text.trim(),
     checked: false,
+    wontDo: false,
     completedAt: null,
     sortKey: keyAfter(tx, listId, parentId, input.after),
     collapsed: false,
@@ -228,7 +231,7 @@ function completeOccurrence(tx: Tx, item: Item): string {
   clearSnoozes(tx, item.id);
   for (const childId of descendantIds(itemIndex(tx, item.listId), item.id)) {
     if (tx.get('items', childId)?.checked) {
-      tx.update('items', childId, { checked: false, completedAt: null });
+      tx.update('items', childId, { checked: false, wontDo: false, completedAt: null });
     }
   }
   return next;
@@ -251,17 +254,50 @@ export function setChecked(id: string, checked: boolean): string | null {
     if (!item || item.checked === checked) return null;
     if (checked && item.recurrence) return completeOccurrence(tx, item);
     if (checked) {
-      tx.update('items', id, { checked: true, completedAt: tx.now });
+      tx.update('items', id, { checked: true, wontDo: false, completedAt: tx.now });
       for (const childId of descendantIds(itemIndex(tx, item.listId), id)) {
         if (!tx.get('items', childId)?.checked) {
-          tx.update('items', childId, { checked: true, completedAt: tx.now });
+          tx.update('items', childId, { checked: true, wontDo: false, completedAt: tx.now });
         }
       }
     } else {
-      tx.update('items', id, { checked: false, completedAt: null });
+      tx.update('items', id, { checked: false, wontDo: false, completedAt: null });
       reopenAncestors(tx, item);
     }
     return null;
+  });
+}
+
+/**
+ * Skips one occurrence of an open repeating task: the due date moves to the
+ * next one after the current date (and not before today, if it's overdue). Nothing is recorded as done. Returns the
+ * new date, or null if the task doesn't repeat.
+ */
+export function skipOccurrence(id: string): string | null {
+  return commit('Skip occurrence', (tx) => {
+    const item = tx.get('items', id);
+    if (!item || item.deletedAt || item.checked || !item.recurrence || !item.dueDate) return null;
+    const next = skipDueDate(item.recurrence, item.dueDate, todayKey(new Date(tx.now)));
+    tx.update('items', id, { dueDate: next });
+    clearSnoozes(tx, id);
+    return next;
+  });
+}
+
+/**
+ * Closes an open, non-repeating task (and its open subtasks) without doing
+ * it. It sits in the Completed section like a finished task.
+ */
+export function setWontDo(id: string): void {
+  commit("Won't do", (tx) => {
+    const item = tx.get('items', id);
+    if (!item || item.deletedAt || item.checked || item.recurrence) return;
+    tx.update('items', id, { checked: true, wontDo: true, completedAt: tx.now });
+    for (const childId of descendantIds(itemIndex(tx, item.listId), id)) {
+      if (!tx.get('items', childId)?.checked) {
+        tx.update('items', childId, { checked: true, wontDo: true, completedAt: tx.now });
+      }
+    }
   });
 }
 
@@ -361,5 +397,58 @@ export function moveItem(id: string, parentId: string | null, after: string | nu
       tx.update('items', parentId, { collapsed: false });
     }
     if (!moved.checked) reopenAncestors(tx, moved);
+  });
+}
+
+/**
+ * Moves a task and its subtasks to another to-do list. The task becomes a
+ * top-level task at the end of that list; its subtasks stay under it.
+ */
+export function moveItemToList(id: string, listId: string): void {
+  commit('Move task', (tx) => {
+    const item = tx.get('items', id);
+    const target = tx.get('lists', listId);
+    if (!item || item.deletedAt || item.listId === listId) return;
+    if (!target || target.type !== 'todo' || target.archivedAt || target.deletedAt) return;
+    const subtasks = descendantIds(itemIndex(tx, item.listId), id);
+    tx.update('items', id, {
+      listId,
+      parentId: null,
+      sortKey: keyAfter(tx, listId, null, undefined),
+    });
+    for (const childId of subtasks) tx.update('items', childId, { listId });
+  });
+}
+
+/**
+ * Copies a task and its subtasks into the same list, right after the
+ * original. Every copy is open. Reminders and completions aren't copied, so
+ * the copy doesn't notify twice. Returns the new task's id.
+ */
+export function duplicateItem(id: string): string | null {
+  return commit('Duplicate task', (tx) => {
+    const item = tx.get('items', id);
+    if (!item || item.deletedAt) return null;
+    const subtasks = descendantIds(itemIndex(tx, item.listId), id);
+    const ids = new Map([id, ...subtasks].map((oldId) => [oldId, newId()]));
+    for (const oldId of [id, ...subtasks]) {
+      const source = tx.get('items', oldId);
+      if (!source) continue;
+      const isTop = oldId === id;
+      tx.put('items', {
+        ...source,
+        id: ids.get(oldId)!,
+        parentId: isTop ? item.parentId : (ids.get(source.parentId ?? '') ?? null),
+        sortKey: isTop ? keyAfter(tx, item.listId, item.parentId, id) : source.sortKey,
+        checked: false,
+        wontDo: false,
+        completedAt: null,
+        createdAt: tx.now,
+        updatedAt: tx.now,
+      });
+    }
+    const copy = tx.get('items', ids.get(id))!;
+    reopenAncestors(tx, copy);
+    return copy.id;
   });
 }

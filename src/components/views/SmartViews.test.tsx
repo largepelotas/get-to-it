@@ -1,11 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '@/App';
 import { MemoryRepository } from '@/data/memory';
 import type { Item } from '@/data/types';
 import { addDaysKey, todayKey } from '@/lib/dates';
-import { createItem } from '@/store/actions/items';
+import { createItem, setChecked } from '@/store/actions/items';
 import { createList } from '@/store/actions/lists';
 import { resetForTests, setSetting, useData } from '@/store/data';
 import { navigate, openList, useUI } from '@/store/ui';
@@ -163,5 +163,53 @@ describe('due-date picker', () => {
     await user.click(within(row('Water plants')).getByRole('button', { name: 'Open details' }));
     const history = within(screen.getByRole('list', { name: 'Completion history' }));
     expect(history.getAllByRole('listitem')).toHaveLength(1);
+  });
+});
+
+describe('Today count', () => {
+  it('says how many tasks are listed, overdue and due today, open only', () => {
+    createItem(work, { text: 'Late report', dueDate: yesterday });
+    createItem(home, { text: 'Call plumber', dueDate: today });
+    createItem(work, { text: 'Water plants', dueDate: today });
+    const done = createItem(work, { text: 'Already done', dueDate: today })!;
+    setChecked(done, true);
+    createItem(work, { text: 'Tomorrow thing', dueDate: tomorrow });
+    render(<App />);
+    expect(screen.getByText('3 tasks')).toBeInTheDocument();
+  });
+
+  it('uses the singular for one task, and shows nothing when there are none', () => {
+    const only = createItem(work, { text: 'Only one', dueDate: today })!;
+    render(<App />);
+    expect(screen.getByText('1 task')).toBeInTheDocument();
+    act(() => setChecked(only, true));
+    expect(screen.queryByText(/\btasks?$/)).not.toBeInTheDocument();
+  });
+
+  it('is only on Today', () => {
+    createItem(work, { text: 'Later', dueDate: tomorrow });
+    navigate({ kind: 'upcoming' });
+    render(<App />);
+    expect(screen.queryByText(/\d+ tasks?/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Duplicate from Today', () => {
+  it('focuses the copy there and leaves nothing pending for a list view', async () => {
+    createItem(work, { text: 'Report', dueDate: today });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.pointer({ keys: '[MouseRight]', target: row('Report') });
+    await user.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
+    const copy = allItems().find((i) => i.text === 'Report' && i.id !== find('Report').id)!;
+    const rows = screen.getAllByRole('listitem', { name: 'Report' });
+    expect(rows).toHaveLength(2);
+    expect(useUI.getState().selectedItemId).toBe(copy.id);
+    expect(useUI.getState().reveal).toBeNull();
+    expect(document.activeElement).toHaveAttribute('data-item-id', copy.id);
+
+    // Opening a list afterwards doesn't pull focus anywhere.
+    await user.click(screen.getByRole('button', { name: /^Work/ }));
+    expect(screen.getByRole('button', { name: /^Work/ })).toHaveFocus();
   });
 });

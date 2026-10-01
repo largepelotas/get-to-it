@@ -27,6 +27,26 @@ describe('matchesShortcut', () => {
   });
 });
 
+const BACKSLASH = '\\';
+
+describe('the backslash shortcut', () => {
+  it('matches the backslash key with Mod on both platforms', () => {
+    expect(matchesShortcut(key(BACKSLASH, { meta: true }), `Mod+${BACKSLASH}`, true)).toBe(true);
+    expect(matchesShortcut(key(BACKSLASH, { ctrl: true }), `Mod+${BACKSLASH}`, true)).toBe(false);
+    expect(matchesShortcut(key(BACKSLASH, { ctrl: true }), `Mod+${BACKSLASH}`, false)).toBe(true);
+    expect(matchesShortcut(key(BACKSLASH, { meta: true }), `Mod+${BACKSLASH}`, false)).toBe(false);
+    // Shift turns it into a pipe, which is a different shortcut.
+    expect(matchesShortcut(key('|', { ctrl: true, shift: true }), `Mod+${BACKSLASH}`, false)).toBe(
+      false,
+    );
+  });
+
+  it('is shown as a backslash', () => {
+    expect(formatShortcut(`Mod+${BACKSLASH}`, true)).toBe('⌘' + BACKSLASH);
+    expect(formatShortcut(`Mod+${BACKSLASH}`, false)).toBe('Ctrl+' + BACKSLASH);
+  });
+});
+
 describe('formatShortcut', () => {
   it('uses symbols on macOS and names elsewhere', () => {
     expect(formatShortcut('Mod+Shift+Z', true)).toBe('⌘⇧Z');

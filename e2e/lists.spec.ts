@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { addTasks, openApp, openList, row, sidebar, sidebarButton } from './helpers';
+import {
+  addTasks,
+  expectAccessible,
+  openApp,
+  openList,
+  row,
+  sidebar,
+  sidebarButton,
+} from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await openApp(page);
@@ -56,4 +64,36 @@ test('archives a list, which then opens read-only', async ({ page }) => {
   await page.getByRole('button', { name: /Inbox/ }).first().click();
   await expect(page.getByText('This list is archived.')).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Add a task' })).toHaveCount(0);
+});
+
+test('hides and shows the sidebar, and remembers it after a reload', async ({ page }) => {
+  const nav = page.getByRole('complementary', { name: 'Sidebar' });
+  await expect(nav).toBeVisible();
+
+  await page.getByRole('button', { name: 'Hide sidebar' }).click();
+  await expect(nav).toBeHidden();
+  const show = page.getByRole('button', { name: 'Show sidebar' });
+  await expect(show).toBeFocused();
+  // Close the button's tooltip, which sits outside the page's landmarks.
+  await page.keyboard.press('Escape');
+  await expectAccessible(page);
+
+  await page.reload();
+  await expect(show).toBeVisible();
+  await expect(nav).toBeHidden();
+
+  await page.keyboard.press('ControlOrMeta+Backslash');
+  await expect(nav).toBeVisible();
+  await expect(show).toBeHidden();
+  await page.keyboard.press('ControlOrMeta+Backslash');
+  await expect(nav).toBeHidden();
+  await show.click();
+  await expect(nav).toBeVisible();
+});
+
+test('the Show sidebar button clears the view header', async ({ page }) => {
+  await page.getByRole('button', { name: 'Hide sidebar' }).click();
+  const button = await page.getByRole('button', { name: 'Show sidebar' }).boundingBox();
+  const title = await page.getByRole('heading', { level: 1 }).boundingBox();
+  expect(button!.y + button!.height).toBeLessThanOrEqual(title!.y);
 });

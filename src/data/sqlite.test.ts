@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import { SqliteRepository, type SqlExecutor } from './sqlite';
+import { MIGRATIONS, SqliteRepository, type SqlExecutor } from './sqlite';
 import { emptyTables, type Item, type List } from './types';
 
 // node:sqlite mirrors the Rust executor: the same SQL, run in a transaction.
@@ -50,6 +50,7 @@ const item: Item = {
   parentId: null,
   text: 'Write plan',
   checked: false,
+  wontDo: false,
   completedAt: null,
   sortKey: 'a0',
   collapsed: false,
@@ -71,7 +72,34 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.items).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(1);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(2);
+  });
+
+  it('adds the won’t-do column to a database made before it existed', async () => {
+    const exec = nodeExecutor();
+    // A version 1 database, as the first release made it.
+    const [first] = MIGRATIONS;
+    exec.raw.exec('BEGIN');
+    for (const sql of first) exec.raw.exec(sql);
+    exec.raw.exec('PRAGMA user_version = 1');
+    exec.raw.exec('COMMIT');
+    exec.raw.exec(
+      `INSERT INTO items (id, list_id, text, checked, sort_key, created_at, updated_at)
+       VALUES ('OLD', 'L1', 'Old task', 1, 'a0', 1, 1)`,
+    );
+    const data = await new SqliteRepository(exec).load();
+    expect(data.tables.items.OLD).toMatchObject({ checked: true, wontDo: false });
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
+  });
+
+  it('keeps a task closed as won’t do', async () => {
+    const exec = nodeExecutor();
+    const repo = new SqliteRepository(exec);
+    await repo.write([
+      { kind: 'put', table: 'items', row: { ...item, checked: true, wontDo: true } },
+    ]);
+    const data = await new SqliteRepository(exec).load();
+    expect(data.tables.items.I1).toMatchObject({ checked: true, wontDo: true });
   });
 
   it('round-trips rows and settings', async () => {

@@ -23,7 +23,7 @@ export function describeRow(
 ): string {
   const { item, childCount, doneCount } = row;
   const parts: string[] = [];
-  if (item.checked) parts.push('Completed');
+  if (item.checked) parts.push(item.wontDo ? "Won't do" : 'Completed');
   if (item.dueDate) {
     const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
     parts.push(`Due ${formatDue(item.dueDate, item.dueTime)}${overdue ? ', overdue' : ''}`);

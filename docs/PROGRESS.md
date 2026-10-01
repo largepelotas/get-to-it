@@ -580,6 +580,16 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   (the last three only in the desktop app). The sidebar's settings menu
   has Keyboard shortcuts, and list menus have Copy as Markdown.
 
+- Everyday fixes (after M8): the task menu has Move to (any live to-do
+  list; Undo toast), Duplicate and Won't do (a closed task sits in Completed
+  with a cross instead of a tick; `Item.wontDo`, SQLite migration 2), and the
+  Due date submenu has Skip this time for repeating tasks (also a button in
+  the details panel). The due date on a row opens the picker. Today shows how
+  many tasks it lists. ⌘\/Ctrl+\ hides the sidebar (`settings.sidebarHidden`,
+  also in the palette and the sidebar's "…" menu); the main pane then shows a
+  "Show sidebar" button (on macOS in its own drag strip, clear of the
+  traffic lights).
+
 ### Accessibility and loading (M8)
 
 - **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)
@@ -839,10 +849,11 @@ From M4:
 
 From M3:
 
-- There's no "skip this occurrence" for repeating tasks; set the next date
-  in the picker instead.
-- The due date on a row isn't clickable; change it from the row menu or
+- ~~There's no "skip this occurrence" for repeating tasks; set the next date
+  in the picker instead.~~ Done: "Skip this time" in the Due date menu and
   the details panel.
+- ~~The due date on a row isn't clickable; change it from the row menu or
+  the details panel.~~ Done: it opens the due-date picker.
 - Today/Upcoming order tasks from different lists by list `sortKey`, which
   only matches the sidebar within one folder.
 - ~~No keyboard shortcut opens the due-date picker yet.~~ Done in M7: ⌘D/Ctrl+D.

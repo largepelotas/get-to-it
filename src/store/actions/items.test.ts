@@ -2,22 +2,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRepository } from '@/data/memory';
 import { setSetting, resetForTests, undo, useData } from '../data';
 import { todoModel } from '../todo';
-import { createList } from './lists';
+import { archiveList, createList, deleteList } from './lists';
+import { addReminder, snoozeReminder } from './reminders';
 import {
   createItem,
   createItemFromText,
   deleteItems,
+  duplicateItem,
   indentItem,
   itemNotesText,
   moveItem,
   moveItemBy,
+  moveItemToList,
   outdentItem,
   setChecked,
   setDue,
   setDueTime,
+  setItemCollapsed,
   setItemNotes,
   setItemText,
   setRecurrence,
+  setWontDo,
+  skipOccurrence,
 } from './items';
 
 let list: string;
@@ -339,5 +345,274 @@ describe('repeating tasks', () => {
     setChecked(a, true);
     expect(item(a1)).toMatchObject({ checked: true, dueDate: '2026-09-30' });
     expect(completions()).toHaveLength(0);
+  });
+});
+
+describe('moving to another list', () => {
+  let other: string;
+  beforeEach(() => {
+    other = createList({ type: 'todo', title: 'Other' });
+    createItem(other, { text: 'Existing' });
+  });
+  const otherOpen = () => todoModel(items(), other).open.map((r) => `${r.item.text}@${r.depth}`);
+
+  it('moves a task and its subtasks to the end of the other list', () => {
+    const a = add('A');
+    const a1 = add('A1', { parentId: a });
+    add('A2', { parentId: a });
+    add('B');
+    moveItemToList(a, other);
+    expect(open()).toEqual(['B@0']);
+    expect(otherOpen()).toEqual(['Existing@0', 'A@0', 'A1@1', 'A2@1']);
+    expect(item(a1).listId).toBe(other);
+  });
+
+  it('makes a subtask top-level and leaves its old parent alone', () => {
+    const a = add('A');
+    const a1 = add('A1', { parentId: a });
+    moveItemToList(a1, other);
+    expect(item(a1)).toMatchObject({ listId: other, parentId: null });
+    expect(item(a)).toMatchObject({ listId: list, checked: false });
+    expect(open()).toEqual(['A@0']);
+  });
+
+  it('keeps reminders, and finished tasks stay finished', () => {
+    const a = add('A');
+    const r = addReminder(a, { kind: 'absolute', at: 123 })!;
+    setChecked(a, true);
+    moveItemToList(a, other);
+    expect(useData.getState().tables.reminders[r].itemId).toBe(a);
+    expect(item(a)).toMatchObject({ listId: other, checked: true });
+  });
+
+  it('does nothing for the same list, or one that is archived, trashed or not a to-do list', () => {
+    const a = add('A');
+    const archived = createList({ type: 'todo', title: 'Old' });
+    archiveList(archived);
+    const trashed = createList({ type: 'todo', title: 'Gone' });
+    deleteList(trashed);
+    const grocery = createList({ type: 'grocery', title: 'Shop' });
+    const steps = useData.getState().past.length;
+    for (const target of [list, archived, trashed, grocery, 'missing']) moveItemToList(a, target);
+    moveItemToList('missing', other);
+    expect(item(a).listId).toBe(list);
+    expect(useData.getState().past.length).toBe(steps);
+  });
+
+  it('undoes in one step', () => {
+    const a = add('A');
+    const a1 = add('A1', { parentId: a });
+    moveItemToList(a, other);
+    expect(useData.getState().past.at(-1)?.label).toBe('Move task');
+    undo();
+    expect(item(a)).toMatchObject({ listId: list, parentId: null });
+    expect(item(a1)).toMatchObject({ listId: list, parentId: a });
+  });
+});
+
+describe('duplicating', () => {
+  it('copies a task with its subtasks right after the original', () => {
+    const a = createItem(list, {
+      text: 'A',
+      dueDate: '2026-10-02',
+      dueTime: '09:00',
+      priority: 2,
+      recurrence: { freq: 'daily', interval: 1, mode: 'schedule' },
+    })!;
+    setItemNotes(a, 'Some notes');
+    const a1 = add('A1', { parentId: a });
+    setItemCollapsed(a, true);
+    const b = add('B');
+    const copy = duplicateItem(a)!;
+    expect(item(copy)).toMatchObject({
+      text: 'A',
+      details: item(a).details,
+      dueDate: '2026-10-02',
+      dueTime: '09:00',
+      priority: 2,
+      recurrence: { freq: 'daily', interval: 1, mode: 'schedule' },
+      collapsed: true,
+      parentId: null,
+      checked: false,
+    });
+    expect(
+      todoModel(items(), list)
+        .open.filter((r) => r.depth === 0)
+        .map((r) => r.item.id),
+    ).toEqual([a, copy, b]);
+    const copyChild = Object.values(items()).find((i) => i.parentId === copy)!;
+    expect(copyChild).toMatchObject({ text: 'A1', listId: list });
+    expect(copyChild.id).not.toBe(a1);
+  });
+
+  it('puts a copy of a subtask among its siblings', () => {
+    const a = add('A');
+    const a1 = add('A1', { parentId: a });
+    add('A2', { parentId: a });
+    const copy = duplicateItem(a1)!;
+    expect(item(copy).parentId).toBe(a);
+    expect(open()).toEqual(['A@0', 'A1@1', 'A1@1', 'A2@1']);
+  });
+
+  it('opens every copy, and leaves reminders and completions behind', () => {
+    const a = add('A');
+    const a1 = add('A1', { parentId: a });
+    addReminder(a, { kind: 'absolute', at: 123 });
+    setChecked(a, true);
+    const copy = duplicateItem(a)!;
+    const copies = Object.values(items()).filter((i) => i.id !== a && i.id !== a1);
+    expect(copies).toHaveLength(2);
+    expect(copies.every((i) => !i.checked && !i.wontDo && i.completedAt === null)).toBe(true);
+    expect(item(copy).parentId).toBeNull();
+    expect(Object.keys(useData.getState().tables.reminders)).toHaveLength(1);
+    expect(Object.keys(useData.getState().tables.completions)).toHaveLength(0);
+  });
+
+  it('undoes in one step and ignores missing tasks', () => {
+    const a = add('A');
+    add('A1', { parentId: a });
+    expect(duplicateItem('missing')).toBeNull();
+    duplicateItem(a);
+    expect(useData.getState().past.at(-1)?.label).toBe('Duplicate task');
+    undo();
+    expect(Object.keys(items())).toHaveLength(2);
+  });
+});
+
+describe('skipping an occurrence', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 30, 10, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('moves to the next date after the due date, without recording a completion', () => {
+    const a = createItem(list, {
+      text: 'Water plants',
+      dueDate: '2026-09-20',
+      recurrence: { freq: 'daily', interval: 3, mode: 'schedule' },
+    })!;
+    const a1 = add('Fill can', { parentId: a });
+    setChecked(a1, true);
+    // 20, 23, 26 and 29 are past or today's neighbours; the first on or after today is 2 October.
+    expect(skipOccurrence(a)).toBe('2026-10-02');
+    expect(item(a)).toMatchObject({ dueDate: '2026-10-02', checked: false });
+    // Subtasks stay as they were.
+    expect(item(a1).checked).toBe(true);
+    expect(Object.keys(useData.getState().tables.completions)).toHaveLength(0);
+  });
+
+  it('moves a future task exactly one occurrence, and an overdue one to today or later', () => {
+    const rule = { freq: 'daily', interval: 1, mode: 'schedule' } as const;
+    const future = createItem(list, { text: 'Soon', dueDate: '2026-10-05', recurrence: rule })!;
+    const overdue = createItem(list, { text: 'Late', dueDate: '2026-09-23', recurrence: rule })!;
+    const dueToday = createItem(list, { text: 'Now', dueDate: '2026-09-30', recurrence: rule })!;
+    expect(skipOccurrence(future)).toBe('2026-10-06');
+    expect(skipOccurrence(overdue)).toBe('2026-09-30');
+    expect(skipOccurrence(dueToday)).toBe('2026-10-01');
+  });
+
+  it('counts "after completion" rules from the due date, not today', () => {
+    const a = createItem(list, {
+      text: 'Haircut',
+      dueDate: '2026-09-01',
+      recurrence: { freq: 'weekly', interval: 6, mode: 'completion' },
+    })!;
+    expect(skipOccurrence(a)).toBe('2026-10-13');
+  });
+
+  it('clears snoozes, and undoes in one step', () => {
+    const a = createItem(list, {
+      text: 'Standup',
+      dueDate: '2026-09-30',
+      recurrence: { freq: 'daily', interval: 1, mode: 'schedule' },
+    })!;
+    const r = addReminder(a, { kind: 'relative', offsetMinutes: 0 })!;
+    snoozeReminder(r, '1h');
+    expect(useData.getState().tables.reminders[r].snoozedUntil).not.toBeNull();
+    skipOccurrence(a);
+    expect(useData.getState().tables.reminders[r].snoozedUntil).toBeNull();
+    expect(useData.getState().past.at(-1)?.label).toBe('Skip occurrence');
+    undo();
+    expect(item(a).dueDate).toBe('2026-09-30');
+  });
+
+  it('does nothing for tasks that are finished, don’t repeat or are missing', () => {
+    const rule = { freq: 'daily', interval: 1, mode: 'schedule' } as const;
+    const plain = createItem(list, { text: 'Plain', dueDate: '2026-09-30' })!;
+    const done = createItem(list, { text: 'Done', dueDate: '2026-09-30', recurrence: rule })!;
+    // A finished repeating task can only be a subtask checked with its parent.
+    const parent = add('Parent');
+    const child = createItem(list, {
+      text: 'Child',
+      parentId: parent,
+      dueDate: '2026-09-30',
+      recurrence: rule,
+    })!;
+    setChecked(parent, true);
+    expect(skipOccurrence(plain)).toBeNull();
+    expect(skipOccurrence(child)).toBeNull();
+    expect(skipOccurrence('missing')).toBeNull();
+    expect(skipOccurrence(done)).toBe('2026-10-01');
+    expect(item(plain).dueDate).toBe('2026-09-30');
+    expect(item(child).dueDate).toBe('2026-09-30');
+  });
+});
+
+describe("won't do", () => {
+  it('closes a task and its open subtasks, leaving finished ones as they were', () => {
+    const a = add('A');
+    const a1 = add('A1', { parentId: a });
+    const a2 = add('A2', { parentId: a });
+    setChecked(a2, true);
+    const doneAt = item(a2).completedAt;
+    setWontDo(a);
+    expect(item(a)).toMatchObject({ checked: true, wontDo: true });
+    expect(item(a).completedAt).not.toBeNull();
+    expect(item(a1)).toMatchObject({ checked: true, wontDo: true });
+    expect(item(a2)).toMatchObject({ checked: true, wontDo: false, completedAt: doneAt });
+    const model = todoModel(items(), list);
+    expect(model.open).toHaveLength(0);
+    expect(model.done.map((r) => r.item.text)).toEqual(['A', 'A1', 'A2']);
+    expect(useData.getState().past.at(-1)?.label).toBe("Won't do");
+  });
+
+  it('reopening clears the flag, also on parents that get reopened', () => {
+    const a = add('A');
+    const a1 = add('A1', { parentId: a });
+    setWontDo(a);
+    setChecked(a1, false);
+    expect(item(a1)).toMatchObject({ checked: false, wontDo: false, completedAt: null });
+    expect(item(a)).toMatchObject({ checked: false, wontDo: false, completedAt: null });
+  });
+
+  it('checking a reopened task off sets it as done, not won’t do', () => {
+    const a = add('A');
+    setWontDo(a);
+    setChecked(a, false);
+    setChecked(a, true);
+    expect(item(a)).toMatchObject({ checked: true, wontDo: false });
+  });
+
+  it('is not offered for repeating, finished or missing tasks', () => {
+    const rule = { freq: 'daily', interval: 1, mode: 'schedule' } as const;
+    const r = createItem(list, { text: 'R', dueDate: '2026-10-02', recurrence: rule })!;
+    const d = add('D');
+    setChecked(d, true);
+    const steps = useData.getState().past.length;
+    setWontDo(r);
+    setWontDo(d);
+    setWontDo('missing');
+    expect(item(r)).toMatchObject({ checked: false, wontDo: false });
+    expect(item(d).wontDo).toBe(false);
+    expect(useData.getState().past.length).toBe(steps);
+  });
+
+  it('undoes in one step', () => {
+    const a = add('A');
+    add('A1', { parentId: a });
+    setWontDo(a);
+    undo();
+    expect(Object.values(items()).every((i) => !i.checked && !i.wontDo)).toBe(true);
   });
 });

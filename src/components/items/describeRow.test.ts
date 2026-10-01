@@ -31,6 +31,11 @@ describe('describeRow', () => {
   });
   afterEach(() => vi.useRealTimers());
 
+  it('says a task was closed as won’t do instead of completed', () => {
+    expect(describeRow(row({ checked: true }))).toBe('Completed');
+    expect(describeRow(row({ checked: true, wontDo: true }))).toBe("Won't do");
+  });
+
   it('is empty for a plain task', () => {
     expect(describeRow(row({}))).toBe('');
   });

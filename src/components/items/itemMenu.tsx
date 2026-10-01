@@ -2,25 +2,32 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUp,
+  Ban,
   CalendarDays,
   CalendarSearch,
   CalendarX,
+  Copy,
   Flag,
+  FolderInput,
   IndentDecrease,
   IndentIncrease,
   ListPlus,
   PanelRight,
+  SkipForward,
   Sun,
   Sunrise,
   Trash,
 } from 'lucide-react';
 import { SHORTCUTS } from '@/lib/keymap';
-import type { MenuEntries } from '@/components/ui';
+import { ListIcon } from '@/components/ListIcon';
+import type { MenuEntries, MenuEntry } from '@/components/ui';
 import type { Item } from '@/data/types';
 import { addDaysKey, nextWeekKey, todayKey } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
+import { closeAsWontDo, duplicateTask, moveTaskToList, skipTask } from '@/commands';
 import { setDue, setPriority } from '@/store/actions/items';
 import { useData } from '@/store/data';
+import { sidebarModel } from '@/store/sidebar';
 import { pickDueDate } from '@/store/ui';
 import { PRIORITIES, PRIORITY_COLOR } from './priority';
 
@@ -69,6 +76,13 @@ function dueEntries(item: Item): MenuEntries {
       movesFocus: true,
       onSelect: () => pickDueDate(item.id),
     },
+    !item.checked &&
+      !!item.recurrence &&
+      !!item.dueDate && {
+        label: 'Skip this time',
+        icon: <SkipForward className={icon} />,
+        onSelect: () => skipTask(item.id),
+      },
     !!item.dueDate && { kind: 'separator' },
     !!item.dueDate && {
       label: 'No date',
@@ -76,6 +90,21 @@ function dueEntries(item: Item): MenuEntries {
       onSelect: set(null),
     },
   ];
+}
+
+/** Every live to-do list, in the order the sidebar shows them. */
+function moveToEntries(item: Item): MenuEntries {
+  const { lists, folders } = useData.getState().tables;
+  const model = sidebarModel({ lists, folders });
+  return [...model.unfiled, ...model.folders.flatMap((f) => f.lists)]
+    .filter((list) => list.type === 'todo')
+    .map((list): MenuEntry => ({
+      label: list.title,
+      icon: <ListIcon type="todo" color={list.color} className={icon} />,
+      checked: item.listId === list.id,
+      disabled: item.listId === list.id,
+      onSelect: () => moveTaskToList(item.id, list.id),
+    }));
 }
 
 /** The right-click menu of a task. */
@@ -93,6 +122,12 @@ export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntri
       icon: <ListPlus className={icon} />,
       movesFocus: true,
       onSelect: actions.addSubtask,
+    },
+    {
+      label: 'Duplicate',
+      icon: <Copy className={icon} />,
+      movesFocus: true,
+      onSelect: () => duplicateTask(item.id),
     },
     {
       kind: 'sub',
@@ -113,6 +148,18 @@ export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntri
         onSelect: () => setPriority(item.id, p),
       })),
     },
+    {
+      kind: 'sub',
+      label: 'Move to',
+      icon: <FolderInput className={icon} />,
+      entries: moveToEntries(item),
+    },
+    !item.checked &&
+      !item.recurrence && {
+        label: "Won't do",
+        icon: <Ban className={icon} />,
+        onSelect: () => closeAsWontDo(item.id),
+      },
     actions.goToList && {
       label: 'Go to list',
       icon: <ArrowRight className={icon} />,

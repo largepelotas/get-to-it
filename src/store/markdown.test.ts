@@ -3,7 +3,7 @@ import { MemoryRepository } from '@/data/memory';
 import { DEFAULT_GROCERY_CATEGORIES } from '@/data/types';
 import { docFromText } from '@/lib/richText';
 import { createFolder } from './actions/folders';
-import { createItem, setChecked, setItemNotes } from './actions/items';
+import { createItem, setChecked, setItemNotes, setWontDo } from './actions/items';
 import { archiveList, createList, deleteList, moveListToFolder } from './actions/lists';
 import { setNoteContent } from './actions/notes';
 import { resetForTests, useData } from './data';
@@ -45,6 +45,16 @@ describe('listToMarkdown', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  it('strikes through tasks closed as won’t do', () => {
+    const list = createList({ type: 'todo', title: 'Work' });
+    const a = createItem(list, { text: 'Skip it', dueDate: '2026-10-02' })!;
+    const b = createItem(list, { text: 'Did it' })!;
+    setWontDo(a);
+    setChecked(b, true);
+    expect(md(list)).toContain('- [x] ~~Skip it~~ (due 2026-10-02)');
+    expect(md(list)).toContain('- [x] Did it\n');
   });
 
   it('writes a grocery list by category, with the cart last', () => {

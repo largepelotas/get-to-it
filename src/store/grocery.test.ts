@@ -9,6 +9,7 @@ function item(id: string, fields: Partial<Item> = {}): Item {
     parentId: null,
     text: id,
     checked: false,
+    wontDo: false,
     completedAt: null,
     sortKey: 'a0',
     collapsed: false,

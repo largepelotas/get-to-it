@@ -197,3 +197,32 @@ describe('app shortcuts', () => {
     expect(useUI.getState()).toMatchObject({ selectedItemId: id, duePickerFor: id });
   });
 });
+
+describe('sidebar command', () => {
+  it('offers to hide the sidebar, then to show it', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    let p = await openPalette(user);
+    await user.keyboard('sidebar');
+    expect(p.getByRole('option', { name: /Hide sidebar/ })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    expect(useData.getState().settings.sidebarHidden).toBe(true);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    p = await openPalette(user);
+    await user.keyboard('sidebar');
+    expect(p.getByRole('option', { name: /Show sidebar/ })).toBeInTheDocument();
+  });
+});
+
+describe('New folder with the sidebar hidden', () => {
+  it('shows the sidebar so the rename field is there', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }));
+    await openPalette(user);
+    await user.keyboard('new folder{Enter}');
+    expect(useData.getState().settings.sidebarHidden).toBe(false);
+    expect(await screen.findByRole('textbox', { name: 'Folder name' })).toBeInTheDocument();
+  });
+});

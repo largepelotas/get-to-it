@@ -158,3 +158,21 @@ export function sanitizeRecurrence(value: unknown): Recurrence | null {
   }
   return rule;
 }
+
+/**
+ * The date a skipped occurrence moves to: the first one after the current due
+ * date that is also on or after `today`, so skipping an overdue task lands
+ * on today or later. Counts from the due date even for "after I finish it"
+ * rules. A task due in the future moves exactly one occurrence.
+ */
+export function skipDueDate(rule: Recurrence, dueDate: DateKey, today: DateKey = dueDate): DateKey {
+  if (rule.mode === 'completion') {
+    // Count each step from the due date itself, so a monthly rule on the
+    // 31st doesn't slide to the 28th after passing February.
+    const n = Math.max(1, Math.floor(rule.interval));
+    let next = addInterval(rule, dueDate);
+    for (let k = 2; next < today; k++) next = addInterval({ ...rule, interval: n * k }, dueDate);
+    return next;
+  }
+  return occurrenceAfter(rule, dueDate, today > dueDate ? addDaysKey(today, -1) : dueDate);
+}
