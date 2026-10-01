@@ -3,6 +3,8 @@ import type { ListType } from '@/data/types';
 
 export type View =
   | { kind: 'today' }
+  | { kind: 'tomorrow' }
+  | { kind: 'next7' }
   | { kind: 'upcoming' }
   | { kind: 'reminders' }
   | { kind: 'list'; listId: string }

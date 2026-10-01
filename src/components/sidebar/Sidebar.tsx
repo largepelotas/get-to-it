@@ -3,6 +3,7 @@ import {
   Archive,
   Bell,
   CalendarDays,
+  CalendarRange,
   Ellipsis,
   FolderPlus,
   Keyboard,
@@ -12,6 +13,7 @@ import {
   Plus,
   Settings as SettingsIcon,
   Sun,
+  Sunrise,
   Trash,
   TriangleAlert,
 } from 'lucide-react';
@@ -20,7 +22,7 @@ import { newFolder, toggleSidebar } from '@/commands';
 import { ListIcon } from '@/components/ListIcon';
 import { listMenuEntries } from '@/components/menus';
 import { Button, ContextMenu, IconButton, Menu, Tooltip, type MenuEntries } from '@/components/ui';
-import type { Settings } from '@/data/types';
+import type { BuiltInView, Settings } from '@/data/types';
 import { SHORTCUTS } from '@/lib/keymap';
 import { useReminderEntries } from '@/hooks/useReminders';
 import { useToday } from '@/hooks/useToday';
@@ -29,7 +31,7 @@ import { isMac } from '@/platform';
 import { renameList } from '@/store/actions/lists';
 import { setSetting, useData } from '@/store/data';
 import { openCounts, sidebarModel } from '@/store/sidebar';
-import { dueRows, todayCount } from '@/store/smart';
+import { dueRows, next7Count, todayCount, tomorrowCount } from '@/store/smart';
 import { navigate, openDialog, openList, startRename, stopRename, useUI } from '@/store/ui';
 import { ListTree } from './ListTree';
 import { RenameField } from './RenameField';
@@ -87,8 +89,19 @@ export function Sidebar() {
   const model = useMemo(() => sidebarModel({ lists, folders }), [lists, folders]);
   const counts = useMemo(() => openCounts(items), [items]);
   const today = useToday();
-  const dueToday = useMemo(() => todayCount(dueRows(items, lists), today), [items, lists, today]);
+  const counted = useMemo(() => {
+    const rows = dueRows(items, lists);
+    return {
+      today: todayCount(rows, today),
+      tomorrow: tomorrowCount(rows, today),
+      next7: next7Count(rows, today),
+    };
+  }, [items, lists, today]);
   const reminded = useReminderEntries().inbox.length;
+  const hiddenViews = useData((s) => s.settings.hiddenViews);
+  // A hidden view stays hidden, except Reminders while some are waiting, so none get stranded.
+  const shows = (name: BuiltInView) =>
+    !hiddenViews.includes(name) || (name === 'reminders' && reminded > 0);
 
   return (
     <aside
@@ -100,26 +113,50 @@ export function Sidebar() {
       <div data-tauri-drag-region className={clsx('shrink-0', isMac ? 'h-11' : 'h-3')} />
 
       <nav aria-label="Lists" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        <SidebarItem
-          icon={<Sun className={navIcon} style={{ color: colorVar('amber') }} />}
-          label="Today"
-          count={dueToday}
-          active={view.kind === 'today'}
-          onClick={() => navigate({ kind: 'today' })}
-        />
-        <SidebarItem
-          icon={<CalendarDays className={navIcon} style={{ color: colorVar('red') }} />}
-          label="Upcoming"
-          active={view.kind === 'upcoming'}
-          onClick={() => navigate({ kind: 'upcoming' })}
-        />
-        <SidebarItem
-          icon={<Bell className={navIcon} style={{ color: colorVar('purple') }} />}
-          label="Reminders"
-          count={reminded}
-          active={view.kind === 'reminders'}
-          onClick={() => navigate({ kind: 'reminders' })}
-        />
+        {shows('today') && (
+          <SidebarItem
+            icon={<Sun className={navIcon} style={{ color: colorVar('amber') }} />}
+            label="Today"
+            count={counted.today}
+            active={view.kind === 'today'}
+            onClick={() => navigate({ kind: 'today' })}
+          />
+        )}
+        {shows('tomorrow') && (
+          <SidebarItem
+            icon={<Sunrise className={navIcon} style={{ color: colorVar('orange') }} />}
+            label="Tomorrow"
+            count={counted.tomorrow}
+            active={view.kind === 'tomorrow'}
+            onClick={() => navigate({ kind: 'tomorrow' })}
+          />
+        )}
+        {shows('next7') && (
+          <SidebarItem
+            icon={<CalendarRange className={navIcon} style={{ color: colorVar('green') }} />}
+            label="Next 7 days"
+            count={counted.next7}
+            active={view.kind === 'next7'}
+            onClick={() => navigate({ kind: 'next7' })}
+          />
+        )}
+        {shows('upcoming') && (
+          <SidebarItem
+            icon={<CalendarDays className={navIcon} style={{ color: colorVar('red') }} />}
+            label="Upcoming"
+            active={view.kind === 'upcoming'}
+            onClick={() => navigate({ kind: 'upcoming' })}
+          />
+        )}
+        {shows('reminders') && (
+          <SidebarItem
+            icon={<Bell className={navIcon} style={{ color: colorVar('purple') }} />}
+            label="Reminders"
+            count={reminded}
+            active={view.kind === 'reminders'}
+            onClick={() => navigate({ kind: 'reminders' })}
+          />
+        )}
 
         {model.pinned.length > 0 && (
           <>

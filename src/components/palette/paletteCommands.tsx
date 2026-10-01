@@ -2,6 +2,7 @@ import {
   Archive,
   Bell,
   CalendarDays,
+  CalendarRange,
   ClipboardCopy,
   Download,
   FileDown,
@@ -18,6 +19,7 @@ import {
   Redo2,
   Settings as SettingsIcon,
   Sun,
+  Sunrise,
   Trash,
   Trash2,
   Undo2,
@@ -89,7 +91,11 @@ export function paletteCommands({
   const list = view.kind === 'list' ? tables.lists[view.listId] : undefined;
   const editable = list && !list.deletedAt && !list.archivedAt;
   const hasQuickAdd =
-    view.kind === 'today' || view.kind === 'upcoming' || (editable && list.type !== 'note');
+    view.kind === 'today' ||
+    view.kind === 'tomorrow' ||
+    view.kind === 'next7' ||
+    view.kind === 'upcoming' ||
+    (editable && list.type !== 'note');
   const hasTrash = Object.values(tables.lists).some((l) => l.deletedAt);
   const goTo = (target: View['kind'], label: string, icon: LucideIcon, shortcut?: string) =>
     view.kind !== target && {
@@ -133,6 +139,8 @@ export function paletteCommands({
       run: newFolder,
     },
     goTo('today', 'Today', CalendarDays, SHORTCUTS.today),
+    goTo('tomorrow', 'Tomorrow', Sunrise),
+    goTo('next7', 'Next 7 days', CalendarRange),
     goTo('upcoming', 'Upcoming', CalendarDays, SHORTCUTS.upcoming),
     goTo('reminders', 'Reminders', Bell, SHORTCUTS.reminders),
     goTo('archive', 'Archive', Archive),

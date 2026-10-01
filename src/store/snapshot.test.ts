@@ -129,6 +129,41 @@ describe('snapshots', () => {
     expect(settings).toEqual({ weekStartsOn: 0, defaultListId: null });
   });
 
+  // Bug prevented: importing an older export failing, or losing the new settings.
+  it('reads a reminder without the constant field as ordinary, and keeps constant ones', () => {
+    const base = { itemId: 'I', kind: 'relative', offsetMinutes: 0, createdAt: 1, updatedAt: 1 };
+    const { tables } = parseSnapshot(
+      JSON.stringify({
+        app: 'checklist',
+        version: 1,
+        tables: {
+          reminders: [
+            { id: 'A', ...base },
+            { id: 'B', ...base, constant: true },
+          ],
+        },
+      }),
+    );
+    expect(tables.reminders.A.constant).toBe(false);
+    expect(tables.reminders.B.constant).toBe(true);
+  });
+
+  it('exports and imports the sidebar and daily review settings, dropping unknown view names', () => {
+    setSetting('hiddenViews', ['tomorrow', 'next7']);
+    setSetting('dailyReviewTime', '08:15');
+    expect(parseSnapshot(exportNow()).settings).toMatchObject({
+      hiddenViews: ['tomorrow', 'next7'],
+      dailyReviewTime: '08:15',
+    });
+    const odd = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: {},
+      settings: { hiddenViews: ['today', 'nope'], dailyReviewTime: 'noon' },
+    });
+    expect(parseSnapshot(odd).settings).toEqual({ hiddenViews: ['today'] });
+  });
+
   it('describes what a data set holds, leaving out the Trash', () => {
     const { list } = sampleData();
     const gone = createList({ type: 'todo', title: 'Gone' });

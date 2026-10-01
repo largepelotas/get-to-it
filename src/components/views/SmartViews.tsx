@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { CalendarDays, Sun } from 'lucide-react';
+import { CalendarDays, CalendarRange, Sunrise, Sun } from 'lucide-react';
 import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react';
 import { rescheduleTasks } from '@/commands';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
@@ -13,7 +13,7 @@ import { addDaysKey, formatDateKey, formatLongDate } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { useData } from '@/store/data';
 import { useUI } from '@/store/ui';
-import { dueRows, todayModel, upcomingModel } from '@/store/smart';
+import { dueRows, next7Model, todayModel, tomorrowModel, upcomingModel } from '@/store/smart';
 import { EmptyState, ViewHeader } from './ViewHeader';
 
 // The calendar is only needed once Reschedule opens, so it loads separately.
@@ -172,6 +172,102 @@ export function TodayView() {
           today.
         </EmptyState>
       }
+    />
+  );
+}
+
+export function TomorrowView() {
+  const today = useToday();
+  const rows = useDueRows();
+  const tomorrow = addDaysKey(today, 1);
+  const dueTomorrow = tomorrowModel(rows, today);
+  const sections: SmartSection[] = dueTomorrow.length
+    ? [{ key: 'Tomorrow', title: 'Tomorrow', rows: dueTomorrow, timeOnly: true }]
+    : [];
+  const count = dueTomorrow.length;
+
+  return (
+    <SmartLayout
+      header={
+        <ViewHeader
+          icon={<Sunrise className="size-6" style={{ color: colorVar('orange') }} />}
+          title="Tomorrow"
+          subtitle={
+            <>
+              {formatLongDate(tomorrow)}
+              {count > 0 && (
+                <>
+                  <span aria-hidden> · </span>
+                  <span className="text-fg-subtle">
+                    {count === 1 ? '1 task' : `${count} tasks`}
+                  </span>
+                </>
+              )}
+            </>
+          }
+        />
+      }
+      defaultDue={tomorrow}
+      sections={sections}
+      empty={
+        <EmptyState title="Nothing due tomorrow">
+          Tasks due tomorrow, from all your lists, show here. Tasks you add here are due tomorrow.
+        </EmptyState>
+      }
+    />
+  );
+}
+
+export function Next7View() {
+  const today = useToday();
+  const rows = useDueRows();
+  const { overdue, days } = useMemo(() => next7Model(rows, today), [rows, today]);
+
+  const sections: SmartSection[] = [];
+  if (overdue.length) {
+    sections.push({
+      key: 'Overdue',
+      title: 'Overdue',
+      tone: 'danger',
+      rows: overdue,
+      actions: <RescheduleOverdue ids={overdue.map((r) => r.item.id)} />,
+    });
+  }
+  // Every day is shown, even without tasks, so the week can be read at a glance.
+  for (const day of days) {
+    const relative = formatDateKey(day.date);
+    const long = formatLongDate(day.date);
+    sections.push({
+      key: day.date,
+      title:
+        day.date === today
+          ? `Today · ${long}`
+          : relative === 'Tomorrow'
+            ? `Tomorrow · ${long}`
+            : long,
+      rows: day.rows,
+      emptyText: 'Nothing due',
+      timeOnly: true,
+    });
+  }
+  const count = overdue.length + days.reduce((sum, d) => sum + d.rows.length, 0);
+
+  return (
+    <SmartLayout
+      header={
+        <ViewHeader
+          icon={<CalendarRange className="size-6" style={{ color: colorVar('green') }} />}
+          title="Next 7 days"
+          subtitle={
+            count > 0 ? (
+              <span className="text-fg-subtle">{count === 1 ? '1 task' : `${count} tasks`}</span>
+            ) : undefined
+          }
+        />
+      }
+      defaultDue={today}
+      sections={sections}
+      empty={null}
     />
   );
 }

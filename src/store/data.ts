@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { opKey, type LoadResult, type Repository, type WriteOp } from '@/data/repository';
-import { DEFAULT_SETTINGS, emptyTables, type Settings, type Tables } from '@/data/types';
+import { isTimeString } from '@/lib/dates';
+import {
+  BUILT_IN_VIEWS,
+  DEFAULT_SETTINGS,
+  emptyTables,
+  type Settings,
+  type Tables,
+} from '@/data/types';
 import { applyChanges, mergeEntries, Tx, type Change, type HistoryEntry } from './history';
 
 interface DataState {
@@ -37,6 +44,13 @@ function normalizeSettings(stored: Partial<Settings>): Settings {
   const settings = { ...DEFAULT_SETTINGS, ...stored };
   if (!Array.isArray(settings.groceryCategories) || !settings.groceryCategories.length) {
     settings.groceryCategories = DEFAULT_SETTINGS.groceryCategories;
+  }
+  // Unknown view names (a hand-edited or newer file) are dropped.
+  settings.hiddenViews = Array.isArray(settings.hiddenViews)
+    ? BUILT_IN_VIEWS.filter((v) => settings.hiddenViews.includes(v))
+    : [];
+  if (settings.dailyReviewTime !== null && !isTimeString(settings.dailyReviewTime)) {
+    settings.dailyReviewTime = null;
   }
   return settings;
 }

@@ -5,7 +5,7 @@ import { QuickAdd } from '@/components/items/QuickAdd';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { Button, Dialog, Input, Label, Select } from '@/components/ui';
 import type { ListType } from '@/data/types';
-import { todayKey } from '@/lib/dates';
+import { addDaysKey, todayKey } from '@/lib/dates';
 import { bySortKey } from '@/lib/order';
 import { createList, LIST_TYPE_LABEL } from '@/store/actions/lists';
 import { useData } from '@/store/data';
@@ -140,8 +140,12 @@ function QuickAddDialog() {
   const folders = useData((s) => s.tables.folders);
   const todo = useMemo(() => liveTodoLists({ lists: allLists, folders }), [allLists, folders]);
   const [listId, setListId] = useState(() => startingList(todo));
-  // Today's own quick add gives new tasks today's date, so this does too.
-  const [defaultDue] = useState(() => (useUI.getState().view.kind === 'today' ? todayKey() : null));
+  // Each date view's own quick add dates new tasks for its day, so this does too.
+  const [defaultDue] = useState(() => {
+    const { kind } = useUI.getState().view;
+    if (kind === 'today' || kind === 'next7') return todayKey();
+    return kind === 'tomorrow' ? addDaysKey(todayKey(), 1) : null;
+  });
   // Whether the dialog's own field has its paste bar up (not one in the view behind).
   const [pasteBar, setPasteBar] = useState(false);
   const chosen = todo.some((l) => l.id === listId) ? listId : startingList(todo);

@@ -463,6 +463,14 @@ export function completeFromReminder(reminderId: string, itemId: string): void {
   toggleItem(itemId, true, { announce: true });
 }
 
+/** The daily review went off while the app is open: the notification is out, so offer Today too. */
+export function announceDailyReview(): void {
+  toast('Plan your day', {
+    duration: 10_000,
+    action: { label: 'Today', onClick: () => navigate({ kind: 'today' }) },
+  });
+}
+
 /** Tells the user about reminders that passed while the app was closed. */
 export function announceMissed(entries: ReminderEntry[]): void {
   const title = entries.length === 1 ? 'Missed reminder' : `You missed ${entries.length} reminders`;

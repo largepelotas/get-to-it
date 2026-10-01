@@ -9,6 +9,8 @@ export class MemoryRepository implements Repository {
   constructor(initial?: Partial<LoadResult>) {
     this.tables = structuredClone(initial?.tables ?? emptyTables());
     this.settings = structuredClone(initial?.settings ?? {});
+    // Reminders saved before constant reminders existed don't have the field.
+    for (const r of Object.values(this.tables.reminders)) r.constant = !!r.constant;
   }
 
   async load(): Promise<LoadResult> {

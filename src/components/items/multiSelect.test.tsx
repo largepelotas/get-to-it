@@ -247,7 +247,9 @@ describe('the selection bar', () => {
     render(<App />);
     await selectTwo(user);
     await user.click(barButton('Date'));
-    await user.click(await screen.findByRole('button', { name: 'Tomorrow' }));
+    await user.click(
+      await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Tomorrow' }),
+    );
     expect(find('A')).toMatchObject({ dueDate: tomorrow, dueTime: '09:30' });
     expect(find('B').dueDate).toBe(tomorrow);
     expect(await screen.findByText('Rescheduled 2 tasks')).toBeInTheDocument();

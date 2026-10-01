@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -9,7 +9,9 @@ import { addDaysKey, todayKey } from '@/lib/dates';
 import { createItem, setChecked } from '@/store/actions/items';
 import { createList } from '@/store/actions/lists';
 import { resetForTests, setSetting, useData } from '@/store/data';
-import { navigate, openList, useUI } from '@/store/ui';
+import { fireTime } from '@/lib/reminders';
+import { addReminder, markFired } from '@/store/actions/reminders';
+import { navigate, openDialog, openList, useUI } from '@/store/ui';
 
 let work: string;
 let home: string;
@@ -95,7 +97,10 @@ describe('Today', () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Reschedule' }));
-    await user.click(await screen.findByRole('button', { name: 'Tomorrow' }));
+    // The picker is a dialog; the sidebar has a Tomorrow entry of its own.
+    await user.click(
+      await within(await screen.findByRole('dialog')).findByRole('button', { name: 'Tomorrow' }),
+    );
     expect(find('Late A')).toMatchObject({ dueDate: tomorrow, dueTime: '09:00' });
     expect(find('Late B').dueDate).toBe(tomorrow);
     expect(useData.getState().past.length).toBe(steps + 1);
@@ -135,10 +140,12 @@ describe('due-date picker', () => {
     const panel = within(screen.getByRole('complementary', { name: 'Task details' }));
 
     await user.click(panel.getByRole('button', { name: 'Add due date' }));
-    await user.click(await screen.findByRole('button', { name: /^Tomorrow/ }));
+    await user.click(
+      await within(await screen.findByRole('dialog')).findByRole('button', { name: /^Tomorrow/ }),
+    );
     expect(find('Standup').dueDate).toBe(tomorrow);
     // Choosing a day closes the picker.
-    expect(screen.queryByRole('button', { name: /^Tomorrow/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await user.click(panel.getByRole('button', { name: /^Due Tomorrow/ }));
     await user.type(screen.getByLabelText('Time'), '09:30');
@@ -233,5 +240,166 @@ describe('Duplicate from Today', () => {
     // Opening a list afterwards doesn't pull focus anywhere.
     await user.click(screen.getByRole('button', { name: /^Work/ }));
     expect(screen.getByRole('button', { name: /^Work/ })).toHaveFocus();
+  });
+});
+
+describe('Tomorrow', () => {
+  it('shows the tasks due tomorrow with a count, and adds tasks due tomorrow', async () => {
+    createItem(work, { text: 'Dentist', dueDate: tomorrow, dueTime: '10:00' });
+    createItem(home, { text: 'Laundry', dueDate: tomorrow });
+    createItem(work, { text: 'Today thing', dueDate: today });
+    createItem(work, { text: 'Later thing', dueDate: addDaysKey(today, 2) });
+    navigate({ kind: 'tomorrow' });
+    const user = userEvent.setup();
+    render(<App />);
+    const main = within(screen.getByRole('main'));
+    // The view's title, then the one section.
+    expect(main.getAllByRole('heading', { name: 'Tomorrow' })).toHaveLength(2);
+    expect(main.getByText('2 tasks')).toBeInTheDocument();
+    expect(row('Dentist')).toBeInTheDocument();
+    expect(row('Laundry')).toBeInTheDocument();
+    expect(screen.queryByRole('listitem', { name: 'Today thing' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('listitem', { name: 'Later thing' })).not.toBeInTheDocument();
+    // The sidebar counts what Tomorrow shows.
+    expect(within(screen.getByRole('button', { name: /^Tomorrow/ })).getByText('2')).toBeVisible();
+
+    await user.type(screen.getByRole('textbox', { name: 'Add a task' }), 'Pack bags{Enter}');
+    expect(find('Pack bags').dueDate).toBe(tomorrow);
+  });
+
+  it('says so when nothing is due tomorrow', () => {
+    navigate({ kind: 'tomorrow' });
+    render(<App />);
+    expect(screen.getByText('Nothing due tomorrow')).toBeInTheDocument();
+  });
+});
+
+describe('Next 7 days', () => {
+  // Bug prevented: empty days disappearing, so the week can't be read at a glance.
+  it('shows all seven days, empty ones as Nothing due, with overdue first', () => {
+    createItem(work, { text: 'Late', dueDate: yesterday });
+    createItem(work, { text: 'Now', dueDate: today });
+    createItem(home, { text: 'Friday', dueDate: addDaysKey(today, 3) });
+    createItem(work, { text: 'Day eight', dueDate: addDaysKey(today, 7) });
+    navigate({ kind: 'next7' });
+    render(<App />);
+    const regions = within(screen.getByRole('main')).getAllByRole('region');
+    expect(regions).toHaveLength(8);
+    expect(within(regions[0]).getByRole('heading')).toHaveTextContent('Overdue');
+    expect(within(regions[0]).getByRole('listitem', { name: 'Late' })).toBeInTheDocument();
+    expect(within(regions[1]).getByRole('heading')).toHaveTextContent(/^Today · /);
+    expect(within(regions[2]).getByRole('heading')).toHaveTextContent(/^Tomorrow · /);
+    expect(within(regions[2]).getByText('Nothing due')).toBeInTheDocument();
+    expect(within(regions[4]).getByRole('listitem', { name: 'Friday' })).toBeInTheDocument();
+    expect(screen.queryByRole('listitem', { name: 'Day eight' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('main')).getByText('3 tasks')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('button', { name: /^Next 7 days/ })).getByText('3'),
+    ).toBeVisible();
+  });
+
+  it('has no Overdue section when nothing is overdue, and adds tasks due today', async () => {
+    navigate({ kind: 'next7' });
+    const user = userEvent.setup();
+    render(<App />);
+    expect(screen.queryByRole('region', { name: 'Overdue' })).not.toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: 'Add a task' }), 'Buy stamps{Enter}');
+    expect(find('Buy stamps').dueDate).toBe(today);
+  });
+
+  // Bug prevented: arrow keys getting stuck on, or crashing at, a day with no tasks.
+  it('moves between tasks with the arrow keys across an empty day', async () => {
+    createItem(work, { text: 'First', dueDate: today });
+    createItem(work, { text: 'Third', dueDate: addDaysKey(today, 2) });
+    navigate({ kind: 'next7' });
+    const user = userEvent.setup();
+    render(<App />);
+    row('First').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(row('Third')).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(row('First')).toHaveFocus();
+  });
+});
+
+describe('Hiding built-in views', () => {
+  const nav = () => within(screen.getByRole('navigation', { name: 'Lists' }));
+
+  it('lists the five views in order', () => {
+    render(<App />);
+    const names = ['Today', 'Tomorrow', 'Next 7 days', 'Upcoming', 'Reminders'];
+    const buttons = names.map((n) => nav().getByRole('button', { name: new RegExp(`^${n}`) }));
+    for (let i = 1; i < buttons.length; i++) {
+      expect(
+        buttons[i - 1].compareDocumentPosition(buttons[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+  });
+
+  it.each([
+    ['today', 'Today'],
+    ['tomorrow', 'Tomorrow'],
+    ['next7', 'Next 7 days'],
+    ['upcoming', 'Upcoming'],
+    ['reminders', 'Reminders'],
+  ] as const)('leaves %s out of the sidebar when hidden', (name, label) => {
+    setSetting('hiddenViews', [name]);
+    render(<App />);
+    expect(nav().queryByRole('button', { name: new RegExp(`^${label}`) })).not.toBeInTheDocument();
+  });
+
+  it('keeps a hidden view open when it is the current one', () => {
+    setSetting('hiddenViews', ['tomorrow']);
+    navigate({ kind: 'tomorrow' });
+    render(<App />);
+    expect(
+      within(screen.getByRole('main')).getByRole('heading', { name: 'Tomorrow', level: 1 }),
+    ).toBeInTheDocument();
+  });
+
+  // Bug prevented: a reminder going off with no way to reach the inbox.
+  it('shows a hidden Reminders entry while a reminder is waiting', () => {
+    setSetting('hiddenViews', ['reminders']);
+    const id = createItem(work, { text: 'Call Sam', dueDate: yesterday, dueTime: '10:00' })!;
+    const r = addReminder(id, { kind: 'relative', offsetMinutes: 0 })!;
+    const { tables, settings } = useData.getState();
+    markFired([
+      { id: r, at: fireTime(tables.reminders[r], tables.items[id], settings.allDayReminderTime)! },
+    ]);
+    render(<App />);
+    expect(nav().getByRole('button', { name: /^Reminders/ })).toBeInTheDocument();
+  });
+
+  it('is set from checkboxes in Settings', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    act(() => openDialog({ kind: 'settings' }));
+    const box = await screen.findByRole('checkbox', { name: 'Show Tomorrow' });
+    expect(box).toBeChecked();
+    await user.click(box);
+    expect(useData.getState().settings.hiddenViews).toEqual(['tomorrow']);
+    expect(nav().queryByRole('button', { name: /^Tomorrow/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: 'Show Tomorrow' }));
+    expect(useData.getState().settings.hiddenViews).toEqual([]);
+    expect(nav().getByRole('button', { name: /^Tomorrow/ })).toBeInTheDocument();
+  });
+});
+
+describe('Daily review setting', () => {
+  it('turns on at 09:00 and takes a new time', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    act(() => openDialog({ kind: 'settings' }));
+    const box = await screen.findByRole('checkbox', { name: 'Daily review reminder' });
+    expect(box).not.toBeChecked();
+    expect(screen.queryByLabelText('Daily review at')).not.toBeInTheDocument();
+    await user.click(box);
+    expect(useData.getState().settings.dailyReviewTime).toBe('09:00');
+    const time = screen.getByLabelText('Daily review at');
+    expect(time).toHaveValue('09:00');
+    fireEvent.change(time, { target: { value: '07:30' } });
+    expect(useData.getState().settings.dailyReviewTime).toBe('07:30');
+    await user.click(box);
+    expect(useData.getState().settings.dailyReviewTime).toBeNull();
   });
 });

@@ -35,6 +35,7 @@ export function insertReminder(tx: Tx, itemId: string, spec: ReminderSpec): stri
     firedFor: null,
     dismissedFor: null,
     snoozedUntil: null,
+    constant: false,
     createdAt: tx.now,
     updatedAt: tx.now,
   };
@@ -49,6 +50,13 @@ export function addReminder(itemId: string, spec: ReminderSpec): string | null {
 
 export function removeReminder(id: string): void {
   commit('Remove reminder', (tx) => tx.remove('reminders', id));
+}
+
+/** Turns "keep reminding until dealt with" on or off for a reminder, as one undo step. */
+export function setReminderConstant(id: string, constant: boolean): void {
+  commit(constant ? 'Keep reminding' : 'Stop repeating reminder', (tx) => {
+    if (tx.get('reminders', id)) tx.update('reminders', id, { constant });
+  });
 }
 
 /**

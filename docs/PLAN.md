@@ -102,11 +102,20 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - Opening the app lists any reminders it missed.
 - Fired reminders appear in an in-app inbox, with Snooze (10 min, 1 hour,
   tomorrow), Complete and Dismiss.
+- A reminder can be set to keep reminding: once delivered it notifies again
+  every 5 minutes, for up to 2 hours, until dismissed, snoozed or the task is
+  done.
+- An optional daily review notification ("Plan your day", with what's due) at
+  a time set in Settings.
 
 ### Smart views
 
 - **Today:** overdue and due-today tasks from every to-do list.
+- **Tomorrow:** tasks due tomorrow.
+- **Next 7 days:** overdue tasks, then each of the next seven days (empty
+  days shown).
 - **Upcoming:** future tasks grouped by day.
+- Any built-in view can be hidden from the sidebar in Settings.
 
 ### Grocery lists
 

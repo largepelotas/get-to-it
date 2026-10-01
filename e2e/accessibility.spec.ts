@@ -37,6 +37,8 @@ async function useColourScheme(page: Page, name: string) {
 for (const palette of PALETTES)
   for (const theme of ['light', 'dark'] as const) {
     test(`every screen passes axe in ${palette}, ${theme} theme`, async ({ page }) => {
+      // Fifteen axe scans don't fit in the default 30 seconds.
+      test.slow();
       await page.emulateMedia({ colorScheme: theme });
       await openApp(page);
       await useColourScheme(page, palette);
@@ -51,7 +53,15 @@ for (const palette of PALETTES)
       await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
       await expectAccessible(page);
 
-      for (const view of ['Today', 'Upcoming', 'Reminders', 'Archive', 'Trash']) {
+      for (const view of [
+        'Today',
+        'Tomorrow',
+        'Next 7 days',
+        'Upcoming',
+        'Reminders',
+        'Archive',
+        'Trash',
+      ]) {
         await page.getByRole('button', { name: new RegExp(`^${view}`) }).click();
         await expect(page.getByRole('heading', { level: 1, name: view })).toBeVisible();
         await expectAccessible(page);

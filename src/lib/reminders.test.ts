@@ -6,7 +6,12 @@ import {
   fireKey,
   fireTime,
   formatOffset,
+  dailyReviewAt,
   inboxEntries,
+  nextRepeatAt,
+  REPEAT_EVERY,
+  REPEAT_LIMIT,
+  type ReminderEntry,
   notificationFor,
   planSchedule,
   reminderEntries,
@@ -39,6 +44,7 @@ function reminder(patch: Partial<Reminder> = {}): Reminder {
     firedFor: null,
     dismissedFor: null,
     snoozedUntil: null,
+    constant: false,
     createdAt: 0,
     updatedAt: 0,
     ...patch,
@@ -186,5 +192,49 @@ describe('snoozeUntil', () => {
     expect(snoozeUntil('10m', now, '09:00')).toBe(now + 10 * 60_000);
     expect(snoozeUntil('1h', now, '09:00')).toBe(now + 60 * 60_000);
     expect(snoozeUntil('tomorrow', now, '08:00')).toBe(at('2026-10-06', '08:00'));
+  });
+});
+
+describe('nextRepeatAt', () => {
+  const first = at('2026-10-05', '14:45');
+  const entry = (patch: Partial<Reminder> = {}, state: ReminderEntry['state'] = 'fired') =>
+    ({ reminder: reminder({ constant: true, ...patch }), at: first, state }) as ReminderEntry;
+
+  // Bug prevented: a constant reminder never nagging again, or nagging in the past.
+  it('is the first slot after now, counting from the fire time', () => {
+    expect(nextRepeatAt(entry(), first + 1)).toBe(first + REPEAT_EVERY);
+    expect(nextRepeatAt(entry(), first + REPEAT_EVERY + 1)).toBe(first + 2 * REPEAT_EVERY);
+  });
+
+  it('moves on to the next slot when now is exactly on one', () => {
+    expect(nextRepeatAt(entry(), first + REPEAT_EVERY)).toBe(first + 2 * REPEAT_EVERY);
+  });
+
+  it('starts at the first slot when now is before the fire time', () => {
+    expect(nextRepeatAt(entry(), first - 1000)).toBe(first + REPEAT_EVERY);
+  });
+
+  // Bug prevented: a forgotten reminder buzzing all night.
+  it('stops once the limit has passed, but keeps the last slot inside it', () => {
+    expect(nextRepeatAt(entry(), first + REPEAT_LIMIT - 1)).toBe(first + REPEAT_LIMIT);
+    expect(nextRepeatAt(entry(), first + REPEAT_LIMIT)).toBeNull();
+    expect(nextRepeatAt(entry(), first + REPEAT_LIMIT + 60_000)).toBeNull();
+  });
+
+  // Bug prevented: ordinary reminders repeating.
+  it('is null unless the reminder is constant and waiting in the inbox', () => {
+    expect(nextRepeatAt(entry({ constant: false }), first + 1)).toBeNull();
+    expect(nextRepeatAt(entry({}, 'scheduled'), first - 1)).toBeNull();
+    expect(nextRepeatAt(entry({}, 'due'), first + 1)).toBeNull();
+    expect(nextRepeatAt(entry({}, 'done'), first + 1)).toBeNull();
+  });
+});
+
+describe('dailyReviewAt', () => {
+  it('is today if the time is still ahead, else tomorrow', () => {
+    const now = at('2026-10-05', '12:00');
+    expect(dailyReviewAt('13:00', now)).toBe(at('2026-10-05', '13:00'));
+    expect(dailyReviewAt('12:00', now)).toBe(at('2026-10-06', '12:00'));
+    expect(dailyReviewAt('09:00', now)).toBe(at('2026-10-06', '09:00'));
   });
 });
