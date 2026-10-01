@@ -12,6 +12,8 @@ export type View =
 export type DialogState =
   | { kind: 'newList'; folderId: string | null; type?: ListType }
   | { kind: 'settings' }
+  | { kind: 'palette' }
+  | { kind: 'shortcuts' }
   | {
       kind: 'confirm';
       title: string;
@@ -39,6 +41,8 @@ interface UIState {
   dialog: DialogState | null;
   /** The sidebar row showing an inline rename field. */
   renaming: Renaming | null;
+  /** An item for its list to scroll to and focus once shown (opened from search). */
+  reveal: string | null;
 }
 
 export const useUI = create<UIState>(() => ({
@@ -48,6 +52,7 @@ export const useUI = create<UIState>(() => ({
   duePickerFor: null,
   dialog: null,
   renaming: null,
+  reveal: null,
 }));
 
 export function sameView(a: View, b: View): boolean {
@@ -81,6 +86,10 @@ export function pickDueDate(id: string): void {
 
 export function setDuePickerFor(id: string | null): void {
   useUI.setState({ duePickerFor: id });
+}
+
+export function clearReveal(): void {
+  useUI.setState({ reveal: null });
 }
 
 export function openDialog(dialog: DialogState): void {

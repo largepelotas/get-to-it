@@ -56,6 +56,7 @@ export function QuickAdd({
         <input
           ref={inputRef}
           aria-label="Add a task"
+          data-quick-add
           placeholder={placeholder}
           value={text}
           onChange={(e) => setText(e.target.value)}

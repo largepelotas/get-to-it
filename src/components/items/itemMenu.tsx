@@ -14,6 +14,7 @@ import {
   Sunrise,
   Trash,
 } from 'lucide-react';
+import { SHORTCUTS } from '@/lib/keymap';
 import type { MenuEntries } from '@/components/ui';
 import type { Item } from '@/data/types';
 import { addDaysKey, nextWeekKey, todayKey } from '@/lib/dates';
@@ -64,6 +65,7 @@ function dueEntries(item: Item): MenuEntries {
     {
       label: 'Pick a date…',
       icon: <CalendarSearch className={icon} />,
+      shortcut: SHORTCUTS.dueDate,
       movesFocus: true,
       onSelect: () => pickDueDate(item.id),
     },
@@ -83,7 +85,7 @@ export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntri
     {
       label: 'Open details',
       icon: <PanelRight className={icon} />,
-      shortcut: 'Mod+I',
+      shortcut: SHORTCUTS.details,
       onSelect: actions.openDetails,
     },
     actions.addSubtask && {

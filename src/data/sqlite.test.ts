@@ -2,7 +2,7 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { SqliteRepository, type SqlExecutor } from './sqlite';
-import type { Item, List } from './types';
+import { emptyTables, type Item, type List } from './types';
 
 // node:sqlite mirrors the Rust executor: the same SQL, run in a transaction.
 const require = createRequire(import.meta.url);
@@ -110,5 +110,26 @@ describe('SqliteRepository', () => {
       ]),
     ).rejects.toThrow();
     expect((await repo.load()).tables.lists).toEqual({});
+  });
+
+  it('replaces everything, tombstoning rows that are gone', async () => {
+    const exec = nodeExecutor();
+    const repo = new SqliteRepository(exec);
+    await repo.write([
+      { kind: 'put', table: 'lists', row: list },
+      { kind: 'put', table: 'items', row: item },
+      { kind: 'setting', key: 'theme', value: 'dark' },
+    ]);
+    const other = { ...list, id: 'L2', title: 'Other' };
+    const tables = emptyTables();
+    tables.lists = { L1: { ...list, title: 'Renamed' }, L2: other };
+    await repo.replaceAll({ tables, settings: { weekStartsOn: 0 } });
+    const data = await repo.load();
+    expect(Object.keys(data.tables.lists).sort()).toEqual(['L1', 'L2']);
+    expect(data.tables.lists.L1.title).toBe('Renamed');
+    expect(data.tables.items).toEqual({});
+    expect(data.settings).toEqual({ weekStartsOn: 0 });
+    const tombstones = await exec.select('SELECT entity, id FROM tombstones');
+    expect(tombstones).toEqual([{ entity: 'items', id: 'I1' }]);
   });
 });

@@ -14,8 +14,8 @@ happens one milestone per chat; update this file at the end of each one.
 | M4  | Reminders     | **Done**                         |
 | M5  | Grocery lists | **Done**                         |
 | M6  | Notes         | **Done**                         |
-| M7  | Search, etc.  | Next (see the end of this file). |
-| M8  |               | Not started.                     |
+| M7  | Search, etc.  | **Done**                         |
+| M8  | Polish        | Next (see the end of this file). |
 
 ## How to run
 
@@ -76,10 +76,12 @@ and uploads them as workflow artifacts.
 
 - `data/types.ts`: every entity type, `Settings` with defaults, and
   `Snapshot` (the export format).
-- `data/repository.ts`: the `Repository` interface (`load`, `write(ops)`).
-  Adapters:
+- `data/repository.ts`: the `Repository` interface (`load`, `write(ops)`,
+  and since M7 `replaceAll(data)` for imports). Adapters:
   - `sqlite.ts`: column mapping plus migrations tracked with
     `PRAGMA user_version`. Hard deletes write a `tombstones` row.
+    `replaceAll` runs in one transaction and tombstones every row that
+    doesn't come back.
   - `localStorage.ts`: browser preview.
   - `memory.ts`: tests.
 - `platform/index.ts`: `isTauri`, `isMac`, `createRepository()`, `appReady()`,
@@ -90,10 +92,21 @@ and uploads them as workflow artifacts.
   `openUrl` (only `isSafeUrl` links: the opener plugin in the app, a new
   tab in the browser). Native events go
   through `listenNative`, which returns an unsubscribe function right away.
+  Since M7: `copyText` (clipboard plugin, else `navigator.clipboard`),
+  `saveTextFile(name, contents, filter)` (save dialog, then
+  `write_text_file`; the browser downloads), `openTextFile(filter)` (open
+  dialog, then `read_text_file`; the browser uses a hidden file input),
+  `saveFolder(folderName, files)` (asks for a folder and writes the files
+  into a new subfolder with `write_files`; the browser downloads one
+  combined `.md`), `canBackUp` (desktop only), `writeBackup` and
+  `openBackupsFolder`. All return false or null when the user cancels.
   Put every other native call here too, with a browser fallback.
   - `browserScheduler.ts`: the browser preview's copy of the native
     scheduler (1 s tick, the Notification API, the same resend rule).
 - `store/data.ts`: Zustand store `useData` holding `{ tables, settings, past, future, saveError }`.
+  Since M7, `replaceData(data, keep)` swaps in an imported data set: it
+  flushes pending saves, calls `replaceAll`, drops anything queued
+  meanwhile, keeps the `keep` settings (`lastBackupAt`) and clears undo.
   - **All data changes go through `commit(label, tx => ..., { coalesce?, undoable? })`.**
     It applies changes, queues saves (150 ms debounce, writes to the same row
     collapse, one retry) and records undo.
@@ -225,7 +238,46 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
   `snooze` (toast with the new time), `dismiss`, `completeFromReminder`
   (dismisses, then `toggleItem` with `announce`) and `announceMissed`.
   `homeView()` is where to go when the open list disappears (the default
-  list, else Today).
+  list, else Today). Since M7: `copyAsMarkdown(listId)` (toast, or an
+  error toast if the clipboard refuses) and `revealItem(id)` (opens the
+  item's list, expands collapsed parents, shows the Completed or cart
+  section if the item is there, selects it, opens details for to-dos and
+  sets `useUI.reveal` so the list focuses the row).
+- `dataCommands.ts` (M7): `exportJson`, `exportMarkdown`, `importJson`
+  (open, `parseSnapshot`, confirm with what the file holds, back up first in
+  the desktop app, `replaceData`, `seedIfNeeded` for a default list, go
+  home), `backUpNow` and `showBackups`. Used by Settings and the palette.
+- `store/search.ts` (M7): `search(tables, query)` returns `{ lists, items,
+notes }`, each sorted by score and capped. Case and accents are ignored
+  (`fold` keeps a map back to the original, so highlights land on the
+  right characters), and every word of the query must match somewhere:
+  list titles; item text plus task notes; note titles plus bodies. Scores:
+  whole field > start of field > start of a word > inside a word; notes
+  text counts half; archived lists and finished items rank lower; trashed
+  lists and deleted items are left out. Results carry `Snippet`s (`text`
+  plus `ranges`) for highlighting, and `makeSnippet` cuts long text to one
+  line around the first match. Folded text and parsed task notes are
+  cached per row object (rows are never mutated), which keeps a keystroke
+  around 25 ms at 20,000 items. `scoreText` scores any string the same way.
+- `store/markdown.ts` (M7): `listToMarkdown` (to-do lists as `- [ ]`
+  task lists with subtasks indented, task notes under their task, due
+  date, repeat and priority in brackets and a Completed section; grocery
+  lists by category with quantities and an In cart section; notes via
+  `docToMarkdown`), `safeFileName` and `markdownFiles` (one file per list,
+  in a subfolder per folder, archived lists under `Archive/`, clashes
+  numbered, Trash left out).
+- `store/snapshot.ts` (M7): `makeSnapshot` (every row, soft-deleted ones
+  included, and the settings except `lastBackupAt`), `snapshotToJson`,
+  `parseSnapshot` (checks every field of every row against a table of
+  checks and throws `ImportError` with a message such as "In item 3,
+  dueDate should be a date (YYYY-MM-DD)."; missing optional fields get
+  defaults; unknown or mistyped settings are dropped) and
+  `describeContents` ("3 lists and 12 items", Trash left out).
+- `store/backup.ts` (M7): `backupName` (`checklist-2026-09-30-221500.json`,
+  which sorts by age as `prune_backups` needs), `backupDue` (none yet
+  today, or the clock went backwards), `backUp(write, now, note?)` (a noted
+  backup such as `before-import` doesn't count as the daily one) and
+  `backUpIfDue`. `BACKUPS_KEPT` is 14.
 - `lib/`
   - `dates.ts`: date keys (`YYYY-MM-DD`, local), formatting (`formatDue`,
     `formatDateKey` relative labels, `formatLongDate`, `formatShortDate`),
@@ -268,9 +320,17 @@ history)`, which only returns categories that still exist.
   render), `useReminderScheduler` and `useReminderEntries` (`{ all, inbox
 }`), `useAppLifecycle` (close to tray follows the setting, the quit
   listener, and the tray tooltip: "Checklist · 3 due today, 1 reminder"),
-  and `useAppShortcuts` (undo ⌘Z/Ctrl+Z, redo ⌘⇧Z/Ctrl+Shift+Z/Ctrl+Y,
-  ignored in text fields; ⌘,/Ctrl+, opens Settings from anywhere). Add new
-  global shortcuts there.
+  `useAppShortcuts` and `useBackups` (M7: the daily backup, checked 15 s
+  after launch and then hourly, desktop only; one error toast if it fails).
+- `lib/keymap.ts` (M7): `SHORTCUTS`, every app-wide shortcut by name, and
+  `SHORTCUT_HELP`, what the Keyboard shortcuts dialog lists. Menus show
+  shortcuts from here too. `useAppShortcuts` handles them: the palette
+  (⌘K or ⌘F) works everywhere, even in text fields, and closes the palette
+  when it's open; Settings (⌘,), the shortcuts dialog (⌘/), New list (⌘⇧N),
+  New task (⌘N, focuses the view's `[data-quick-add]` field with
+  `focusQuickAdd`) and the views (⌘1–3) work everywhere unless a dialog
+  is open; undo, redo and Copy as Markdown (⌘⇧C) are ignored in text
+  fields. Task rows handle ⌘D (due-date picker) and ⌘I themselves.
 
 ### Design system
 
@@ -440,6 +500,32 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   The dialog body scrolls.
 - `MainPane` switches on the view and goes to `homeView()` if the open list
   stops existing.
+- `components/palette/` (M7): `CommandPalette`, a Radix dialog around
+  cmdk with `shouldFilter={false}` (search and matching are ours) and
+  `vimBindings={false}` (cmdk otherwise swallows Ctrl+K/N/J/P). With no
+  query it shows the lists in sidebar order, then every command. With a
+  query, groups (Commands, Lists, Tasks and items, Notes) are ordered by
+  their best score. The palette owns the highlighted row (`value`) and
+  falls back to the first row whenever the chosen one isn't shown, since
+  cmdk can lose it when groups reorder. Search runs synchronously so
+  Enter always acts on the rows for what's typed. Choosing a row closes
+  the palette and runs the action on the next tick; unless the command
+  `keepsFocus`, it stops the dialog returning focus (Radix's close
+  auto-focus would otherwise take it back from the revealed row or a new
+  dialog). `paletteCommands(context)` builds the commands that apply
+  (New task only with a quick-add field, Copy as Markdown in a list,
+  Undo/Redo with the step's name, the other two themes, export, import,
+  backups in the desktop app, Empty Trash when there is one), and
+  `commandScore` matches only words that start a word of the command's
+  own label (`matchLabel`, so a list's title in "Copy “Work” as Markdown"
+  doesn't match) or keywords.
+- `TodoList` and `GroceryList` focus the row in `useUI.reveal` once it's
+  rendered, then clear it.
+- `dialogs/ShortcutsDialog.tsx` (M7) renders `SHORTCUT_HELP`. Settings
+  has a Data section: Export…, Import…, Export as Markdown…, the daily
+  backup toggle with the last backup time, Back up now and Show backups
+  (the last three only in the desktop app). The sidebar's settings menu
+  has Keyboard shortcuts, and list menus have Copy as Markdown.
 
 ### Conventions
 
@@ -463,6 +549,13 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   relative to the real today instead, since user-event needs real timers.
 - Radix submenus open reliably in jsdom with the keyboard (ArrowRight,
   Enter), not with clicks.
+- `test/setup.ts` also stubs `ResizeObserver` and `scrollIntoView` for
+  cmdk, and raises Testing Library's `asyncUtilTimeout` to 3 s: the
+  lazy-loaded due-date picker sometimes took over the 1 s default to load
+  when the whole suite ran in parallel, which made a SmartViews test flaky
+  (on `main` too).
+- `user-event`'s `setup()` installs a clipboard, so tests can read what
+  `copyText` wrote with `navigator.clipboard.readText()`.
 - UI text uses British spelling ("colour", "Grey"), matching the history
   labels.
 
@@ -517,9 +610,42 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
 - Links have no keyboard shortcut: ⌘K is kept for the command palette
   (M7). Use the toolbar, paste a link over selected text, or type the
   address.
-- The Welcome note mentions the note shortcuts.
+- The Welcome note mentions the note shortcuts, and since M7 ⌘K and ⌘/.
+- Import replaces everything; there's no merge. The desktop app saves a
+  `before-import` backup first, and the confirmation says what the file
+  holds.
+- Exports include the Trash and deleted items (it's a full copy); the
+  Markdown export leaves them out.
+- The Markdown export writes into a new dated folder inside the folder
+  you pick. The browser preview downloads one combined file instead.
+- Due dates in Markdown are `YYYY-MM-DD HH:mm`, which don't go stale the
+  way "Tomorrow" would.
+- ⌘F opens the palette too (the desktop webview has no find bar).
+- Search results ignore the Completed/cart state for filtering (finished
+  items show, ranked lower) rather than hiding them.
 
 ## Known gaps
+
+From M7:
+
+- The palette searches from the first letter, and a one-letter query on a
+  very large data set (20,000 items) takes about 70 ms per keystroke in
+  tests. Fine for normal use; a minimum length or an index would help if
+  it ever isn't.
+- Search is word-based substring matching, not fuzzy: typos don't match.
+- No "restore from backup" command; use Import with a file from Show
+  backups.
+- Pre-import backups count toward the 14 kept, so many imports in one day
+  can push out older daily backups.
+- The export, import and backups were checked in the browser preview
+  (export and re-import round trip in Chromium) and in unit tests, but
+  the native dialogs and the backups folder only in code, since this
+  environment can't run the desktop app. Check them in `npm run app:dev`.
+- Shortcuts are fixed; they can't be changed in Settings.
+- ⌘D and ⌘N may clash with a browser's bookmark and new-window shortcuts in
+  the browser preview (not in the desktop app).
+- The main chunk is now 700 kB (cmdk and the palette). Code-splitting
+  remains an M8 item.
 
 From M6:
 
@@ -592,7 +718,7 @@ From M3:
   the details panel.
 - Today/Upcoming order tasks from different lists by list `sortKey`, which
   only matches the sidebar within one folder.
-- No keyboard shortcut opens the due-date picker yet (M7).
+- ~~No keyboard shortcut opens the due-date picker yet.~~ Done in M7: ⌘D/Ctrl+D.
 
 From M1:
 
@@ -601,33 +727,24 @@ From M1:
 - The native window theme and macOS drag strip were checked in code only;
   the browser preview can't show them. Check them in `npm run app:dev`.
 
-## Next: M7 (search, command palette, shortcuts, export)
+## Next: M8 (end-to-end tests, accessibility, packaging polish)
 
-From the plan: a ⌘/Ctrl+K command palette that also searches every list,
-item and note; keyboard shortcuts for everything common; copy any list or
-note as Markdown; JSON export and import, Markdown export, and automatic
-daily backups.
+From the plan: end-to-end tests, an accessibility pass and packaging
+polish.
 
-What's already there:
+Worth starting with:
 
-- Search data: everything is in memory (`useData`). Notes have
-  `notes[listId].plainText`, kept up to date by `setNoteContent`; task
-  notes are docs in `Item.details` (`itemNotesText` gives their text).
-  Search in memory rather than SQLite FTS (see Deviations).
-- `cmdk` is installed. ⌘K is free: the editor doesn't bind it. Global
-  shortcuts go in `useAppShortcuts`, which ignores text fields, so a
-  palette shortcut that should also work while typing needs its own check.
-- Markdown: `docToMarkdown` covers notes and task notes. To-do and grocery
-  lists need small helpers (`- [ ] task` with indented subtasks, due date
-  and priority as text; grocery items by category).
-- Clipboard: `@tauri-apps/plugin-clipboard-manager` is installed with
-  `allow-write-text`. Add a `copyText` to `platform` with a
-  `navigator.clipboard` fallback.
-- Files: `files.rs` has `write_text_file`, `read_text_file`, `write_files`,
-  `write_backup(name, contents, keep)` and `open_backups_folder`, and the
-  dialog plugin allows open and save. `Snapshot` in `data/types.ts` is the
-  export format. Import should validate, write through the `Repository`,
-  reload the store and clear undo history.
-- Shortcuts still missing (see Known gaps): open the due-date picker from a
-  task, and a way to reach a folder's menu without right-clicking (M8 may
-  cover the latter).
+- End-to-end tests: `@playwright/test` is installed (`npm run test:e2e`)
+  but there are no specs or config yet. The browser preview (`npm run
+dev`) is enough for most flows. In this environment Playwright has to
+  launch Chromium with `executablePath: '/opt/pw-browsers/chromium'`, since
+  the installed Playwright expects a different browser build.
+- Accessibility: the gaps listed above from M1 (folder menu without
+  right-click) and M2 (leaving a list with Tab), focus order in the
+  details panel, and screen reader names for rows (due date, priority,
+  reminders).
+- Code-splitting: the main chunk is 700 kB. Candidates are the palette
+  (cmdk), Settings, and chrono-node (only quick-add needs it).
+- Packaging: check the native paths flagged "checked in code only" above
+  in `npm run app:dev` on macOS and Windows (notifications, tray, close to
+  tray, launch at login, links, the save/open dialogs, backups folder).

@@ -18,6 +18,8 @@ export interface Repository {
   load(): Promise<LoadResult>;
   /** Applies every op, all or nothing. */
   write(ops: WriteOp[]): Promise<void>;
+  /** Replaces all data and settings with `data`, all or nothing (import). */
+  replaceAll(data: LoadResult): Promise<void>;
 }
 
 /** Key used to collapse repeated writes to the same row. */

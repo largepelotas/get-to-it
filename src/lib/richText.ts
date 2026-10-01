@@ -81,7 +81,7 @@ export function isDocEmpty(doc: RichNode | null): boolean {
   return !hasStructure(doc);
 }
 
-function escapeMarkdown(text: string): string {
+export function escapeMarkdown(text: string): string {
   return text.replace(/([\\`*_[\]#<>])/g, '\\$1');
 }
 

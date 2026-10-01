@@ -6,12 +6,13 @@ import {
   duplicateList,
   unarchiveList,
   restoreList,
+  setShowCompleted,
 } from './store/actions/lists';
 import { formatDateKey, formatTimestamp } from './lib/dates';
 import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
-import { notify, requestNotificationPermission } from './platform';
+import { copyText, notify, requestNotificationPermission } from './platform';
 import { clearChecked, uncheckAll } from './store/actions/grocery';
-import { deleteItems, setChecked } from './store/actions/items';
+import { deleteItems, setChecked, setItemCollapsed } from './store/actions/items';
 import {
   addReminder,
   dismissReminders,
@@ -20,6 +21,7 @@ import {
 } from './store/actions/reminders';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import { lastEntryId, redo, undo, undoEntry, useData } from './store/data';
+import { listToMarkdown } from './store/markdown';
 import { confirmAction, navigate, openList, startRename, useUI, type View } from './store/ui';
 
 /*
@@ -96,6 +98,42 @@ export function restore(id: string): void {
 export function duplicate(id: string): void {
   const copy = duplicateList(id);
   if (copy) openList(copy);
+}
+
+/** Copies a list or note to the clipboard as Markdown. */
+export async function copyAsMarkdown(id: string): Promise<void> {
+  const { tables, settings } = useData.getState();
+  const list = tables.lists[id];
+  if (!list) return;
+  try {
+    await copyText(listToMarkdown(tables, list, settings.groceryCategories));
+    toast(`Copied ${quote(list.title)} as Markdown`, { duration: 2000 });
+  } catch (err) {
+    console.error('Copying failed', err);
+    toast.error('Couldn’t copy to the clipboard');
+  }
+}
+
+/**
+ * Opens an item's list with the item selected and in view: collapsed parents
+ * are expanded, and a finished item's section is shown. To-do items also get
+ * the details panel.
+ */
+export function revealItem(id: string): void {
+  const { items, lists } = useData.getState().tables;
+  const item = items[id];
+  const list = item && lists[item.listId];
+  if (!item || !list) return;
+  let top = item;
+  for (let parent = items[item.parentId ?? '']; parent; parent = items[parent.parentId ?? '']) {
+    if (parent.collapsed) setItemCollapsed(parent.id, false);
+    top = parent;
+  }
+  if (list.type === 'grocery' ? item.checked : top.checked) {
+    if (!list.showCompleted) setShowCompleted(list.id, true);
+  }
+  openList(list.id);
+  useUI.setState({ selectedItemId: id, detailsOpen: list.type === 'todo', reveal: id });
 }
 
 export function newFolder(): void {

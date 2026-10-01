@@ -143,3 +143,113 @@ export async function quitApp(): Promise<void> {
 export async function setTrayTooltip(text: string): Promise<void> {
   if (isTauri) await invoke('set_tray_tooltip', { text });
 }
+
+// Clipboard
+
+export async function copyText(text: string): Promise<void> {
+  if (isTauri) {
+    const { writeText } = await import('@tauri-apps/plugin-clipboard-manager');
+    await writeText(text);
+  } else {
+    await navigator.clipboard.writeText(text);
+  }
+}
+
+// Files: export, import and backups
+
+export interface FileFilter {
+  name: string;
+  extensions: string[];
+}
+
+/** Offers a file for download in the browser preview. */
+function download(name: string, contents: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([contents], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Asks where to save and writes the file. In the browser it downloads instead.
+ * Returns false if the user cancelled.
+ */
+export async function saveTextFile(
+  defaultName: string,
+  contents: string,
+  filter: FileFilter,
+): Promise<boolean> {
+  if (!isTauri) {
+    download(
+      defaultName,
+      contents,
+      filter.extensions[0] === 'json' ? 'application/json' : 'text/markdown',
+    );
+    return true;
+  }
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const path = await save({ defaultPath: defaultName, filters: [filter] });
+  if (!path) return false;
+  await invoke('write_text_file', { path, contents });
+  return true;
+}
+
+/** Asks for a file and reads it. Returns null if the user cancelled. */
+export async function openTextFile(filter: FileFilter): Promise<string | null> {
+  if (isTauri) {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const path = await open({ multiple: false, directory: false, filters: [filter] });
+    if (typeof path !== 'string') return null;
+    return invoke<string>('read_text_file', { path });
+  }
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = filter.extensions.map((e) => `.${e}`).join(',');
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (file) void file.text().then(resolve, () => resolve(null));
+      else resolve(null);
+    });
+    input.addEventListener('cancel', () => resolve(null));
+    input.click();
+  });
+}
+
+/**
+ * Writes a set of files into a new folder named `folderName` inside a folder
+ * the user picks. The browser preview downloads one combined file instead.
+ * Returns false if the user cancelled.
+ */
+export async function saveFolder(
+  folderName: string,
+  files: { path: string; contents: string }[],
+): Promise<boolean> {
+  if (!isTauri) {
+    const combined = files.map((f) => f.contents.trim()).join('\n\n---\n\n');
+    download(`${folderName}.md`, `${combined}\n`, 'text/markdown');
+    return true;
+  }
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const dir = await open({ directory: true, multiple: false, title: 'Choose where to export' });
+  if (typeof dir !== 'string') return false;
+  await invoke('write_files', {
+    dir,
+    files: files.map((f) => ({ path: `${folderName}/${f.path}`, contents: f.contents })),
+  });
+  return true;
+}
+
+/** True where automatic backups are written (the desktop app). */
+export const canBackUp = isTauri;
+
+/** Writes a backup into the app's backups folder, keeping the newest `keep`. */
+export async function writeBackup(name: string, contents: string, keep: number): Promise<void> {
+  if (isTauri) await invoke('write_backup', { name, contents, keep });
+}
+
+export async function openBackupsFolder(): Promise<void> {
+  if (isTauri) await invoke('open_backups_folder');
+}

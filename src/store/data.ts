@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { opKey, type Repository, type WriteOp } from '@/data/repository';
+import { opKey, type LoadResult, type Repository, type WriteOp } from '@/data/repository';
 import { DEFAULT_SETTINGS, emptyTables, type Settings, type Tables } from '@/data/types';
 import { applyChanges, mergeEntries, Tx, type Change, type HistoryEntry } from './history';
 
@@ -193,6 +193,32 @@ export function undoEntry(id: number): boolean {
 export function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void {
   useData.setState((s) => ({ settings: { ...s.settings, [key]: value } }));
   queue([{ kind: 'setting', key, value }]);
+}
+
+/**
+ * Replaces all data and settings with an imported set, in storage and then
+ * in memory. Pending saves are written first so they can't land on top of
+ * the import. Undo history is cleared, since it describes the old data.
+ * Settings that belong to this computer (`keep`) carry over.
+ */
+export async function replaceData(data: LoadResult, keep: (keyof Settings)[] = []): Promise<void> {
+  if (!repo) throw new Error('Storage isn’t ready');
+  await flushWrites();
+  const current = useData.getState().settings;
+  const settings: Partial<Settings> = { ...data.settings };
+  for (const key of keep) (settings as Record<string, unknown>)[key] = current[key];
+  await repo.replaceAll({ tables: data.tables, settings });
+  // Anything queued meanwhile (or waiting to retry) was for the old data.
+  pending = new Map();
+  if (timer) clearTimeout(timer);
+  timer = null;
+  useData.setState({
+    tables: data.tables,
+    settings: normalizeSettings(settings),
+    past: [],
+    future: [],
+    saveError: null,
+  });
 }
 
 /** Replaces all data in memory and storage, e.g. for tests. Clears undo history. */

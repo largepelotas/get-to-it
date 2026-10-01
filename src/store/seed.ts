@@ -29,6 +29,9 @@ export function welcomeDoc(): RichNode {
           bullet('Right-click a list or folder to rename it, colour it, pin it or move it.'),
           bullet('Drag lists in the sidebar to reorder them or move them between folders.'),
           bullet('Deleted lists go to the Trash, where you can restore them.'),
+          bullet(
+            'Press ⌘K (Ctrl+K on Windows) to search every list, task and note, or to run a command. ⌘/ lists all the shortcuts.',
+          ),
           bullet('Undo with ⌘Z on a Mac or Ctrl+Z on Windows.'),
         ],
       },

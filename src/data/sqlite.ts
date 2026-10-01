@@ -270,6 +270,41 @@ export class SqliteRepository implements Repository {
     return { tables, settings: settings as Partial<Settings> };
   }
 
+  /**
+   * Swaps in a whole new data set in one transaction. Rows that don't come
+   * back get a tombstone, as if they'd been deleted.
+   */
+  async replaceAll({ tables, settings }: LoadResult): Promise<void> {
+    await this.migrate();
+    const now = Date.now();
+    const statements: { sql: string; params: unknown[] }[] = [];
+    for (const table of TABLE_NAMES) {
+      statements.push(
+        {
+          sql: `INSERT OR REPLACE INTO tombstones (entity, id, deleted_at) SELECT '${table}', id, ? FROM ${table}`,
+          params: [now],
+        },
+        { sql: `DELETE FROM ${table}`, params: [] },
+        ...Object.values(tables[table] ?? {}).map((row) => ({
+          sql: putSql(table),
+          params: rowToRecord(table, row),
+        })),
+        {
+          sql: `DELETE FROM tombstones WHERE entity = '${table}' AND id IN (SELECT id FROM ${table})`,
+          params: [],
+        },
+      );
+    }
+    statements.push({ sql: 'DELETE FROM settings', params: [] });
+    for (const [key, value] of Object.entries(settings)) {
+      statements.push({
+        sql: 'INSERT INTO settings (key, value) VALUES (?, ?)',
+        params: [key, JSON.stringify(value ?? null)],
+      });
+    }
+    await this.db.batch(statements);
+  }
+
   async write(ops: WriteOp[]): Promise<void> {
     if (!ops.length) return;
     await this.migrate();

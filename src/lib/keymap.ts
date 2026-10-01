@@ -1,0 +1,79 @@
+import type { Shortcut } from './shortcuts';
+
+/** App-wide shortcuts, handled in `useAppShortcuts`. */
+export const SHORTCUTS = {
+  palette: 'Mod+K',
+  search: 'Mod+F',
+  newTask: 'Mod+N',
+  newList: 'Mod+Shift+N',
+  today: 'Mod+1',
+  upcoming: 'Mod+2',
+  reminders: 'Mod+3',
+  copyMarkdown: 'Mod+Shift+C',
+  settings: 'Mod+,',
+  help: 'Mod+/',
+  undo: 'Mod+Z',
+  redo: 'Mod+Shift+Z',
+  /** On a task: open the due-date picker. */
+  dueDate: 'Mod+D',
+  /** On a task: show or hide its details. */
+  details: 'Mod+I',
+} satisfies Record<string, Shortcut>;
+
+export interface ShortcutHelp {
+  keys: Shortcut[];
+  label: string;
+}
+
+/** Everything listed in the Keyboard shortcuts dialog, by section. */
+export const SHORTCUT_HELP: { title: string; entries: ShortcutHelp[] }[] = [
+  {
+    title: 'Everywhere',
+    entries: [
+      { keys: [SHORTCUTS.palette], label: 'Search and run commands' },
+      { keys: [SHORTCUTS.newTask], label: 'Add a task or item to the open list' },
+      { keys: [SHORTCUTS.newList], label: 'New list' },
+      { keys: [SHORTCUTS.today], label: 'Go to Today' },
+      { keys: [SHORTCUTS.upcoming], label: 'Go to Upcoming' },
+      { keys: [SHORTCUTS.reminders], label: 'Go to Reminders' },
+      { keys: [SHORTCUTS.copyMarkdown], label: 'Copy the open list as Markdown' },
+      { keys: [SHORTCUTS.undo], label: 'Undo' },
+      { keys: [SHORTCUTS.redo], label: 'Redo' },
+      { keys: [SHORTCUTS.settings], label: 'Settings' },
+      { keys: [SHORTCUTS.help], label: 'Keyboard shortcuts' },
+    ],
+  },
+  {
+    title: 'Tasks',
+    entries: [
+      { keys: ['ArrowUp', 'ArrowDown'], label: 'Select the task above or below' },
+      { keys: ['Enter'], label: 'Edit the task, or add one below while editing' },
+      { keys: ['Space', 'Mod+Enter'], label: 'Complete' },
+      { keys: ['Tab', 'Shift+Tab'], label: 'Make a subtask, or move it back out' },
+      { keys: ['Alt+ArrowUp', 'Alt+ArrowDown'], label: 'Move up or down' },
+      { keys: [SHORTCUTS.details], label: 'Show or hide details' },
+      { keys: [SHORTCUTS.dueDate], label: 'Set the due date' },
+      { keys: ['Delete'], label: 'Delete' },
+      { keys: ['Escape'], label: 'Stop editing, then clear the selection' },
+    ],
+  },
+  {
+    title: 'Grocery lists',
+    entries: [
+      { keys: ['Space'], label: 'Put in the cart, or take out' },
+      { keys: ['Enter'], label: 'Edit the name' },
+      { keys: ['Tab'], label: 'From the name to the quantity' },
+      { keys: ['Alt+ArrowUp', 'Alt+ArrowDown'], label: 'Move within the category' },
+    ],
+  },
+  {
+    title: 'Notes',
+    entries: [
+      { keys: ['Mod+B', 'Mod+I', 'Mod+U'], label: 'Bold, italic, underline' },
+      { keys: ['Mod+Alt+1', 'Mod+Alt+2', 'Mod+Alt+3'], label: 'Headings' },
+      { keys: ['Mod+Shift+8', 'Mod+Shift+7'], label: 'Bulleted or numbered list' },
+      { keys: ['Mod+Shift+9'], label: 'Checklist' },
+      { keys: ['Mod+Click'], label: 'Open a link' },
+    ],
+  },
+];

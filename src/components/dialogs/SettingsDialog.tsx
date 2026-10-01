@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button, Dialog, Input, Select } from '@/components/ui';
 import type { Settings } from '@/data/types';
-import { isTimeString } from '@/lib/dates';
-import { getLaunchAtLogin, isTauri, setLaunchAtLogin } from '@/platform';
+import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
+import { formatTimestamp, isTimeString } from '@/lib/dates';
+import { canBackUp, getLaunchAtLogin, isTauri, setLaunchAtLogin } from '@/platform';
+import { BACKUPS_KEPT } from '@/store/backup';
 import { setSetting, useData } from '@/store/data';
 import { closeDialog } from '@/store/ui';
 import { GroceryCategoriesEditor } from './GroceryCategoriesEditor';
@@ -124,6 +126,59 @@ function LaunchAtLogin() {
   );
 }
 
+function DataSection() {
+  const backupsEnabled = useData((s) => s.settings.backupsEnabled);
+  const lastBackupAt = useData((s) => s.settings.lastBackupAt);
+  const [busy, setBusy] = useState(false);
+  const run = (action: () => Promise<void>) => () => {
+    setBusy(true);
+    void action().finally(() => setBusy(false));
+  };
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={busy} onClick={run(exportJson)}>
+          Export…
+        </Button>
+        <Button disabled={busy} onClick={run(importJson)}>
+          Import…
+        </Button>
+        <Button disabled={busy} onClick={run(exportMarkdown)}>
+          Export as Markdown…
+        </Button>
+      </div>
+      <p className="text-xs text-fg-subtle">
+        Export saves everything to a JSON file that Import can read back. Importing replaces
+        everything that’s here.
+      </p>
+      <Toggle
+        id="settings-backups"
+        label="Back up automatically every day"
+        hint={
+          !canBackUp
+            ? 'Only in the desktop app.'
+            : lastBackupAt
+              ? `Last backup: ${formatTimestamp(lastBackupAt)}. The last ${BACKUPS_KEPT} are kept.`
+              : `No backup yet. The last ${BACKUPS_KEPT} are kept.`
+        }
+        checked={canBackUp && backupsEnabled}
+        disabled={!canBackUp}
+        onChange={(next) => setSetting('backupsEnabled', next)}
+      />
+      {canBackUp && (
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy} onClick={run(backUpNow)}>
+            Back up now
+          </Button>
+          <Button variant="ghost" onClick={showBackups}>
+            Show backups
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function SettingsDialog() {
   const settings = useData((s) => s.settings);
   const set =
@@ -191,6 +246,10 @@ export function SettingsDialog() {
 
         <Section title="Grocery categories">
           <GroceryCategoriesEditor />
+        </Section>
+
+        <Section title="Data">
+          <DataSection />
         </Section>
       </div>
     </Dialog>
