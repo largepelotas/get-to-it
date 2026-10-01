@@ -24,36 +24,48 @@ async function addContent(page: Page) {
   await row(page, 'milk').getByRole('checkbox').click();
 }
 
-for (const theme of ['light', 'dark'] as const) {
-  test(`every screen passes axe in the ${theme} theme`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: theme });
-    await openApp(page);
-    await addContent(page);
+const PALETTES = ['Graphite and cobalt', 'Stone and moss', 'Sage study', 'Midnight ink', 'Dusk'];
 
-    await expectAccessible(page);
-    await openList(page, 'Inbox');
-    await row(page, 'Review deck').hover();
-    await row(page, 'Review deck').getByRole('button', { name: 'Open details' }).click();
-    await expectAccessible(page);
-    await openList(page, 'Welcome');
-    await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
-    await expectAccessible(page);
-
-    for (const view of ['Today', 'Upcoming', 'Reminders', 'Archive', 'Trash']) {
-      await page.getByRole('button', { name: new RegExp(`^${view}`) }).click();
-      await expect(page.getByRole('heading', { level: 1, name: view })).toBeVisible();
-      await expectAccessible(page);
-    }
-
-    for (const shortcut of ['ControlOrMeta+,', 'ControlOrMeta+/', 'ControlOrMeta+k']) {
-      await page.keyboard.press(shortcut);
-      await expect(page.getByRole('dialog')).toBeVisible();
-      await expectAccessible(page);
-      await page.keyboard.press('Escape');
-      await expect(page.getByRole('dialog')).toBeHidden();
-    }
-  });
+/** Picks a colour scheme in Settings. */
+async function useColourScheme(page: Page, name: string) {
+  await page.keyboard.press('ControlOrMeta+,');
+  await page.getByRole('combobox', { name: 'Colour scheme' }).selectOption(name);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
 }
+
+for (const palette of PALETTES)
+  for (const theme of ['light', 'dark'] as const) {
+    test(`every screen passes axe in ${palette}, ${theme} theme`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme });
+      await openApp(page);
+      await useColourScheme(page, palette);
+      await addContent(page);
+
+      await expectAccessible(page);
+      await openList(page, 'Inbox');
+      await row(page, 'Review deck').hover();
+      await row(page, 'Review deck').getByRole('button', { name: 'Open details' }).click();
+      await expectAccessible(page);
+      await openList(page, 'Welcome');
+      await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
+      await expectAccessible(page);
+
+      for (const view of ['Today', 'Upcoming', 'Reminders', 'Archive', 'Trash']) {
+        await page.getByRole('button', { name: new RegExp(`^${view}`) }).click();
+        await expect(page.getByRole('heading', { level: 1, name: view })).toBeVisible();
+        await expectAccessible(page);
+      }
+
+      for (const shortcut of ['ControlOrMeta+,', 'ControlOrMeta+/', 'ControlOrMeta+k']) {
+        await page.keyboard.press(shortcut);
+        await expect(page.getByRole('dialog')).toBeVisible();
+        await expectAccessible(page);
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toBeHidden();
+      }
+    });
+  }
 
 test.describe('keyboard', () => {
   test.beforeEach(async ({ page }) => {

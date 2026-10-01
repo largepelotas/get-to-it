@@ -123,7 +123,7 @@ function CustomRepeat({ item, rule }: { item: Item; rule: Recurrence }) {
             if (Number.isInteger(n) && n >= 1 && n <= 999) update({ interval: n });
           }}
           onBlur={() => setIntervalText(String(rule.interval))}
-          className="h-7 w-12 shrink-0 rounded-md border border-line-strong bg-surface px-1 text-center text-xs text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+          className="h-7 w-12 shrink-0 rounded-md border border-line-control bg-surface px-1 text-center text-xs text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
         />
         <Select
           aria-label="Repeat unit"

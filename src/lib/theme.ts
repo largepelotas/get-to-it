@@ -1,4 +1,4 @@
-import type { ColorName, Settings } from '@/data/types';
+import { PALETTE_NAMES, type ColorName, type PaletteName, type Settings } from '@/data/types';
 
 export type ThemePreference = Settings['theme'];
 export type ResolvedTheme = 'light' | 'dark';
@@ -19,6 +19,26 @@ export function resolveTheme(preference: ThemePreference): ResolvedTheme {
 /** Sets `data-theme` on <html>, which switches every design token. */
 export function applyTheme(theme: ResolvedTheme): void {
   document.documentElement.dataset.theme = theme;
+}
+
+/** The colour schemes in the order Settings offers them, with their names. */
+export const PALETTES: { value: PaletteName; label: string }[] = [
+  { value: 'graphite', label: 'Graphite and cobalt' },
+  { value: 'stone', label: 'Stone and moss' },
+  { value: 'sage', label: 'Sage study' },
+  { value: 'midnight', label: 'Midnight ink' },
+  { value: 'dusk', label: 'Dusk' },
+];
+
+export function isPaletteName(value: unknown): value is PaletteName {
+  return PALETTE_NAMES.includes(value as PaletteName);
+}
+
+/** Sets `data-palette` on <html>, which picks the colour scheme. Graphite is the stylesheet's default. */
+export function applyPalette(palette: PaletteName): void {
+  const root = document.documentElement;
+  if (isPaletteName(palette) && palette !== 'graphite') root.dataset.palette = palette;
+  else delete root.dataset.palette;
 }
 
 /** Calls `onChange` when the OS switches between light and dark. Returns an unsubscribe. */

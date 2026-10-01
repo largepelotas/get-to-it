@@ -41,7 +41,7 @@ export function Checkbox({
       onClick={() => onChange(!checked)}
       className={clsx(
         'flex size-4 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors disabled:opacity-50',
-        checked ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong hover:bg-hover',
+        checked ? 'border-accent bg-accent text-accent-fg' : 'border-line-control hover:bg-hover',
         className,
       )}
       style={!checked && color ? { borderColor: color } : undefined}

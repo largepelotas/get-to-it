@@ -128,6 +128,7 @@ export function CommandPalette() {
   const [selected, setSelected] = useState('');
   const tables = useData((s) => s.tables);
   const theme = useData((s) => s.settings.theme);
+  const palette = useData((s) => s.settings.palette);
   const undoLabel = useData((s) => s.past[s.past.length - 1]?.label ?? null);
   const redoLabel = useData((s) => s.future[s.future.length - 1]?.label ?? null);
   const view = useUI((s) => s.view);
@@ -140,13 +141,13 @@ export function CommandPalette() {
   const results = useMemo(() => search(tables, query), [tables, query]);
   /** Commands with how well they match, best first (all of them, in order, with no query). */
   const commands = useMemo(() => {
-    const all = paletteCommands({ view, tables, theme, undoLabel, redoLabel });
+    const all = paletteCommands({ view, tables, theme, palette, undoLabel, redoLabel });
     if (!terms.length) return all.map((command) => ({ command, score: 0 }));
     return all
       .map((command) => ({ command, score: commandScore(command, terms) }))
       .filter((c): c is { command: PaletteCommand; score: number } => c.score !== null)
       .sort((a, b) => b.score - a.score);
-  }, [view, tables, theme, undoLabel, redoLabel, terms]);
+  }, [view, tables, theme, palette, undoLabel, redoLabel, terms]);
   const allLists = useMemo(() => {
     if (terms.length) return [];
     const model = sidebarModel(tables);

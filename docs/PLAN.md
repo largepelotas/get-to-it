@@ -125,7 +125,7 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - Keyboard shortcuts for everything common.
 - Copy any list or note as Markdown.
 - JSON export and import, Markdown export, and automatic daily backups.
-- Light, dark and system themes.
+- Light, dark and system themes, in five colour schemes (the same as another project's).
 
 ## Milestones
 

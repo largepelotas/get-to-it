@@ -3,6 +3,7 @@ import { Button, Dialog, Input, Select } from '@/components/ui';
 import type { Settings } from '@/data/types';
 import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
 import { formatTimestamp, isTimeString } from '@/lib/dates';
+import { PALETTES } from '@/lib/theme';
 import { canBackUp, getLaunchAtLogin, isTauri, setLaunchAtLogin } from '@/platform';
 import { BACKUPS_KEPT } from '@/store/backup';
 import { setSetting, useData } from '@/store/data';
@@ -209,6 +210,19 @@ export function SettingsDialog() {
               <option value="system">System</option>
               <option value="light">Light</option>
               <option value="dark">Dark</option>
+            </Select>
+          </Row>
+          <Row label="Colour scheme" htmlFor="settings-palette">
+            <Select
+              id="settings-palette"
+              value={settings.palette}
+              onChange={(e) => set('palette')(e.target.value as Settings['palette'])}
+            >
+              {PALETTES.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
             </Select>
           </Row>
           <Row label="Week starts on" htmlFor="settings-week-start">

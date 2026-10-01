@@ -352,9 +352,34 @@ history)`, which only returns categories that still exist.
   dark on `[data-theme='dark']`. `<html data-theme>` is set from
   `settings.theme` (following the OS for "system") before the first paint
   and by `useApplyTheme`. The `dark:` variant follows `data-theme` too.
+- Colour schemes: five palettes shared with another project (Graphite and
+  cobalt, Stone and moss, Sage study, Midnight ink, Dusk), each with a light
+  and a dark theme, picked in Settings or the palette ("Use the … colour
+  scheme"). `settings.palette` (`PaletteName`, default `graphite`, the
+  closest to the original look) is exported and imported like `theme`.
+  `applyPalette` sets `<html data-palette>`, left off for Graphite, whose
+  values are the bare `:root` rules; each other palette has a
+  `[data-palette='…']` rule and a `[data-palette='…'][data-theme='dark']`
+  one. Values come from another project's DESIGN.md: `surface` is its `bg`,
+  `sidebar` its rail, `elevated` its raised surface, `fg`/`fg-muted`/
+  `fg-subtle` its three inks, `hover` its ink wash, `danger` its fail
+  colour; `selected` and `accent-soft` are the accent at 0.12 and
+  `danger-soft` danger at 0.1, `accent-hover` and `danger-hover` move 12%
+  toward black (light) or white (dark), and text on
+  accent and danger fills is white in light themes and the rail colour in
+  dark. The list colours are the user's choice and stay the same in every
+  palette. `styles/tokens.test.ts` checks every text colour on every surface
+  and wash in all ten combinations (4.5:1), and that no palette leaves out a
+  token. It also checks non-text contrast (3:1, WCAG 1.4.11) on every
+  surface, hovered and selected rows included: `--line-control` (the
+  palette's `line-strong` moved toward its ink), the accent (focus ring), and
+  the list colours, whose light values were darkened in OKLCH lightness
+  (hue kept) to reach 3:1 on every palette.
 - Tailwind names map to the tokens: `bg-surface`, `bg-sidebar`,
   `bg-elevated`, `bg-hover`, `bg-selected`, `text-fg`, `text-fg-muted`,
-  `text-fg-subtle`, `border-line`, `border-line-strong`, `bg-accent`,
+  `text-fg-subtle`, `border-line`, `border-line-strong`,
+  `border-line-control` (borders that show where a control is: checkbox
+  rings, text fields, the quick-add fields), `bg-accent`,
   `text-accent-fg`, `bg-accent-soft`, `text-danger`, `text-danger-fg`
   (text on `bg-danger`), `bg-danger-soft`, `bg-overlay`, `shadow-popover`.
   Use these, not raw colors.
@@ -363,8 +388,8 @@ history)`, which only returns categories that still exist.
   are darker in light mode and lighter in dark mode than before, the light
   accent is darker, the dark accent lighter, and text on the dark theme's
   accent and danger fills is dark (`--accent-fg`, `--danger-fg`). The
-  accessibility e2e test checks this with axe in both themes, so a new
-  colour that's too faint fails CI.
+  accessibility e2e test checks this with axe in every palette and both
+  themes, so a new colour that's too faint fails CI.
 - The 10 list colors are `--list-<name>`; use `colorVar(name)` in a style.
 - Rich text (the editor, task notes and `RichTextPreview`) renders the
   same HTML under `.rich-text`, styled in `index.css` (Tailwind's reset
@@ -520,7 +545,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   - `groceryMenu.tsx`: `categoryEntries` and `groceryMenuEntries`.
 - `components/dialogs/Dialogs.tsx`: New list (type, name, folder) and the
   confirmation dialog, driven by `useUI.dialog`. `SettingsDialog.tsx`:
-  theme, week start, reading dates in new tasks, the all-day reminder
+  theme, colour scheme, week start, reading dates in new tasks, the all-day reminder
   time, close to tray, open at login (read from and written to the
   autostart plugin, not stored in settings; disabled in the browser) and
   the grocery categories (`GroceryCategoriesEditor`: rename, reorder with
@@ -542,7 +567,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   auto-focus would otherwise take it back from the revealed row or a new
   dialog). `paletteCommands(context)` builds the commands that apply
   (New task only with a quick-add field, Copy as Markdown in a list,
-  Undo/Redo with the step's name, the other two themes, export, import,
+  Undo/Redo with the step's name, the other two themes and four colour schemes, export, import,
   backups in the desktop app, Empty Trash when there is one), and
   `commandScore` matches only words that start a word of the command's
   own label (`matchLabel`, so a list's title in "Copy “Work” as Markdown"
