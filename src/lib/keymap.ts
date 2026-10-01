@@ -12,6 +12,9 @@ export const SHORTCUTS = {
   copyMarkdown: 'Mod+Shift+C',
   settings: 'Mod+,',
   help: 'Mod+/',
+  /** Move between the sidebar, the open view and the details panel. */
+  nextRegion: 'F6',
+  previousRegion: 'Shift+F6',
   undo: 'Mod+Z',
   redo: 'Mod+Shift+Z',
   /** On a task: open the due-date picker. */
@@ -37,6 +40,11 @@ export const SHORTCUT_HELP: { title: string; entries: ShortcutHelp[] }[] = [
       { keys: [SHORTCUTS.upcoming], label: 'Go to Upcoming' },
       { keys: [SHORTCUTS.reminders], label: 'Go to Reminders' },
       { keys: [SHORTCUTS.copyMarkdown], label: 'Copy the open list as Markdown' },
+      {
+        keys: [SHORTCUTS.nextRegion, SHORTCUTS.previousRegion],
+        label: 'Move between the sidebar, the list and the details',
+      },
+      { keys: ['Shift+F10'], label: 'Open the menu of the focused row' },
       { keys: [SHORTCUTS.undo], label: 'Undo' },
       { keys: [SHORTCUTS.redo], label: 'Redo' },
       { keys: [SHORTCUTS.settings], label: 'Settings' },

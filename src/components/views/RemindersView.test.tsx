@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { preloadDialogs } from '@/components/dialogs/lazy';
 import { App } from '@/App';
 import { MemoryRepository } from '@/data/memory';
 import { addDaysKey, todayKey } from '@/lib/dates';
@@ -15,6 +16,9 @@ let work: string;
 const today = todayKey();
 const tomorrow = addDaysKey(today, 1);
 const yesterday = addDaysKey(today, -1);
+
+// Dialogs load lazily; loaded up front they open without suspending.
+beforeAll(() => preloadDialogs());
 
 beforeEach(() => {
   resetForTests(new MemoryRepository());

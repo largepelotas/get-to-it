@@ -1,15 +1,23 @@
 import clsx from 'clsx';
-import { ChevronRight, Flag, GripVertical, NotebookText, PanelRight, Repeat } from 'lucide-react';
+import {
+  Bell,
+  ChevronRight,
+  Flag,
+  GripVertical,
+  NotebookText,
+  PanelRight,
+  Repeat,
+} from 'lucide-react';
 import { useState, type CSSProperties, type KeyboardEvent, type Ref } from 'react';
 import { ContextMenu, IconButton, type MenuEntries } from '@/components/ui';
 import { toggleItem } from '@/commands';
-import type { List } from '@/data/types';
 import { formatDue, formatTime, isOverdue } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { setItemCollapsed, setItemText } from '@/store/actions/items';
 import type { FlatRow } from '@/store/tree';
 import { Checkbox } from './Checkbox';
-import { PRIORITY_COLOR, PRIORITY_LABEL } from './priority';
+import { describeRow, originTitle, type RowOrigin } from './describeRow';
+import { PRIORITY_COLOR } from './priority';
 
 /** Horizontal step per subtask level, in px. Also the drag distance per level. */
 export const INDENT = 24;
@@ -36,11 +44,13 @@ export interface ItemRowProps {
    * For rows outside their list (Today, Upcoming): no tree controls, and the
    * list (and parent task) shown on the right.
    */
-  origin?: { list: List; parentText?: string };
+  origin?: RowOrigin;
   /** Show only the time of the due date (the view's heading already says the day). */
   timeOnly?: boolean;
   /** Replaces the default check action (e.g. to confirm completions with a toast). */
   onToggle?: (checked: boolean) => void;
+  /** The task has a reminder still to go off. */
+  hasReminder?: boolean;
   menu: () => MenuEntries;
   onKeyDown: (event: KeyboardEvent<HTMLElement>, mode: RowKeyMode) => void;
   onSelect: () => void;
@@ -92,9 +102,6 @@ function ItemText({
   );
 }
 
-const originTitle = (origin: NonNullable<ItemRowProps['origin']>) =>
-  origin.parentText ? `${origin.list.title} › ${origin.parentText}` : origin.list.title;
-
 export function ItemRow({
   row,
   selected,
@@ -105,6 +112,7 @@ export function ItemRow({
   origin,
   timeOnly = false,
   onToggle,
+  hasReminder = false,
   menu,
   onKeyDown,
   onSelect,
@@ -113,6 +121,8 @@ export function ItemRow({
   const { item, childCount, doneCount } = row;
   const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
   const hasNotes = !!item.details;
+  const description = describeRow(row, { hasReminder, origin });
+  const descriptionId = `row-desc-${item.id}`;
 
   return (
     <ContextMenu entries={menu}>
@@ -123,6 +133,7 @@ export function ItemRow({
         data-item-id={item.id}
         tabIndex={tabbable ? 0 : -1}
         aria-label={item.text}
+        aria-describedby={description ? descriptionId : undefined}
         aria-current={selected ? 'true' : undefined}
         onFocus={onSelect}
         onClick={(e) => {
@@ -188,30 +199,29 @@ export function ItemRow({
         />
         <ItemText id={item.id} text={item.text} checked={item.checked} readOnly={readOnly} />
         <span className="min-w-0 flex-1 self-stretch" />
-        <span className="flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle">
+        {description && (
+          <span id={descriptionId} hidden>
+            {description}
+          </span>
+        )}
+        <span aria-hidden className="flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle">
           {childCount > 0 && (
-            <span
-              className="tabular-nums"
-              aria-label={`${doneCount} of ${childCount} subtasks done`}
-            >
+            <span className="tabular-nums">
               {doneCount}/{childCount}
             </span>
           )}
-          {hasNotes && <NotebookText aria-label="Has notes" className="size-3.5" />}
+          {hasReminder && <Bell className="size-3.5" />}
+          {hasNotes && <NotebookText className="size-3.5" />}
           {item.dueDate && (!timeOnly || item.dueTime || item.recurrence) && (
             <span className={clsx('flex items-center gap-1', overdue && 'text-danger')}>
-              {item.recurrence && <Repeat aria-label="Repeats" className="size-3" />}
+              {item.recurrence && <Repeat className="size-3" />}
               {timeOnly
                 ? item.dueTime && formatTime(item.dueTime)
                 : formatDue(item.dueDate, item.dueTime)}
             </span>
           )}
           {item.priority > 0 && (
-            <Flag
-              aria-label={PRIORITY_LABEL[item.priority]}
-              className="size-3.5"
-              style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }}
-            />
+            <Flag className="size-3.5" style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }} />
           )}
           {origin && (
             <span

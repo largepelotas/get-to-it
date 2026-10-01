@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Checklist",
-  "version": "0.1.0",
+  "version": "../package.json",
   "identifier": "com.largepelotas.checklist",
   "build": {
     "frontendDist": "../dist",
@@ -40,8 +40,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "longDescription": "To-do lists with subtasks, due dates, repeats and reminders, grocery lists sorted by category, and rich-text notes. Everything is stored on this computer.",
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
     },
     "windows": {
       "nsis": {

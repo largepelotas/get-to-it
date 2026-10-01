@@ -65,10 +65,10 @@ function SortableRow({
 
 function SectionTitle({ children, count }: { children: ReactNode; count: number }) {
   return (
-    <h3 className="flex h-7 items-center gap-1.5 px-2 text-xs font-semibold text-fg-muted">
+    <h2 className="flex h-7 items-center gap-1.5 px-2 text-xs font-semibold text-fg-muted">
       {children}
       <span className="font-normal text-fg-subtle tabular-nums">{count}</span>
-    </h3>
+    </h2>
   );
 }
 

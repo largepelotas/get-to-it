@@ -23,6 +23,18 @@ export default defineConfig({
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rolldownOptions: {
+      output: {
+        // React rarely changes, so it gets its own chunk. Only modules every
+        // screen needs belong here: a group pulls its modules into one chunk,
+        // so adding a lazily loaded library would load it at startup.
+        codeSplitting: {
+          groups: [
+            { name: 'react', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+          ],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

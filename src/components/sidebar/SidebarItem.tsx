@@ -58,7 +58,10 @@ export function SidebarItem({
       {editor ?? <span className="min-w-0 flex-1 truncate">{label}</span>}
       {trailing}
       {!editor && count ? (
-        <span className="text-xs text-fg-subtle tabular-nums">{count}</span>
+        // A folder's "…" button takes this spot while the row is hovered or focused.
+        <span className="text-xs text-fg-subtle tabular-nums group-focus-within/folder:invisible group-hover/folder:invisible">
+          {count}
+        </span>
       ) : null}
     </div>
   );

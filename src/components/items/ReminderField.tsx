@@ -100,7 +100,7 @@ export function ReminderField({ item, readOnly }: { item: Item; readOnly: boolea
 
   return (
     <div>
-      <h3 className="mb-1.5 flex items-center text-xs font-medium text-fg-muted">
+      <h2 className="mb-1.5 flex items-center text-xs font-medium text-fg-muted">
         <span className="flex-1">Reminders</span>
         {!readOnly && (
           <Menu
@@ -111,7 +111,7 @@ export function ReminderField({ item, readOnly }: { item: Item; readOnly: boolea
             }
           />
         )}
-      </h3>
+      </h2>
       {reminders.length > 0 && (
         <ul aria-label="Reminders" className="space-y-0.5">
           {reminders.map(({ reminder, at }) => {

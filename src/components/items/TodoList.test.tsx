@@ -37,7 +37,7 @@ describe('TodoList', () => {
     await user.type(field, 'Call Sam{Enter}');
     expect(field).toHaveValue('');
     expect(open()).toEqual(['Pay invoice@0', 'Call Sam@0']);
-    expect(within(row('Pay invoice')).getByLabelText('Priority 1')).toBeInTheDocument();
+    expect(row('Pay invoice')).toHaveAccessibleDescription('Priority 1');
   });
 
   it('adds below with Enter and nests the new task with Tab', async () => {

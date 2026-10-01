@@ -25,6 +25,7 @@ import { EmptyState } from '@/components/views/ViewHeader';
 import type { List } from '@/data/types';
 import { SHORTCUTS } from '@/lib/keymap';
 import { matchesShortcut } from '@/lib/shortcuts';
+import { useItemsWithReminders } from '@/hooks/useReminders';
 import { isMac } from '@/platform';
 import {
   createItemFromText,
@@ -114,6 +115,7 @@ export function TodoList({ list }: { list: List }) {
   const model = useMemo(() => todoModel(items, list.id), [items, list.id]);
   const selectedId = useUI((s) => s.selectedItemId);
   const reveal = useUI((s) => s.reveal);
+  const reminded = useItemsWithReminders();
   const readOnly = !!(list.deletedAt || list.archivedAt);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -409,6 +411,7 @@ export function TodoList({ list }: { list: List }) {
       drag={drag}
       readOnly={readOnly}
       selected={row.item.id === selectedId}
+      hasReminder={reminded.has(row.item.id)}
       tabbable={row.item.id === selectedId || (index === 0 && !selectionShown)}
       menu={menuFor(index)}
       onSelect={() => selectItem(row.item.id)}

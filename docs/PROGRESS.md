@@ -5,17 +5,20 @@ happens one milestone per chat; update this file at the end of each one.
 
 ## Status
 
-| #   | Milestone     | State                            |
-| --- | ------------- | -------------------------------- |
-| M0  | Project setup | **Done**                         |
-| M1  | App frame     | **Done**                         |
-| M2  | To-do lists   | **Done**                         |
-| M3  | Due dates     | **Done**                         |
-| M4  | Reminders     | **Done**                         |
-| M5  | Grocery lists | **Done**                         |
-| M6  | Notes         | **Done**                         |
-| M7  | Search, etc.  | **Done**                         |
-| M8  | Polish        | Next (see the end of this file). |
+| #   | Milestone     | State    |
+| --- | ------------- | -------- |
+| M0  | Project setup | **Done** |
+| M1  | App frame     | **Done** |
+| M2  | To-do lists   | **Done** |
+| M3  | Due dates     | **Done** |
+| M4  | Reminders     | **Done** |
+| M5  | Grocery lists | **Done** |
+| M6  | Notes         | **Done** |
+| M7  | Search, etc.  | **Done** |
+| M8  | Polish        | **Done** |
+
+v1 is feature-complete. What's left before calling it 1.0 is checking the
+native paths on real macOS and Windows machines (see the end of this file).
 
 ## How to run
 
@@ -24,13 +27,24 @@ npm install
 npm run dev          # browser preview at http://localhost:1420 (data in localStorage)
 npm run app:dev      # desktop app (needs Rust; on Linux also the webkit2gtk libraries)
 npm test             # Vitest unit tests
+npm run test:e2e     # Playwright end-to-end tests (builds, then serves on :4173)
 npm run lint && npm run typecheck && npm run format:check
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of the above. `build.yml` builds an
-unsigned macOS universal `.dmg` and a Windows `.exe` installer on every push
-and uploads them as workflow artifacts.
+The end-to-end tests need a Chromium: `npx playwright install chromium`
+once, or point `PW_CHROMIUM_PATH` at one. In the Claude Code cloud
+environment use `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`, since the
+preinstalled browsers don't match the Playwright version.
+
+CI (`.github/workflows/ci.yml`) runs all of the above, the end-to-end tests
+in their own job (the HTML report is uploaded when they fail). `build.yml`
+builds an unsigned macOS universal `.dmg` and a Windows `.exe` installer on
+every push and uploads them as workflow artifacts. Pushing a `v*` tag also
+attaches them to a **draft** GitHub release; publish it by hand.
+
+The version lives in `package.json` only: `tauri.conf.json` reads it from
+there (`"version": "../package.json"`). Bump it before tagging.
 
 ## Architecture as built
 
@@ -341,8 +355,16 @@ history)`, which only returns categories that still exist.
 - Tailwind names map to the tokens: `bg-surface`, `bg-sidebar`,
   `bg-elevated`, `bg-hover`, `bg-selected`, `text-fg`, `text-fg-muted`,
   `text-fg-subtle`, `border-line`, `border-line-strong`, `bg-accent`,
-  `text-accent-fg`, `bg-accent-soft`, `text-danger`, `bg-danger-soft`,
-  `bg-overlay`, `shadow-popover`. Use these, not raw colors.
+  `text-accent-fg`, `bg-accent-soft`, `text-danger`, `text-danger-fg`
+  (text on `bg-danger`), `bg-danger-soft`, `bg-overlay`, `shadow-popover`.
+  Use these, not raw colors.
+- Since M8 every text token meets WCAG AA (4.5:1) on every surface it's
+  used on, selected and hovered rows included: `fg-subtle` and `fg-muted`
+  are darker in light mode and lighter in dark mode than before, the light
+  accent is darker, the dark accent lighter, and text on the dark theme's
+  accent and danger fills is dark (`--accent-fg`, `--danger-fg`). The
+  accessibility e2e test checks this with axe in both themes, so a new
+  colour that's too faint fails CI.
 - The 10 list colors are `--list-<name>`; use `colorVar(name)` in a style.
 - Rich text (the editor, task notes and `RichTextPreview`) renders the
   same HTML under `.rich-text`, styled in `index.css` (Tailwind's reset
@@ -369,6 +391,12 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
 - `components/menus.tsx` builds the list and folder menus (different
   entries for archived and trashed lists; grocery lists also get Uncheck
   all and Clear checked, disabled while the cart is empty).
+- `ContextMenu` also opens from the keyboard (M8): Shift+F10 or the Menu
+  key on the focused element dispatches a `contextmenu` event at its
+  bottom-left corner. Every right-click menu (task and grocery rows,
+  sidebar lists and folders) gets this for free.
+- `Checkbox` is out of the Tab order unless `tabbable` (rows handle Space
+  themselves); the details panel's checkboxes are tabbable.
 
 ### Screens
 
@@ -527,6 +555,43 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   (the last three only in the desktop app). The sidebar's settings menu
   has Keyboard shortcuts, and list menus have Copy as Markdown.
 
+### Accessibility and loading (M8)
+
+- **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)
+  puts what a task row shows into words ("Due Tomorrow 15:00. Repeats every
+  day. Priority 1. Reminder set. 1 of 3 subtasks done. Has notes. In Work
+  › Launch"). `ItemRow` renders it in a `hidden` span and points
+  `aria-describedby` at it, so the row's name stays the task text; the
+  icons and small text are `aria-hidden`. `GroceryRow` does the same with
+  the quantity, "In cart" and the category.
+- **Reminder bell.** Rows show a bell when the task has a reminder still to
+  go off. `useItemsWithReminders()` (in `hooks/useReminders.ts`) builds the
+  set once per list (`TodoList`, `SmartList`) and rows get `hasReminder`.
+- **Regions and F6.** The sidebar, the open view and the details panel
+  carry `data-region` (`sidebar`, `view`, `details`). F6 and Shift+F6
+  (`cycleRegion` in `useAppShortcuts`) move between them, landing on the
+  current thing (`aria-current`: the open list, the selected task), else
+  the quick-add field, else the first control. This is how keyboard users
+  leave a to-do list, where Tab indents.
+- **Focus.** Closing the details panel from inside it (Escape, the close
+  button) puts focus back on the task's row. Creating a list from the New
+  list dialog focuses its quick-add field. The sidebar shows a "…" button
+  on folder rows while hovered or focused (it's a sibling of the row, not
+  inside it, since the row is itself a `role=button`; the row's count hides
+  under it). The Reminders view's rows got their focus ring back.
+- **Headings.** Every view has one `h1` (a list's title field sits inside
+  one, so the heading's name is the title). Section headings in the details
+  panel and grocery categories are `h2`.
+- **Code-splitting.** The palette (with cmdk and search), Settings and the
+  shortcuts dialog load through `lazyWithPreload` in
+  `components/dialogs/lazy.tsx`: `Dialogs` preloads them 1.5 s after
+  launch, and once loaded they render without suspending. React and
+  React DOM are their own chunk (`codeSplitting.groups` in
+  `vite.config.ts`; only add modules there that every screen needs, since a
+  group is loaded as a whole). The main chunk went from 700 kB to 452 kB
+  and the size warning is gone. chrono-node (45 kB) stays in the main chunk:
+  quick-add parses synchronously as you type.
+
 ### Conventions
 
 - Soft delete with `deletedAt`. Only emptying the Trash hard-deletes.
@@ -558,6 +623,23 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   `copyText` wrote with `navigator.clipboard.readText()`.
 - UI text uses British spelling ("colour", "Grey"), matching the history
   labels.
+- End-to-end tests (M8) live in `e2e/`, run against `vite build` + `vite
+preview` (the browser preview, data in localStorage), and use only
+  roles and accessible names, like the component tests. Each test gets a
+  fresh browser context, so it starts from the seeded starter lists.
+  `helpers.ts` has `openApp`, `openList`, `sidebarButton` (sidebar names
+  include the count, e.g. "Inbox 2"), `row`, `taskRows`, `addTasks` and
+  `expectAccessible` (axe, WCAG 2.1 A/AA plus best practice). Row details
+  are asserted through `toHaveAccessibleDescription`. Use
+  `ControlOrMeta+…` for shortcuts. `reminders.spec.ts` shows the pattern for
+  time: `page.clock.install` before loading, then `clock.fastForward`, with
+  `Notification` replaced by a recorder in `addInitScript`.
+- Wait for a menu to close (`toBeHidden`) before opening the next one in
+  e2e tests; Radix is still tearing the first one down otherwise.
+- Dialogs loaded with `lazyWithPreload` (`components/dialogs/lazy.tsx`)
+  suspend on their first render in tests. Call `preloadDialogs()` in a
+  `beforeAll` in tests that open the palette, Settings or the shortcuts
+  dialog.
 
 ## Deviations from the plan
 
@@ -624,7 +706,29 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
 - Search results ignore the Completed/cart state for filtering (finished
   items show, ranked lower) rather than hiding them.
 
+- Leaving a to-do list from the keyboard is F6 (to the next region), not a
+  change to Tab, which keeps indenting as in Todoist and Things. Shift+F10
+  opens any row's menu.
+- Dark mode text on the accent and danger fills is dark, not white, for
+  contrast.
+
 ## Known gaps
+
+From M8:
+
+- Accessibility was checked with axe in Chromium and by keyboard in the e2e
+  tests, not with a real screen reader. VoiceOver on macOS and NVDA on
+  Windows are worth a pass, especially the row descriptions and the drag
+  handles.
+- Sidebar rows' names include their count ("Inbox 2"), read as is.
+- The e2e tests cover the browser preview only. The desktop build was run
+  on Linux under Xvfb (it starts, creates and seeds `checklist.db`, writes
+  the daily backup), which exercises the Rust side and SQLite, but not on
+  macOS or Windows. Driving the desktop app itself in tests would need
+  `tauri-driver` (WebDriver; Linux and Windows only).
+- macOS builds are ad-hoc signed (`signingIdentity: "-"`) so Apple silicon
+  accepts the universal binary, but they're not notarised: the first launch
+  still needs **Open Anyway** (see the README).
 
 From M7:
 
@@ -644,8 +748,7 @@ From M7:
 - Shortcuts are fixed; they can't be changed in Settings.
 - ⌘D and ⌘N may clash with a browser's bookmark and new-window shortcuts in
   the browser preview (not in the desktop app).
-- The main chunk is now 700 kB (cmdk and the palette). Code-splitting
-  remains an M8 item.
+- ~~The main chunk is now 700 kB (cmdk and the palette).~~ Split in M8.
 
 From M6:
 
@@ -685,24 +788,23 @@ From M5:
 
 From M2:
 
-- Tab inside a list indents, so keyboard users leave the list by pressing
-  Escape until the selection clears (focus goes to the list container),
-  then Tab. Revisit in M8.
+- ~~Tab inside a list indents, so keyboard users can't Tab out of it.~~ M8
+  added F6/Shift+F6 to move between the sidebar, the list and the details.
 - Row-mode Space/Delete only work while the row has focus; after clicking
   a toolbar button, click the row again.
 - The production bundle went over Vite's 500 kB warning in M2 (476 kB
   before), mostly chrono-node, which quick-add now pulls in. After M3 the
   main chunk is 614 kB, with the due-date picker split out (54 kB). After
   M6 it's 657 kB; TipTap loads separately (404 kB) the first time a note
-  or task notes are shown. Consider more code-splitting in M8.
+  or task notes are shown. ~~Consider more code-splitting.~~ Done in M8
+  (452 kB).
 
 From M4:
 
 - Desktop notifications can't be clicked to open the task, and have no
   Snooze or Complete buttons: the notification plugin doesn't support
   actions on desktop. Both live in the Reminders view.
-- Task rows don't show that a task has a reminder; only the details panel
-  and the Reminders view do.
+- ~~Task rows don't show that a task has a reminder.~~ Done in M8: a bell.
 - After the computer sleeps through several reminders, they all fire on
   wake.
 - The native side (notifications, tray tooltip, close to tray, launch at
@@ -722,29 +824,23 @@ From M3:
 
 From M1:
 
-- Folders have no "…" button, so their menu is right-click only (lists have
-  one in the header). Revisit in the M8 accessibility pass.
+- ~~Folders have no "…" button.~~ Done in M8, and Shift+F10 opens any
+  right-click menu.
 - The native window theme and macOS drag strip were checked in code only;
   the browser preview can't show them. Check them in `npm run app:dev`.
 
-## Next: M8 (end-to-end tests, accessibility, packaging polish)
+## Next: checking v1 on macOS and Windows
 
-From the plan: end-to-end tests, an accessibility pass and packaging
-polish.
+Everything in the plan is built. Before tagging 1.0 (bump the version in
+`package.json`, push a `v1.0.0` tag, then publish the draft release):
 
-Worth starting with:
+- Install the build artifacts on a Mac (Apple silicon and Intel) and a
+  Windows PC, and go through the native paths flagged "checked in code
+  only" above: notifications (and the macOS permission prompt), the tray
+  and its tooltip, close to tray, launch at login, the quit handshake,
+  links opening in the browser, the save/open dialogs, Show backups, the
+  window theme and the macOS drag strip.
+- A screen reader pass (VoiceOver, NVDA).
 
-- End-to-end tests: `@playwright/test` is installed (`npm run test:e2e`)
-  but there are no specs or config yet. The browser preview (`npm run
-dev`) is enough for most flows. In this environment Playwright has to
-  launch Chromium with `executablePath: '/opt/pw-browsers/chromium'`, since
-  the installed Playwright expects a different browser build.
-- Accessibility: the gaps listed above from M1 (folder menu without
-  right-click) and M2 (leaving a list with Tab), focus order in the
-  details panel, and screen reader names for rows (due date, priority,
-  reminders).
-- Code-splitting: the main chunk is 700 kB. Candidates are the palette
-  (cmdk), Settings, and chrono-node (only quick-add needs it).
-- Packaging: check the native paths flagged "checked in code only" above
-  in `npm run app:dev` on macOS and Windows (notifications, tray, close to
-  tray, launch at login, links, the save/open dialogs, backups folder).
+After v1, the plan's "Not in v1" list is the backlog: sync, a quick-capture
+hotkey, templates, tags, and web or mobile builds.

@@ -17,7 +17,11 @@ export function ShortcutsDialog() {
         </Button>
       }
     >
-      <div className="-mx-5 max-h-[min(560px,calc(100vh-180px))] space-y-5 overflow-y-auto px-5">
+      {/* Focusable, so the list can be scrolled with the keyboard. */}
+      <div
+        tabIndex={0}
+        className="-mx-5 max-h-[min(560px,calc(100vh-180px))] space-y-5 overflow-y-auto px-5"
+      >
         {SHORTCUT_HELP.map((section) => (
           <section key={section.title}>
             <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-fg-subtle uppercase">
