@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { Check, ChevronRight } from 'lucide-react';
 import { ContextMenu as CM, DropdownMenu as DM } from 'radix-ui';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, KeyboardEvent, ReactNode } from 'react';
 import { Kbd } from './Kbd';
 import { cleanEntries, type MenuEntries } from './menuEntries';
 
@@ -77,7 +77,7 @@ function renderEntries(P: MenuParts, entries: MenuEntries): ReactNode {
             className={clsx(
               itemClass,
               entry.danger &&
-                'text-danger data-[highlighted]:bg-danger data-[highlighted]:text-white',
+                'text-danger data-[highlighted]:bg-danger data-[highlighted]:text-danger-fg',
             )}
           >
             <span className="flex size-4 items-center justify-center">{entry.icon}</span>
@@ -138,11 +138,32 @@ export interface ContextMenuProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-/** A right-click menu around a single element. */
+/**
+ * Opens an element's right-click menu from the keyboard: Shift+F10 or the
+ * Menu key, as in desktop apps. The menu appears under the element.
+ */
+function openFromKeyboard(event: KeyboardEvent<HTMLElement>): void {
+  if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return;
+  // Without this the browser fires its own contextmenu event as well.
+  event.preventDefault();
+  const rect = event.currentTarget.getBoundingClientRect();
+  event.currentTarget.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + Math.min(32, rect.width / 2),
+      clientY: rect.bottom,
+    }),
+  );
+}
+
+/** A right-click menu around a single element. Shift+F10 opens it from the keyboard. */
 export function ContextMenu({ entries, children, onOpenChange }: ContextMenuProps) {
   return (
     <CM.Root onOpenChange={onOpenChange}>
-      <CM.Trigger asChild>{children}</CM.Trigger>
+      <CM.Trigger asChild onKeyDown={openFromKeyboard}>
+        {children}
+      </CM.Trigger>
       <CM.Portal>
         <CM.Content className={menuContentClass} onCloseAutoFocus={onCloseAutoFocus}>
           <LazyEntries parts={CM} entries={entries} />

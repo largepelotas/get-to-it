@@ -13,15 +13,21 @@ data in a local SQLite database.
 npm install
 npm run dev        # browser preview at http://localhost:1420
 npm run app:dev    # desktop app (needs Rust)
-npm test
+npm test           # unit tests
+npm run test:e2e   # end-to-end tests (first: npx playwright install chromium)
 ```
 
 ## Installing a build
 
 Every push builds unsigned installers. They're under **Actions → Build
-installers → the latest run → Artifacts**.
+installers → the latest run → Artifacts**. Tagged versions (`v1.0.0`) also
+get a draft release with the installers attached.
 
-Because the builds aren't signed, first launch needs one extra step:
+Because the builds aren't signed with a developer certificate, first launch
+needs one extra step:
 
-- **macOS:** right-click Checklist in Applications and choose **Open**.
+- **macOS:** open Checklist once (it will be blocked), then go to **System
+  Settings → Privacy & Security** and click **Open Anyway** next to the
+  message about Checklist. On macOS 14 and earlier, right-clicking the app
+  in Applications and choosing **Open** also works.
 - **Windows:** in the SmartScreen prompt, click **More info → Run anyway**.

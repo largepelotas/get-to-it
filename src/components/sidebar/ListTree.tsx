@@ -17,11 +17,11 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
-import { ChevronRight, Folder as FolderIcon, FolderOpen } from 'lucide-react';
+import { ChevronRight, Ellipsis, Folder as FolderIcon, FolderOpen } from 'lucide-react';
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ListIcon } from '@/components/ListIcon';
 import { folderMenuEntries, listMenuEntries } from '@/components/menus';
-import { ContextMenu } from '@/components/ui';
+import { ContextMenu, IconButton, Menu } from '@/components/ui';
 import { colorVar } from '@/lib/theme';
 import { moveFolder, renameFolder, setFolderCollapsed } from '@/store/actions/folders';
 import { moveList, renameList } from '@/store/actions/lists';
@@ -135,51 +135,67 @@ export function ListTree({ model, counts }: ListTreeProps) {
                 const isRenaming = renaming?.kind === 'folder' && renaming.id === folder.id;
                 const Icon =
                   folder.collapsed || draggingFolder === folder.id ? FolderIcon : FolderOpen;
+                const entries = () =>
+                  folderMenuEntries(folder, {
+                    onRename: () => startRename({ kind: 'folder', id: folder.id }),
+                  });
                 return (
-                  <ContextMenu
-                    entries={() =>
-                      folderMenuEntries(folder, {
-                        onRename: () => startRename({ kind: 'folder', id: folder.id }),
-                      })
-                    }
-                  >
-                    <SidebarItem
-                      ref={ref}
-                      style={style}
-                      {...handle}
-                      aria-expanded={!folder.collapsed}
-                      className={clsx(dragging && 'bg-elevated shadow-popover')}
-                      onClick={click(() => setFolderCollapsed(folder.id, !folder.collapsed))}
-                      icon={
-                        <>
-                          <ChevronRight
-                            aria-hidden
-                            className={clsx(
-                              '-mx-1 size-3.5 shrink-0 text-fg-subtle transition-transform',
-                              !folder.collapsed && 'rotate-90',
-                            )}
+                  <div ref={ref} style={style} className="group/folder">
+                    <ContextMenu entries={entries}>
+                      <SidebarItem
+                        {...handle}
+                        aria-expanded={!folder.collapsed}
+                        className={clsx(
+                          'group-focus-within/folder:pr-8 group-hover/folder:pr-8',
+                          dragging && 'bg-elevated shadow-popover',
+                        )}
+                        onClick={click(() => setFolderCollapsed(folder.id, !folder.collapsed))}
+                        icon={
+                          <>
+                            <ChevronRight
+                              aria-hidden
+                              className={clsx(
+                                '-mx-1 size-3.5 shrink-0 text-fg-subtle transition-transform',
+                                !folder.collapsed && 'rotate-90',
+                              )}
+                            />
+                            <Icon
+                              aria-hidden
+                              className={clsx('size-4 shrink-0', !folder.color && 'text-fg-muted')}
+                              style={{ color: colorVar(folder.color) }}
+                            />
+                          </>
+                        }
+                        label={folder.name}
+                        count={folder.collapsed ? row.listCount : null}
+                        editor={
+                          isRenaming ? (
+                            <RenameField
+                              initial={folder.name}
+                              label="Folder name"
+                              onCommit={(name) => renameFolder(folder.id, name)}
+                              onDone={stopRename}
+                            />
+                          ) : undefined
+                        }
+                      />
+                    </ContextMenu>
+                    {!isRenaming && !dragging && (
+                      <Menu
+                        align="start"
+                        entries={entries}
+                        trigger={
+                          <IconButton
+                            size="sm"
+                            label={`${folder.name} actions`}
+                            tooltip={false}
+                            icon={<Ellipsis className="size-3.5" />}
+                            className="absolute top-0.5 right-0.5 opacity-0 group-focus-within/folder:opacity-100 group-hover/folder:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
                           />
-                          <Icon
-                            aria-hidden
-                            className={clsx('size-4 shrink-0', !folder.color && 'text-fg-muted')}
-                            style={{ color: colorVar(folder.color) }}
-                          />
-                        </>
-                      }
-                      label={folder.name}
-                      count={folder.collapsed ? row.listCount : null}
-                      editor={
-                        isRenaming ? (
-                          <RenameField
-                            initial={folder.name}
-                            label="Folder name"
-                            onCommit={(name) => renameFolder(folder.id, name)}
-                            onDone={stopRename}
-                          />
-                        ) : undefined
-                      }
-                    />
-                  </ContextMenu>
+                        }
+                      />
+                    )}
+                  </div>
                 );
               }
               const { list } = row;

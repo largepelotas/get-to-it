@@ -88,6 +88,15 @@ export function GroceryRow({
   onKeyDown,
   onSelect,
 }: GroceryRowProps) {
+  // Read after the name: the quantity, and the category for items in the cart.
+  const description = [
+    item.quantity && `Quantity ${item.quantity}`,
+    item.checked && 'In cart',
+    categoryName,
+  ]
+    .filter(Boolean)
+    .join('. ');
+  const descriptionId = `row-desc-${item.id}`;
   const row = (
     <div
       ref={drag?.ref}
@@ -96,6 +105,7 @@ export function GroceryRow({
       data-item-id={item.id}
       tabIndex={tabbable ? 0 : -1}
       aria-label={item.text}
+      aria-describedby={description ? descriptionId : undefined}
       aria-current={selected ? 'true' : undefined}
       onFocus={onSelect}
       onClick={(e) => {
@@ -158,6 +168,11 @@ export function GroceryRow({
         )}
       />
       <span className="min-w-0 flex-1 self-stretch" />
+      {description && (
+        <span id={descriptionId} hidden>
+          {description}
+        </span>
+      )}
       {categoryName && (
         <span className="shrink-0 truncate pl-1 text-xs text-fg-subtle">{categoryName}</span>
       )}

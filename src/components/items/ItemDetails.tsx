@@ -29,7 +29,7 @@ const fieldClass =
   'w-full resize-none rounded-md bg-transparent outline-none placeholder:text-fg-subtle focus:bg-hover';
 
 function SectionLabel({ children }: { children: string }) {
-  return <h3 className="mb-1.5 text-xs font-medium text-fg-muted">{children}</h3>;
+  return <h2 className="mb-1.5 text-xs font-medium text-fg-muted">{children}</h2>;
 }
 
 /** A text field that saves as you type and shows the stored value when not focused. */
@@ -188,12 +188,12 @@ function CompletionHistory({ item }: { item: Item }) {
   const shown = expanded ? entries : entries.slice(0, HISTORY_SHOWN);
   return (
     <div>
-      <h3 className="mb-1.5 flex text-xs font-medium text-fg-muted">
+      <h2 className="mb-1.5 flex text-xs font-medium text-fg-muted">
         <span className="flex-1">Completed</span>
         <span className="font-normal text-fg-subtle tabular-nums">
           {entries.length === 1 ? '1 time' : `${entries.length} times`}
         </span>
-      </h3>
+      </h2>
       <ul aria-label="Completion history" className="space-y-1 text-xs">
         {shown.map((c) => (
           <li key={c.id} className="flex gap-2 px-1">
@@ -220,6 +220,12 @@ export interface ItemDetailsProps {
   readOnly: boolean;
 }
 
+/** Closes the panel from inside it, handing focus back to the task's row. */
+function closeToRow(id: string) {
+  closeDetails();
+  document.querySelector<HTMLElement>(`[role="listitem"][data-item-id="${id}"]`)?.focus();
+}
+
 /** The side panel for the selected task. */
 export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
   const items = useData((s) => s.tables.items);
@@ -236,9 +242,10 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
 
   return (
     <aside
+      data-region="details"
       aria-label="Task details"
       onKeyDown={(e) => {
-        if (e.key === 'Escape' && !e.defaultPrevented) closeDetails();
+        if (e.key === 'Escape' && !e.defaultPrevented) closeToRow(item.id);
       }}
       className="flex h-full w-80 shrink-0 flex-col border-l border-line bg-surface"
     >
@@ -258,7 +265,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
           label="Close details"
           shortcut="Escape"
           icon={<X className="size-4" />}
-          onClick={closeDetails}
+          onClick={() => closeToRow(item.id)}
         />
       </div>
 
@@ -266,6 +273,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
         <div className="flex items-start gap-2">
           <Checkbox
             className="mt-1.5"
+            tabbable
             checked={item.checked}
             priority={item.priority}
             disabled={readOnly}
@@ -321,14 +329,14 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
 
         {(subtasks.length > 0 || (!readOnly && depth < MAX_DEPTH)) && (
           <div>
-            <h3 className="mb-1.5 flex text-xs font-medium text-fg-muted">
+            <h2 className="mb-1.5 flex text-xs font-medium text-fg-muted">
               <span className="flex-1">Subtasks</span>
               {subtasks.length > 0 && (
                 <span className="font-normal text-fg-subtle tabular-nums">
                   {doneCount}/{subtasks.length}
                 </span>
               )}
-            </h3>
+            </h2>
             <ul aria-label="Subtasks">
               {subtasks.map((sub) => (
                 <li
@@ -336,6 +344,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
                   className="flex h-7 items-center gap-2 rounded-md px-1 hover:bg-hover"
                 >
                   <Checkbox
+                    tabbable
                     checked={sub.checked}
                     priority={sub.priority}
                     disabled={readOnly}

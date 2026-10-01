@@ -1,15 +1,14 @@
 import clsx from 'clsx';
-import { useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { LIST_TYPE_ICON } from '@/components/listTypeIcons';
+import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { Button, Dialog, Input, Label, Select } from '@/components/ui';
 import type { ListType } from '@/data/types';
 import { bySortKey } from '@/lib/order';
 import { createList, LIST_TYPE_LABEL } from '@/store/actions/lists';
 import { useData } from '@/store/data';
 import { closeDialog, openList, useUI, type DialogState } from '@/store/ui';
-import { CommandPalette } from '@/components/palette/CommandPalette';
-import { SettingsDialog } from './SettingsDialog';
-import { ShortcutsDialog } from './ShortcutsDialog';
+import { CommandPalette, preloadDialogs, SettingsDialog, ShortcutsDialog } from './lazy';
 
 const TYPES: ListType[] = ['todo', 'grocery', 'note'];
 
@@ -36,6 +35,8 @@ function NewListDialog({ dialog }: { dialog: Extract<DialogState, { kind: 'newLi
     const id = createList({ type, title, folderId: folderId || null });
     closeDialog();
     openList(id);
+    // Straight on to the first task or item, once the dialog has handed focus back.
+    setTimeout(focusQuickAdd, 0);
   };
 
   return (
@@ -144,10 +145,22 @@ function ConfirmDialog({ dialog }: { dialog: Extract<DialogState, { kind: 'confi
 /** Renders whichever app dialog is open. */
 export function Dialogs() {
   const dialog = useUI((s) => s.dialog);
+  useEffect(() => {
+    const timer = setTimeout(() => void preloadDialogs(), 1500);
+    return () => clearTimeout(timer);
+  }, []);
   if (!dialog) return null;
   if (dialog.kind === 'newList') return <NewListDialog dialog={dialog} />;
-  if (dialog.kind === 'settings') return <SettingsDialog />;
-  if (dialog.kind === 'shortcuts') return <ShortcutsDialog />;
-  if (dialog.kind === 'palette') return <CommandPalette />;
-  return <ConfirmDialog dialog={dialog} />;
+  if (dialog.kind === 'confirm') return <ConfirmDialog dialog={dialog} />;
+  return (
+    <Suspense fallback={null}>
+      {dialog.kind === 'settings' ? (
+        <SettingsDialog />
+      ) : dialog.kind === 'shortcuts' ? (
+        <ShortcutsDialog />
+      ) : (
+        <CommandPalette />
+      )}
+    </Suspense>
+  );
 }

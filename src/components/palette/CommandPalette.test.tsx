@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { preloadDialogs } from '@/components/dialogs/lazy';
 import { App } from '@/App';
 import { homeView } from '@/commands';
 import { MemoryRepository } from '@/data/memory';
@@ -11,6 +12,9 @@ import { setNoteContent } from '@/store/actions/notes';
 import { resetForTests, useData } from '@/store/data';
 import { seedIfNeeded } from '@/store/seed';
 import { navigate, useUI } from '@/store/ui';
+
+// Dialogs load lazily; loaded up front they open without suspending.
+beforeAll(() => preloadDialogs());
 
 beforeEach(() => {
   resetForTests(new MemoryRepository());

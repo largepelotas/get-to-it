@@ -31,3 +31,12 @@ export function useReminderEntries(): { all: ReminderEntry[]; inbox: ReminderEnt
     return { all, inbox: inboxEntries(all) };
   }, [reminders, items, lists, allDayTime, now]);
 }
+
+/** Tasks with a reminder still to go off, for the bell on their rows. */
+export function useItemsWithReminders(): Set<string> {
+  const { all } = useReminderEntries();
+  return useMemo(
+    () => new Set(all.filter((e) => e.state === 'scheduled').map((e) => e.item.id)),
+    [all],
+  );
+}

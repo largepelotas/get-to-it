@@ -102,7 +102,12 @@ export function ListView({ listId }: { listId: string }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <ViewHeader
           icon={<ListIcon type={list.type} color={list.color} className="size-6" />}
-          title={<TitleField key={list.id} list={list} inputRef={titleRef} />}
+          title={
+            // The heading's name is the field's value, so the view still has an h1.
+            <h1>
+              <TitleField key={list.id} list={list} inputRef={titleRef} />
+            </h1>
+          }
           actions={
             <>
               {list.pinned && <Pin aria-label="Pinned" className="mr-1 size-4 text-fg-subtle" />}

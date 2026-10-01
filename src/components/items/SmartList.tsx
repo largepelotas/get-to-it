@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode }
 import { toggleItem, trashItems } from '@/commands';
 import { SHORTCUTS } from '@/lib/keymap';
 import { matchesShortcut } from '@/lib/shortcuts';
+import { useItemsWithReminders } from '@/hooks/useReminders';
 import { isMac } from '@/platform';
 import type { DueRow } from '@/store/smart';
 import { closeDetails, openDetails, openList, pickDueDate, selectItem, useUI } from '@/store/ui';
@@ -38,6 +39,7 @@ export interface SmartListProps {
  */
 export function SmartList({ sections, onExitTop }: SmartListProps) {
   const selectedId = useUI((s) => s.selectedItemId);
+  const reminded = useItemsWithReminders();
   const containerRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
   const visible = sections.flatMap((s) => s.rows);
@@ -144,6 +146,7 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
                   timeOnly={section.timeOnly}
                   readOnly={false}
                   selected={id === selectedId}
+                  hasReminder={reminded.has(id)}
                   tabbable={id === selectedId || (i === 0 && !selectionShown)}
                   onToggle={() => toggle(i)}
                   menu={() =>

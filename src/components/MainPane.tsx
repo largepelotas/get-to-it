@@ -18,7 +18,7 @@ export function MainPane() {
   }, [listExists]);
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-surface">
+    <main data-region="view" className="flex h-full min-w-0 flex-1 flex-col bg-surface">
       {view.kind === 'list' && listExists ? (
         <ListView key={view.listId} listId={view.listId} />
       ) : view.kind === 'upcoming' ? (

@@ -11,12 +11,14 @@ export interface CheckboxProps {
   label: string;
   priority?: Priority;
   disabled?: boolean;
+  /** In the Tab order. Off in task rows, which handle Space themselves. */
+  tabbable?: boolean;
   className?: string;
 }
 
 /**
- * A round task checkbox. It's left out of the Tab order: rows handle Space
- * themselves, and Tab indents.
+ * A round task checkbox. By default it's left out of the Tab order: rows
+ * handle Space themselves, and Tab indents.
  */
 export function Checkbox({
   checked,
@@ -24,6 +26,7 @@ export function Checkbox({
   label,
   priority = 0,
   disabled,
+  tabbable = false,
   className,
 }: CheckboxProps) {
   const color = colorVar(PRIORITY_COLOR[priority]);
@@ -33,7 +36,7 @@ export function Checkbox({
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
-      tabIndex={-1}
+      tabIndex={tabbable ? undefined : -1}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={clsx(

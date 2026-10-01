@@ -83,7 +83,11 @@ export function Sidebar() {
   const reminded = useReminderEntries().inbox.length;
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar">
+    <aside
+      data-region="sidebar"
+      aria-label="Sidebar"
+      className="flex h-full w-60 shrink-0 flex-col border-r border-line bg-sidebar"
+    >
       {/* Room for the macOS traffic lights, and somewhere to drag the window. */}
       <div data-tauri-drag-region className={clsx('shrink-0', isMac ? 'h-11' : 'h-3')} />
 

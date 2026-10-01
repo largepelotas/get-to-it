@@ -5,7 +5,7 @@ const VARIANTS = {
   primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   secondary: 'border border-line-strong bg-elevated text-fg hover:bg-hover',
   ghost: 'text-fg hover:bg-hover',
-  danger: 'bg-danger text-white hover:bg-danger-hover',
+  danger: 'bg-danger text-danger-fg hover:bg-danger-hover',
   /** A secondary button for destructive actions. */
   'danger-secondary': 'border border-line-strong bg-elevated text-danger hover:bg-danger-soft',
 } as const;

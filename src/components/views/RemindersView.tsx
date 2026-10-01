@@ -36,7 +36,7 @@ function ReminderRow({ entry, inbox }: { entry: ReminderEntry; inbox: boolean })
       <button
         type="button"
         onClick={() => openDetails(item.id)}
-        className="min-w-0 flex-1 text-left outline-none"
+        className="min-w-0 flex-1 rounded-sm text-left"
       >
         <span className="block truncate text-sm text-fg">{item.text}</span>
         <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-subtle">

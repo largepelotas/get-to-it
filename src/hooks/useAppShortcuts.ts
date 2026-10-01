@@ -12,6 +12,34 @@ export function focusQuickAdd(): boolean {
   return !!field;
 }
 
+const TABBABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]';
+
+/**
+ * Moves focus to the next (or previous) part of the window: the sidebar, the
+ * open view and the details panel, marked with `data-region`. Focus lands on
+ * the current thing there (the open list, the selected task), else the
+ * quick-add field, else the first control.
+ */
+export function cycleRegion(step: 1 | -1): void {
+  const regions = [...document.querySelectorAll<HTMLElement>('[data-region]')];
+  if (!regions.length) return;
+  const current = document.activeElement?.closest<HTMLElement>('[data-region]');
+  const from = current ? regions.indexOf(current) : step === 1 ? -1 : 0;
+  const region = regions[(from + step + regions.length) % regions.length];
+  // Only what belongs to this region, not to one inside it (the details panel sits in the view).
+  const own = (el: HTMLElement) =>
+    el.closest('[data-region]') === region && el.tabIndex >= 0 && el.getClientRects().length > 0;
+  const candidates = [...region.querySelectorAll<HTMLElement>(TABBABLE)].filter(own);
+  const target =
+    candidates.find((el) => el.hasAttribute('aria-current')) ??
+    candidates.find((el) => el.hasAttribute('data-quick-add')) ??
+    candidates[0] ??
+    region;
+  if (target === region && !region.hasAttribute('tabindex')) region.tabIndex = -1;
+  target.focus();
+}
+
 const VIEWS: [string, View][] = [
   [SHORTCUTS.today, { kind: 'today' }],
   [SHORTCUTS.upcoming, { kind: 'upcoming' }],
@@ -40,6 +68,8 @@ export function useAppShortcuts(): void {
         return;
       }
       if (dialog) return;
+      if (is(SHORTCUTS.nextRegion)) return run(() => cycleRegion(1));
+      if (is(SHORTCUTS.previousRegion)) return run(() => cycleRegion(-1));
       if (is(SHORTCUTS.settings)) return run(() => openDialog({ kind: 'settings' }));
       if (is(SHORTCUTS.help)) return run(() => openDialog({ kind: 'shortcuts' }));
       if (is(SHORTCUTS.newList)) return run(() => openDialog({ kind: 'newList', folderId: null }));
