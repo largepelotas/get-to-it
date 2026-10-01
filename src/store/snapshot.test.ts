@@ -398,3 +398,57 @@ describe('snapshots with labels', () => {
     expect(() => parseSnapshot(bad2)).toThrow(/item 1, labelIds should be a list of ids/);
   });
 });
+
+describe('snapshots of end times and deadlines', () => {
+  const load = (fields: Record<string, unknown>) =>
+    parseSnapshot(
+      JSON.stringify({
+        app: 'checklist',
+        version: 1,
+        tables: {
+          lists: [{ id: 'L', type: 'todo', title: 'T', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+          items: [
+            {
+              id: 'I',
+              listId: 'L',
+              text: 'x',
+              sortKey: 'a0',
+              createdAt: 1,
+              updatedAt: 1,
+              ...fields,
+            },
+          ],
+        },
+        settings: {},
+      }),
+    ).tables.items.I;
+  const due = { dueDate: '2026-10-03', dueTime: '14:00' };
+
+  // Bug prevented: an end time with no start time loading, and showing a range with no start.
+  it('drops an end time that has no due time', () => {
+    expect(load({ dueDate: '2026-10-03', endTime: '15:00' }).endTime).toBeNull();
+  });
+
+  // Bug prevented: an import carrying a range that ends before (or when) it starts.
+  it('drops an end time that is not after the due time', () => {
+    expect(load({ ...due, endTime: '14:00' }).endTime).toBeNull();
+    expect(load({ ...due, endTime: '13:00' }).endTime).toBeNull();
+  });
+
+  // Bug prevented: a valid range being lost on import, or a deadline not round-tripping.
+  it('keeps a valid range and a deadline, and round-trips them', () => {
+    expect(load({ ...due, endTime: '15:30' })).toMatchObject({
+      dueTime: '14:00',
+      endTime: '15:30',
+    });
+    const list = createList({ type: 'todo', title: 'Work' });
+    createItem(list, { text: 'A', ...due, endTime: '15:30', deadline: '2026-10-10' });
+    const { tables } = useData.getState();
+    const parsed = parseSnapshot(exportNow());
+    expect(parsed.tables).toEqual(tables);
+    expect(Object.values(parsed.tables.items)[0]).toMatchObject({
+      endTime: '15:30',
+      deadline: '2026-10-10',
+    });
+  });
+});

@@ -176,3 +176,27 @@ describe('listToMarkdown with sections', () => {
     expect(md(list)).toBe('# Plain\n\n- [ ] One\n');
   });
 });
+
+describe('listToMarkdown with deadlines', () => {
+  // Bug prevented: an end time or deadline being lost from the Markdown copy.
+  it('writes a time range and a deadline', () => {
+    const list = createList({ type: 'todo', title: 'Work' });
+    createItem(list, {
+      text: 'Call',
+      dueDate: '2026-10-03',
+      dueTime: '14:00',
+      endTime: '15:30',
+      deadline: '2026-10-10',
+    });
+    createItem(list, { text: 'Only deadline', deadline: '2026-10-11' });
+    expect(md(list)).toBe(
+      [
+        '# Work',
+        '',
+        '- [ ] Call (due 2026-10-03 14:00–15:30, deadline 2026-10-10)',
+        '- [ ] Only deadline (deadline 2026-10-11)',
+        '',
+      ].join('\n'),
+    );
+  });
+});

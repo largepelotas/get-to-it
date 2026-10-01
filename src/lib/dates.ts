@@ -77,9 +77,38 @@ export function formatDue(
   dueDate: DateKey,
   dueTime: string | null,
   now: Date = new Date(),
+  endTime: string | null = null,
 ): string {
   const day = formatDateKey(dueDate, now);
-  return dueTime ? `${day} ${formatTime(dueTime)}` : day;
+  if (!dueTime) return day;
+  return `${day} ${formatTimeRange(dueTime, endTime)}`;
+}
+
+/** "2:00 PM" or "2:00 PM–3:30 PM" (an en dash, no spaces). */
+export function formatTimeRange(start: string, end: string | null): string {
+  return end ? `${formatTime(start)}\u2013${formatTime(end)}` : formatTime(start);
+}
+
+/** HH:mm plus `minutes`, or null if that would pass midnight or `minutes` isn't positive. */
+export function addMinutes(time: string, minutes: number): string | null {
+  if (!(minutes > 0)) return null;
+  const [h, m] = time.split(':').map(Number);
+  const total = h * 60 + m + minutes;
+  if (total >= 24 * 60) return null;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** "45 min", "1 h", "1 h 30 min". */
+export function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (!h) return `${m} min`;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+/** Whether HH:mm time `a` is strictly later than `b`. Zero-padded, so a string compare is enough. */
+export function isTimeAfter(a: string, b: string): boolean {
+  return a > b;
 }
 
 /** Long form for headings: "Wednesday, September 30". */

@@ -66,3 +66,22 @@ describe('LocalStorageRepository labels', () => {
     window.localStorage.removeItem('checklist:data:v1');
   });
 });
+
+describe('LocalStorageRepository deadlines', () => {
+  // Bug prevented: data saved before deadlines existed loading with endTime and deadline undefined.
+  it('reads tasks saved without endTime and deadline as having neither', async () => {
+    window.localStorage.setItem(
+      'checklist:data:v1',
+      JSON.stringify({
+        tables: {
+          items: { I1: { id: 'I1', listId: 'L1', parentId: null, text: 'Old' } },
+        },
+        settings: {},
+      }),
+    );
+    const { tables } = await new LocalStorageRepository().load();
+    expect(tables.items.I1.endTime).toBeNull();
+    expect(tables.items.I1.deadline).toBeNull();
+    window.localStorage.removeItem('checklist:data:v1');
+  });
+});

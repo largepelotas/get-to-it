@@ -91,6 +91,13 @@ export interface Item {
   dueDate: string | null;
   /** Local time, HH:mm. Only set when dueDate is. */
   dueTime: string | null;
+  /** Local time, HH:mm, strictly after `dueTime`. Only set when `dueTime` is. */
+  endTime: string | null;
+  /**
+   * Local calendar date, YYYY-MM-DD. When the task must be finished, apart from
+   * the due date (when you plan to do it). Independent of the due date.
+   */
+  deadline: string | null;
   priority: Priority;
   recurrence: Recurrence | null;
   /** Grocery: free text such as "2" or "500 g". */

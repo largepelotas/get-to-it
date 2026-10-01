@@ -18,6 +18,8 @@ function item(id: string, fields: Partial<Item> = {}): Item {
     details: null,
     dueDate: null,
     dueTime: null,
+    endTime: null,
+    deadline: null,
     priority: 0,
     recurrence: null,
     quantity: null,

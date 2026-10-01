@@ -76,6 +76,9 @@ const SCHEMA: Record<TableName, Column[]> = {
     sectionId: 'text',
     // Added in migration 5.
     labelIds: 'json',
+    // Added in migration 7.
+    endTime: 'text',
+    deadline: 'text',
   }),
   labels: columns({
     id: 'text',
@@ -260,6 +263,8 @@ export const MIGRATIONS: string[][] = [
       updated_at INTEGER NOT NULL
     )`,
   ],
+  // A task's end time (a time range) and its deadline.
+  [`ALTER TABLE items ADD COLUMN end_time TEXT`, `ALTER TABLE items ADD COLUMN deadline TEXT`],
 ];
 
 function toColumnValue(value: unknown, type: ColumnType): unknown {

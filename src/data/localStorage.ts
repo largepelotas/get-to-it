@@ -28,7 +28,14 @@ export class LocalStorageRepository extends MemoryRepository {
       tables.items = Object.fromEntries(
         Object.entries(tables.items).map(([id, item]) => [
           id,
-          { ...item, sectionId: item.sectionId ?? null, labelIds: item.labelIds ?? [] },
+          {
+            ...item,
+            sectionId: item.sectionId ?? null,
+            labelIds: item.labelIds ?? [],
+            // Items saved before deadlines existed don't have these.
+            endTime: item.endTime ?? null,
+            deadline: item.deadline ?? null,
+          },
         ]),
       );
       return { tables, settings: parsed.settings ?? {} };

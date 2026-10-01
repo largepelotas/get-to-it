@@ -16,6 +16,11 @@ export class MemoryRepository implements Repository {
     for (const i of Object.values(this.tables.items)) i.sectionId = i.sectionId ?? null;
     // Items saved before labels existed don't have the field.
     for (const i of Object.values(this.tables.items)) i.labelIds = i.labelIds ?? [];
+    // Items saved before deadlines existed don't have the fields.
+    for (const i of Object.values(this.tables.items)) {
+      i.endTime = i.endTime ?? null;
+      i.deadline = i.deadline ?? null;
+    }
   }
 
   async load(): Promise<LoadResult> {
@@ -26,6 +31,10 @@ export class MemoryRepository implements Repository {
     this.tables = { ...emptyTables(), ...structuredClone(data.tables) };
     for (const i of Object.values(this.tables.items)) i.sectionId = i.sectionId ?? null;
     for (const i of Object.values(this.tables.items)) i.labelIds = i.labelIds ?? [];
+    for (const i of Object.values(this.tables.items)) {
+      i.endTime = i.endTime ?? null;
+      i.deadline = i.deadline ?? null;
+    }
     this.settings = structuredClone(data.settings);
   }
 

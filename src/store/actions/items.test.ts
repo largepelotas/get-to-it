@@ -17,8 +17,13 @@ import {
   moveItemToList,
   outdentItem,
   setChecked,
+  clearDue,
+  moveDueDates,
+  setDeadline,
   setDue,
+  setDueDates,
   setDueTime,
+  setEndTime,
   setItemCollapsed,
   setItemNotes,
   setItemText,
@@ -687,5 +692,206 @@ describe('quick add: #List, reminders and several lines', () => {
     expect(item(ids[0]).priority).toBe(1);
     undo();
     expect(open()).toEqual(['Existing@0']);
+  });
+});
+
+describe('deadlines and end times', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 30, 10, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const ranged = () =>
+    createItem(list, {
+      text: 'Call',
+      dueDate: '2026-10-02',
+      dueTime: '14:00',
+      endTime: '15:30',
+      deadline: '2026-10-10',
+    })!;
+
+  // Bug prevented: a deadline needing a due date, or the new item dropping the fields.
+  it('stores an end time and deadline on a new task, and a deadline with no due date', () => {
+    const a = ranged();
+    expect(item(a)).toMatchObject({ endTime: '15:30', deadline: '2026-10-10' });
+    const b = createItem(list, { text: 'B', deadline: '2026-10-10' })!;
+    expect(item(b)).toMatchObject({ dueDate: null, endTime: null, deadline: '2026-10-10' });
+  });
+
+  // Bug prevented: a new task storing a range with no start or an end before the start.
+  it('drops an end time on a new task without a due time or not after it', () => {
+    const noTime = createItem(list, { text: 'A', dueDate: '2026-10-02', endTime: '15:00' })!;
+    const before = createItem(list, {
+      text: 'B',
+      dueDate: '2026-10-02',
+      dueTime: '14:00',
+      endTime: '14:00',
+    })!;
+    expect(item(noTime).endTime).toBeNull();
+    expect(item(before).endTime).toBeNull();
+  });
+
+  // Bug prevented: setting a deadline moving the due date or clearing a reminder snooze.
+  it('sets a deadline on a task with no due date, leaving due fields and snoozes alone', () => {
+    const a = ranged();
+    const r = addReminder(a, { kind: 'relative', offsetMinutes: 0 })!;
+    snoozeReminder(r, '1h');
+    setDeadline(a, '2026-11-01');
+    expect(item(a)).toMatchObject({
+      dueDate: '2026-10-02',
+      dueTime: '14:00',
+      endTime: '15:30',
+      deadline: '2026-11-01',
+    });
+    expect(useData.getState().tables.reminders[r].snoozedUntil).not.toBeNull();
+    const b = add('B');
+    setDeadline(b, '2026-10-05');
+    expect(item(b)).toMatchObject({ dueDate: null, deadline: '2026-10-05' });
+  });
+
+  // Bug prevented: an invalid date being stored as a deadline.
+  it('clears the deadline for null or an invalid date', () => {
+    const a = ranged();
+    setDeadline(a, 'nonsense');
+    expect(item(a).deadline).toBeNull();
+    setDeadline(a, '2026-10-10');
+    setDeadline(a, null);
+    expect(item(a).deadline).toBeNull();
+  });
+
+  // Bug prevented: undo of a deadline change not restoring the old value, or lacking a label.
+  it('undoes setDeadline to the previous value', () => {
+    const a = ranged();
+    setDeadline(a, '2026-12-25');
+    expect(useData.getState().past.at(-1)?.label).toBe('Deadline');
+    undo();
+    expect(item(a).deadline).toBe('2026-10-10');
+  });
+
+  // Bug prevented: clearing the due date also wiping the separate deadline.
+  it('keeps the deadline when the due date is cleared', () => {
+    const a = ranged();
+    setDue(a, null);
+    expect(item(a)).toMatchObject({ dueDate: null, dueTime: null, endTime: null });
+    expect(item(a).deadline).toBe('2026-10-10');
+    const b = ranged();
+    clearDue(b);
+    expect(item(b)).toMatchObject({ endTime: null, deadline: '2026-10-10' });
+    const c = ranged();
+    setDueDates([c], null);
+    expect(item(c)).toMatchObject({ dueTime: null, endTime: null, deadline: '2026-10-10' });
+  });
+
+  // Bug prevented: a range being lost when its day is changed.
+  it('keeps the end time when the date changes', () => {
+    const a = ranged();
+    setDue(a, '2026-10-05', '14:00');
+    expect(item(a).endTime).toBe('15:30');
+    setDueDates([a], '2026-10-06');
+    expect(item(a).endTime).toBe('15:30');
+    moveDueDates([a], '2026-10-07');
+    expect(item(a)).toMatchObject({ dueDate: '2026-10-07', endTime: '15:30' });
+  });
+
+  // Bug prevented: a range with no start left behind after the due time is cleared.
+  it('clears the end time when the due time is cleared', () => {
+    const a = ranged();
+    setDueTime(a, null);
+    expect(item(a)).toMatchObject({ dueTime: null, endTime: null });
+  });
+
+  // Bug prevented: a range that ends before it starts after the start is moved later.
+  it('clears the end time when a later due time is not before it', () => {
+    const a = ranged();
+    setDueTime(a, '15:00');
+    expect(item(a).endTime).toBe('15:30');
+    setDueTime(a, '15:30');
+    expect(item(a).endTime).toBeNull();
+    const b = ranged();
+    setDueTime(b, '16:00');
+    expect(item(b).endTime).toBeNull();
+  });
+
+  // Bug prevented: an end time being set on a task with no start, giving a range with no start.
+  it('ignores setEndTime on a task with no due time', () => {
+    const a = add('A');
+    setEndTime(a, '14:00');
+    expect(item(a).endTime).toBeNull();
+    setDue(a, '2026-10-02');
+    setEndTime(a, '14:00');
+    expect(item(a).endTime).toBeNull();
+  });
+
+  // Bug prevented: an end time equal to or before the start being stored.
+  it('stores null for an invalid end time or one not after the start', () => {
+    const a = ranged();
+    setEndTime(a, '14:00');
+    expect(item(a).endTime).toBeNull();
+    setEndTime(a, '13:00');
+    expect(item(a).endTime).toBeNull();
+    setEndTime(a, '25:99');
+    expect(item(a).endTime).toBeNull();
+    setEndTime(a, '16:00');
+    expect(item(a).endTime).toBe('16:00');
+  });
+
+  // Bug prevented: editing the end time clearing the snooze (reminders key off the start), or
+  // typing in the field filling the undo stack with one step per keystroke.
+  it('leaves snoozes alone and merges end time edits into one undo step', () => {
+    const a = ranged();
+    const r = addReminder(a, { kind: 'relative', offsetMinutes: 0 })!;
+    snoozeReminder(r, '1h');
+    setEndTime(a, '16:00');
+    setEndTime(a, '16:30');
+    expect(useData.getState().tables.reminders[r].snoozedUntil).not.toBeNull();
+    expect(useData.getState().past.at(-1)?.label).toBe('End time');
+    undo();
+    expect(item(a).endTime).toBe('15:30');
+  });
+
+  // Bug prevented: completing or skipping a repeating task losing its range, or moving its deadline.
+  it('keeps the range and deadline when a repeating task moves to its next date', () => {
+    const rule = { freq: 'daily', interval: 1, mode: 'schedule' } as const;
+    const a = createItem(list, {
+      text: 'Standup',
+      dueDate: '2026-09-30',
+      dueTime: '09:00',
+      endTime: '09:30',
+      deadline: '2026-10-20',
+      recurrence: rule,
+    })!;
+    setChecked(a, true);
+    expect(item(a)).toMatchObject({
+      dueDate: '2026-10-01',
+      dueTime: '09:00',
+      endTime: '09:30',
+      deadline: '2026-10-20',
+    });
+    skipOccurrence(a);
+    expect(item(a)).toMatchObject({
+      dueDate: '2026-10-02',
+      dueTime: '09:00',
+      endTime: '09:30',
+      deadline: '2026-10-20',
+    });
+  });
+
+  // Bug prevented: a duplicate losing the range or deadline.
+  it('copies the end time and deadline when duplicating', () => {
+    const copy = duplicateItem(ranged())!;
+    expect(item(copy)).toMatchObject({ endTime: '15:30', deadline: '2026-10-10' });
+  });
+
+  // Bug prevented: quick-add reading a range and deadline but not storing them on the task.
+  it('puts the range and deadline read from typed text onto the task', () => {
+    const id = createItemFromText(list, 'Send report {15 oct} tomorrow 2-3:30pm')!;
+    expect(item(id)).toMatchObject({
+      text: 'Send report',
+      dueDate: '2026-10-01',
+      dueTime: '14:00',
+      endTime: '15:30',
+      deadline: '2026-10-15',
+    });
   });
 });

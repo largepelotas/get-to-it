@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Item, List } from '@/data/types';
-import { formatDue } from '@/lib/dates';
+import { formatDateKey, formatDue, formatTime } from '@/lib/dates';
 import { describeRow } from './describeRow';
 
 const item = (fields: Partial<Item>): Item =>
@@ -12,6 +12,8 @@ const item = (fields: Partial<Item>): Item =>
     details: null,
     dueDate: null,
     dueTime: null,
+    endTime: null,
+    deadline: null,
     priority: 0,
     recurrence: null,
     ...fields,
@@ -68,6 +70,36 @@ describe('describeRow', () => {
     expect(describeRow(row({ dueDate: '2026-09-29' }))).toBe(`Due ${due}, overdue`);
     expect(describeRow(row({ dueDate: '2026-09-29', checked: true }))).toBe(
       `Completed. Due ${due}`,
+    );
+  });
+
+  // Bug prevented: a screen reader hearing an en dash read out, or never hearing the end time.
+  it('says a time range with the word "to"', () => {
+    expect(describeRow(row({ dueDate: '2026-10-02', dueTime: '14:00', endTime: '15:30' }))).toBe(
+      `Due Tomorrow ${formatTime('14:00')} to ${formatTime('15:30')}`,
+    );
+  });
+
+  // Bug prevented: the deadline being invisible to a screen reader, or sorted after the repeat.
+  it('says the deadline after the due part and before the repeat', () => {
+    expect(
+      describeRow(
+        row({
+          dueDate: '2026-10-02',
+          deadline: '2026-10-10',
+          recurrence: { freq: 'daily', interval: 1, mode: 'schedule' } as Item['recurrence'],
+        }),
+      ),
+    ).toBe(`Due Tomorrow. Deadline ${formatDateKey('2026-10-10')}. Repeats every day`);
+    expect(describeRow(row({ deadline: '2026-10-02' }))).toBe('Deadline Tomorrow');
+  });
+
+  // Bug prevented: a finished task being announced as past its deadline.
+  it('says a deadline has passed, but not once the task is done', () => {
+    expect(describeRow(row({ deadline: '2026-09-30' }))).toBe('Deadline Yesterday, passed');
+    expect(describeRow(row({ deadline: '2026-10-01' }))).toBe('Deadline Today');
+    expect(describeRow(row({ deadline: '2026-09-30', checked: true }))).toBe(
+      'Completed. Deadline Yesterday',
     );
   });
 });

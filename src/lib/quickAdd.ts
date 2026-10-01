@@ -1,8 +1,11 @@
 import * as chrono from 'chrono-node';
 import type { Priority, Recurrence, Weekday } from '@/data/types';
 import {
+  addMinutes,
+  formatDateKey,
   formatDue,
   formatTimestamp,
+  isTimeAfter,
   toDateKey,
   toTimeString,
   todayKey,
@@ -15,6 +18,10 @@ export interface QuickAddResult {
   text: string;
   dueDate: DateKey | null;
   dueTime: string | null;
+  /** The end of a time range ("2-3:30pm", or "for 45m" after a time). Only with a `dueTime`. */
+  endTime: string | null;
+  /** From a `{date}` token. Separate from the due date. */
+  deadline: DateKey | null;
   recurrence: Recurrence | null;
   priority: Priority;
   /** The list named with `#List`, if it matched one of `options.lists`. */
@@ -165,6 +172,21 @@ function resolveHour(s: Parsed, now: Date): Date {
   return next;
 }
 
+/**
+ * The end of a range read by chrono, as HH:mm, if it is on the start's day and after the start.
+ * "5-6" reads the 5 as 17:00 (see `resolveHour`) but the 6 as 06:00, so try 12 hours later too.
+ */
+function rangeEnd(start: Date, end: Date, dueTime: string): string | null {
+  const day = toDateKey(end);
+  if (day !== toDateKey(start)) return null;
+  if (isTimeAfter(toTimeString(end), dueTime)) return toTimeString(end);
+  const later = new Date(end);
+  later.setHours(later.getHours() + 12);
+  return toDateKey(later) === day && isTimeAfter(toTimeString(later), dueTime)
+    ? toTimeString(later)
+    : null;
+}
+
 export interface QuickAddOptions {
   /** Lists a `#List` token can name. */
   lists?: { id: string; title: string }[];
@@ -311,8 +333,24 @@ function findReminder(
   return null;
 }
 
-/** Marks `!word` tokens that are not reminders so the date step can't read into them. */
+/**
+ * Marks tokens that stay in the title as typed (`!word`s that are not reminders, `{…}` that is
+ * not a deadline, "for 45m") so the date step can't read into them. Each is HOLD, the slot
+ * number in `held` as decimal digits (U+E100 plus the digit), then END, so any count fits.
+ */
 const HOLD = String.fromCharCode(0xe000);
+const END = String.fromCharCode(0xe001);
+const DIGIT = 0xe100;
+const HELD_RUN = new RegExp(`${HOLD}([\\ue100-\\ue109]+)${END}`, 'g');
+const holdSlot = (i: number) =>
+  `${HOLD}${[...String(i)].map((d) => String.fromCharCode(DIGIT + Number(d))).join('')}${END}`;
+const slotOf = (digits: string) => Number([...digits].map((c) => c.charCodeAt(0) - DIGIT).join(''));
+
+const DURATION = new RegExp(
+  '(^|\\s)for\\s+(?:(\\d+)\\s*(?:h|hr|hrs|hour|hours)(?:\\s*(\\d+)\\s*(?:m|min|mins|minute|minutes))?' +
+    '|(\\d+)\\s*(?:m|min|mins|minute|minutes))(?=[\\s,.;:!?)]|$)',
+  'i',
+);
 
 function describeReminder(spec: ReminderSpec, now: Date): string {
   if (spec.kind === 'absolute') return `Remind ${formatTimestamp(spec.at, now)}`;
@@ -350,10 +388,12 @@ function tidy(text: string): string {
  * e.g. "Send report fri 3pm p1" or "Standup every weekday 9:30".
  */
 export function parseQuickAdd(
-  input: string,
+  rawInput: string,
   now: Date = new Date(),
   options: QuickAddOptions = {},
 ): QuickAddResult {
+  // Typed private-use characters can't be told from the markers below, so none are kept.
+  const input = rawInput.replace(/[\ue000-\ue1ff]/g, '');
   let text = input;
   let listId: string | null = null;
   let listTitle = '';
@@ -364,6 +404,36 @@ export function parseQuickAdd(
   let recurrence: Recurrence | null = null;
   let dueDate: DateKey | null = null;
   let dueTime: string | null = null;
+  let endTime: string | null = null;
+  let deadline: DateKey | null = null;
+  // Tokens put out of chrono's reach; they go back into the title unless used (`text: ''`).
+  const held: { text: string }[] = [];
+  const hold = (token: string) => {
+    held.push({ text: token });
+    return holdSlot(held.length - 1);
+  };
+
+  // A `{date}` deadline: the first one that reads as a day. Any time inside is ignored.
+  const brace = /\{([^{}]+)\}/.exec(text);
+  if (brace) {
+    // "{for 45m}" is a duration and "{now}" no deadline, so neither counts.
+    const day = DURATION.test(brace[1])
+      ? undefined
+      : chrono
+          .parse(brace[1], now, { forwardDate: true })
+          .find(
+            (res) =>
+              res.text.trim().toLowerCase() !== 'now' &&
+              (res.start.isCertain('day') || res.start.isCertain('weekday')),
+          );
+    if (day) {
+      deadline = toDateKey(day.start.date());
+      text = cut(text, brace.index, brace.index + brace[0].length);
+    }
+  }
+
+  // Any other braces stay in the title as typed, out of reach of everything below.
+  text = text.replace(/\{[^{}]*\}/g, (token) => hold(token));
 
   const l = options.lists?.length ? findList(text, options.lists) : null;
   if (l) {
@@ -413,11 +483,19 @@ export function parseQuickAdd(
     reminder = rem.spec;
     text = cut(text, rem.start, rem.end);
   }
+  // "for 45m": a duration, used if the text gives a start time and no range.
+  let duration: { slot: number; minutes: number } | null = null;
+  const dur = DURATION.exec(text);
+  if (dur) {
+    const minutes = dur[4] ? Number(dur[4]) : Number(dur[2]) * 60 + Number(dur[3] ?? 0);
+    const start = dur.index + dur[1].length;
+    const token = dur[0].slice(dur[1].length);
+    duration = { slot: held.length, minutes };
+    text = `${text.slice(0, start)}${hold(token)}${text.slice(start + token.length)}`;
+  }
   // A "!word" that isn't a reminder stays in the title exactly as typed.
-  const held: string[] = [];
   text = text.replace(/(^|\s)(!(?=[^\s!])\S*)/g, (_, space: string, token: string) => {
-    held.push(token);
-    return space + HOLD.repeat(token.length);
+    return space + hold(token);
   });
 
   const r = findRecurrence(text);
@@ -440,6 +518,8 @@ export function parseQuickAdd(
     const date = resolveHour(s, now);
     if (s.isCertain('hour')) dueTime = toTimeString(date);
     dueDate = toDateKey(date);
+    if (dueTime && result.end?.isCertain('hour'))
+      endTime = rangeEnd(date, result.end.date(), dueTime);
     text = cut(text, result.index, result.index + result.text.length);
   }
 
@@ -448,8 +528,17 @@ export function parseQuickAdd(
     dueDate = firstOccurrence(recurrence, dueDate ?? todayKey(now));
   }
 
+  if (duration) {
+    const end = dueTime && !endTime ? addMinutes(dueTime, duration.minutes) : null;
+    if (end) {
+      endTime = end;
+      text = text.replace(holdSlot(duration.slot), ' ');
+    }
+  }
+
   const chips: string[] = [];
-  if (dueDate) chips.push(formatDue(dueDate, dueTime, now));
+  if (deadline) chips.push(`Deadline ${formatDateKey(deadline, now)}`);
+  if (dueDate) chips.push(formatDue(dueDate, dueTime, now, endTime));
   if (recurrence) chips.push(describeRecurrence(recurrence, dueDate));
   if (priority) chips.push(`P${priority}`);
   if (listId) chips.push(`#${listTitle}`);
@@ -459,12 +548,20 @@ export function parseQuickAdd(
     chips.push(describeReminder(reminder, now));
   }
 
-  const clean = tidy(text).replace(new RegExp(`${HOLD}+`, 'g'), () => held.shift() ?? '');
+  // One pass over the title; each held token's own text is expanded in turn. It can only
+  // hold markers of tokens held before it, so the depth bound is never reached in practice.
+  const expand = (value: string, depth: number): string =>
+    value.replace(HELD_RUN, (_, digits: string) =>
+      depth > 0 ? expand(held[slotOf(digits)]?.text ?? '', depth - 1) : '',
+    );
+  const clean = expand(tidy(text), held.length);
   return {
     // If everything was consumed, keep the original words as the title.
     text: clean || input.trim(),
     dueDate,
     dueTime,
+    endTime,
+    deadline,
     recurrence,
     priority,
     listId,

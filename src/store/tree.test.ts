@@ -18,6 +18,8 @@ function item(id: string, parentId: string | null, sortKey: string): Item {
     details: null,
     dueDate: null,
     dueTime: null,
+    endTime: null,
+    deadline: null,
     priority: 0,
     recurrence: null,
     quantity: null,
