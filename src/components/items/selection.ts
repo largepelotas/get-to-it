@@ -8,9 +8,11 @@ import {
   clearMultiSelection,
   openDialog,
   pickDueDate,
+  pickLabels,
   selectAll,
   selectRange,
   setSelectionDateOpen,
+  setSelectionLabelsOpen,
   useUI,
 } from '@/store/ui';
 import type { RowKeyMode } from './ItemRow';
@@ -106,6 +108,9 @@ export function handleSelectionKey(
     else pickDueDate(ctx.id);
   } else if (['1', '2', '3', '4'].some((n) => is(n))) {
     setTasksPriority(ids, (Number(e.key) % 4) as Priority);
+  } else if (is('l')) {
+    if (several) setSelectionLabelsOpen(true);
+    else pickLabels(ctx.id);
   } else if (is('v')) {
     openDialog({ kind: 'moveTasks', ids });
   } else if (is('Shift+A') && ctx.addAtTop) {

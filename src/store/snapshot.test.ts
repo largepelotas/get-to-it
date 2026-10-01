@@ -5,6 +5,7 @@ import { backupDue, backupName, backUp, backUpIfDue } from './backup';
 import { createItem, setItemNotes } from './actions/items';
 import { addReminder } from './actions/reminders';
 import { createList, deleteList } from './actions/lists';
+import { createLabel } from './actions/labels';
 import { createSection, setSectionCollapsed } from './actions/sections';
 import { replaceData, resetForTests, setSetting, useData } from './data';
 import {
@@ -279,5 +280,66 @@ describe('snapshots with sections', () => {
       settings: {},
     });
     expect(() => parseSnapshot(bad)).toThrow(/section 1, listId should be an id/);
+  });
+});
+
+describe('snapshots with labels', () => {
+  // Bug prevented: labels or the labels on tasks lost on export and import.
+  it('round-trips an export with labels and labelled tasks, without changing the version', () => {
+    const list = createList({ type: 'todo', title: 'Home' });
+    const a = createLabel('Errands', { color: 'red' })!;
+    const b = createLabel('deep work')!;
+    const task = createItem(list, { text: 'Paint', labelIds: [b, a] })!;
+    const { tables } = useData.getState();
+    const parsed = parseSnapshot(exportNow());
+    expect(parsed.tables).toEqual(tables);
+    expect(parsed.tables.labels[a]).toMatchObject({ name: 'Errands', color: 'red' });
+    expect(parsed.tables.items[task].labelIds).toEqual([b, a]);
+    expect(JSON.parse(exportNow()).version).toBe(1);
+  });
+
+  // Bug prevented: an export made before labels existed being refused, or loading with undefined fields.
+  it('reads an old export with no labels table or labelIds as having none', () => {
+    const json = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: {
+        lists: [{ id: 'L', type: 'todo', title: 'T', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+        items: [{ id: 'I', listId: 'L', text: 'x', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+      },
+      settings: {},
+    });
+    const { tables } = parseSnapshot(json);
+    expect(tables.labels).toEqual({});
+    expect(tables.items.I.labelIds).toEqual([]);
+  });
+
+  it('points at a label row that is wrong, and refuses a labelIds that is not a list of ids', () => {
+    const bad = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: { labels: [{ id: 'B', sortKey: 'a0', createdAt: 1, updatedAt: 1 }] },
+      settings: {},
+    });
+    expect(() => parseSnapshot(bad)).toThrow(/label 1, name should be text/);
+    const bad2 = JSON.stringify({
+      app: 'checklist',
+      version: 1,
+      tables: {
+        items: [
+          {
+            id: 'I',
+            listId: 'L',
+            text: 'x',
+            labelIds: 'B',
+            sortKey: 'a0',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      },
+      settings: {},
+    });
+    expect(() => parseSnapshot(bad2)).toThrow(/item 1, labelIds should be a list of ids/);
   });
 });

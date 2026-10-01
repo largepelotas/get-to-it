@@ -6,6 +6,7 @@ import { SHORTCUTS } from '@/lib/keymap';
 import { isMac } from '@/platform';
 import { useData } from '@/store/data';
 import { navigate, useUI } from '@/store/ui';
+import { LabelView } from './views/LabelView';
 import { ListView } from './views/ListView';
 import { RemindersView } from './views/RemindersView';
 import { Next7View, TodayView, TomorrowView, UpcomingView } from './views/SmartViews';
@@ -42,18 +43,28 @@ export function MainPane() {
   const view = useUI((s) => s.view);
   const listId = view.kind === 'list' ? view.listId : null;
   const listExists = useData((s) => (listId ? !!s.tables.lists[listId] : true));
+  const labelId = view.kind === 'label' ? view.labelId : null;
+  const labelExists = useData((s) => (labelId ? !!s.tables.labels[labelId] : true));
   const sidebarHidden = useData((s) => s.settings.sidebarHidden);
 
   // The open list can vanish (undoing its creation, emptying the Trash).
   useEffect(() => {
     if (!listExists) navigate(homeView());
   }, [listExists]);
+  // So can the open label (undoing its creation, deleting it).
+  useEffect(() => {
+    if (!labelExists) navigate(homeView());
+  }, [labelExists]);
 
   return (
     <main data-region="view" className="flex h-full min-w-0 flex-1 flex-col bg-surface">
       {sidebarHidden && <ShowSidebarButton />}
       {view.kind === 'list' && listExists ? (
         <ListView key={view.listId} listId={view.listId} />
+      ) : view.kind === 'label' ? (
+        labelExists ? (
+          <LabelView key={view.labelId} labelId={view.labelId} />
+        ) : null
       ) : view.kind === 'tomorrow' ? (
         <TomorrowView />
       ) : view.kind === 'next7' ? (

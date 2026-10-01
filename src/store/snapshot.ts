@@ -36,6 +36,7 @@ export function makeSnapshot(tables: Tables, settings: Settings, now = Date.now(
       lists: Object.values(tables.lists),
       items: Object.values(tables.items),
       sections: Object.values(tables.sections),
+      labels: Object.values(tables.labels),
       reminders: Object.values(tables.reminders),
       completions: Object.values(tables.completions),
       notes: Object.values(tables.notes),
@@ -114,6 +115,11 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     checked: or(bool, false),
     wontDo: or(bool, false),
     sectionId: opt(id),
+    labelIds: (v, f) => {
+      if (v === undefined || v === null) return [];
+      if (!Array.isArray(v)) return fail(f, 'should be a list of ids');
+      return [...new Set(v.map((x) => id(x, f)))];
+    },
     completedAt: opt(num),
     sortKey: str,
     collapsed: or(bool, false),
@@ -134,6 +140,14 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     title: str,
     sortKey: str,
     collapsed: or(bool, false),
+    createdAt: num,
+    updatedAt: num,
+  },
+  labels: {
+    id,
+    name: str,
+    color,
+    sortKey: str,
     createdAt: num,
     updatedAt: num,
   },
@@ -159,6 +173,7 @@ const TABLE_LABEL: Record<TableName, string> = {
   lists: 'list',
   items: 'item',
   sections: 'section',
+  labels: 'label',
   reminders: 'reminder',
   completions: 'completion',
   notes: 'note',

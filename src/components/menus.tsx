@@ -1,6 +1,8 @@
 import {
   Archive,
   ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
   BrushCleaning,
   ClipboardCopy,
   Copy,
@@ -14,7 +16,7 @@ import {
   Trash,
   Undo2,
 } from 'lucide-react';
-import { COLOR_NAMES, type ColorName, type Folder, type List } from '@/data/types';
+import { COLOR_NAMES, type ColorName, type Folder, type Label, type List } from '@/data/types';
 import { SHORTCUTS } from '@/lib/keymap';
 import { bySortKey } from '@/lib/order';
 import { COLOR_LABEL } from '@/lib/theme';
@@ -25,12 +27,14 @@ import {
   deleteForever,
   duplicate,
   removeFolder,
+  removeLabel,
   restore,
   trashList,
   unarchive,
   uncheckCart,
 } from '@/commands';
 import { setFolderColor } from '@/store/actions/folders';
+import { moveLabelBy, setLabelColor } from '@/store/actions/labels';
 import { moveListToFolder, setListColor, setPinned } from '@/store/actions/lists';
 import { useData } from '@/store/data';
 import { openDialog } from '@/store/ui';
@@ -208,6 +212,52 @@ export function folderMenuEntries(folder: Folder, { onRename }: ListMenuOptions 
       icon: <Trash className={icon} />,
       danger: true,
       onSelect: () => removeFolder(folder.id),
+    },
+  ];
+}
+
+export interface LabelMenuOptions extends ListMenuOptions {
+  /** Where the label sits among the others, so Move up / Move down can be disabled at the ends. */
+  first: boolean;
+  last: boolean;
+}
+
+/** Actions for a label, shown from its sidebar row's context menu and "…" button. */
+export function labelMenuEntries(
+  label: Label,
+  { onRename, first, last }: LabelMenuOptions,
+): MenuEntries {
+  return [
+    onRename && {
+      label: 'Rename',
+      icon: <Pencil className={icon} />,
+      movesFocus: true,
+      onSelect: onRename,
+    },
+    {
+      kind: 'sub',
+      label: 'Colour',
+      icon: <Palette className={icon} />,
+      entries: colorEntries(label.color, (c) => setLabelColor(label.id, c)),
+    },
+    {
+      label: 'Move up',
+      icon: <ArrowUp className={icon} />,
+      disabled: first,
+      onSelect: () => void moveLabelBy(label.id, -1),
+    },
+    {
+      label: 'Move down',
+      icon: <ArrowDown className={icon} />,
+      disabled: last,
+      onSelect: () => void moveLabelBy(label.id, 1),
+    },
+    { kind: 'separator' },
+    {
+      label: 'Delete label',
+      icon: <Trash className={icon} />,
+      danger: true,
+      onSelect: () => removeLabel(label.id),
     },
   ];
 }

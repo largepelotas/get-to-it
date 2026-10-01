@@ -176,6 +176,7 @@ export function duplicateList(id: string): string | null {
         listId: copy.id,
         parentId: item.parentId ? (ids.get(item.parentId) ?? null) : null,
         sectionId: item.sectionId ? (sectionIds.get(item.sectionId) ?? null) : null,
+        labelIds: [...(item.labelIds ?? [])],
         createdAt: tx.now,
         updatedAt: tx.now,
       });

@@ -14,11 +14,14 @@ import { toggleItem } from '@/commands';
 import { formatDue, formatTime, isOverdue } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { setItemCollapsed, setItemText } from '@/store/actions/items';
+import { useData } from '@/store/data';
+import { itemLabels } from '@/store/labels';
 import { isMac } from '@/platform';
 import { pickDueDate } from '@/store/ui';
 import type { FlatRow } from '@/store/tree';
 import { Checkbox } from './Checkbox';
 import { describeRow, originTitle, type RowOrigin } from './describeRow';
+import { LabelChips } from './LabelChips';
 import { PRIORITY_COLOR } from './priority';
 
 /** Horizontal step per subtask level, in px. Also the drag distance per level. */
@@ -182,6 +185,8 @@ export function ItemRow({
   onOpenDetails,
 }: ItemRowProps) {
   const { item, childCount, doneCount } = row;
+  const labelTable = useData((s) => s.tables.labels);
+  const labels = item.labelIds?.length ? itemLabels(item, labelTable) : [];
   const overdue = !item.checked && isOverdue(item.dueDate, item.dueTime);
   const hasNotes = !!item.details;
   // A row in a group of selected tasks says so (aria-selected isn't allowed on a list item).
@@ -290,6 +295,7 @@ export function ItemRow({
           )}
           {hasReminder && <Bell aria-hidden className="size-3.5" />}
           {hasNotes && <NotebookText aria-hidden className="size-3.5" />}
+          <LabelChips labels={labels} />
           {item.dueDate && (!timeOnly || item.dueTime || item.recurrence) && (
             <DueLabel
               label={

@@ -1,11 +1,18 @@
-import { Check, Flag, FolderInput, CalendarDays, Trash, Undo2, X } from 'lucide-react';
+import { Check, Flag, FolderInput, CalendarDays, Tag, Trash, Undo2, X } from 'lucide-react';
 import { lazy, Suspense, useRef } from 'react';
 import { setTasksDue, setTasksPriority, toggleItems, trashItems } from '@/commands';
 import { Button, IconButton, Menu, Popover } from '@/components/ui';
 import { colorVar } from '@/lib/theme';
 import { useData } from '@/store/data';
-import { clearMultiSelection, openDialog, setSelectionDateOpen, useUI } from '@/store/ui';
+import {
+  clearMultiSelection,
+  openDialog,
+  setSelectionDateOpen,
+  setSelectionLabelsOpen,
+  useUI,
+} from '@/store/ui';
 import { PRIORITIES, PRIORITY_COLOR } from './priority';
+import { LabelPicker } from './LabelPicker';
 import { keepFocus } from './selection';
 
 // The calendar is only needed once the Date popover opens, so it loads separately.
@@ -21,6 +28,7 @@ const icon = 'size-3.5';
 export function SelectionBar() {
   const ids = useUI((s) => s.multiSelectedIds);
   const dateOpen = useUI((s) => s.selectionDateOpen);
+  const labelsOpen = useUI((s) => s.selectionLabelsOpen);
   const items = useData((s) => s.tables.items);
   // Set when a date was picked, so closing the popover doesn't pull focus back to its button.
   const picked = useRef(false);
@@ -80,6 +88,20 @@ export function SelectionBar() {
                 }}
               />
             </Suspense>
+          </Popover>
+          <Popover
+            open={labelsOpen}
+            onOpenChange={setSelectionLabelsOpen}
+            className="p-2"
+            label="Choose labels"
+            trigger={
+              <Button size="sm" variant="ghost">
+                <Tag aria-hidden className={icon} />
+                Labels
+              </Button>
+            }
+          >
+            <LabelPicker ids={ids} />
           </Popover>
           <Menu
             trigger={

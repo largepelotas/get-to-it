@@ -32,6 +32,8 @@ export interface SmartSection {
   rows: DueRow[];
   /** Shown under the heading when there are no rows (otherwise an empty section is just a heading). */
   emptyText?: string;
+  /** No heading: the view's own header already says what the rows are. */
+  bare?: boolean;
   /** The heading names the day, so rows show only their time. */
   timeOnly?: boolean;
 }
@@ -176,15 +178,17 @@ export function SmartList({ sections, onExitTop }: SmartListProps) {
           aria-label={typeof section.title === 'string' ? section.title : section.key}
           className="mb-5"
         >
-          <h2
-            className={clsx(
-              'flex h-8 items-center gap-2 border-b border-line px-2 text-[13px] font-semibold',
-              section.tone === 'danger' ? 'text-danger' : 'text-fg',
-            )}
-          >
-            <span className="min-w-0 flex-1 truncate">{section.title}</span>
-            {section.actions}
-          </h2>
+          {!section.bare && (
+            <h2
+              className={clsx(
+                'flex h-8 items-center gap-2 border-b border-line px-2 text-[13px] font-semibold',
+                section.tone === 'danger' ? 'text-danger' : 'text-fg',
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">{section.title}</span>
+              {section.actions}
+            </h2>
+          )}
           {!section.rows.length && section.emptyText && (
             <p className="px-2 py-2 text-sm text-fg-muted">{section.emptyText}</p>
           )}

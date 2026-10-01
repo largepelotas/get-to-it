@@ -8,6 +8,7 @@ export type View =
   | { kind: 'upcoming' }
   | { kind: 'reminders' }
   | { kind: 'list'; listId: string }
+  | { kind: 'label'; labelId: string }
   | { kind: 'archive' }
   | { kind: 'trash' };
 
@@ -28,7 +29,7 @@ export type DialogState =
     };
 
 export interface Renaming {
-  kind: 'list' | 'folder';
+  kind: 'list' | 'folder' | 'label';
   id: string;
   /** Renaming the copy of a list in the Pinned section. */
   pinned?: boolean;
@@ -51,6 +52,10 @@ interface UIState {
   detailsOpen: boolean;
   /** The item whose due-date picker is open in the details panel. */
   duePickerFor: string | null;
+  /** The item whose label picker is open in the details panel. */
+  labelPickerFor: string | null;
+  /** The selection bar's Labels popover is open. */
+  selectionLabelsOpen: boolean;
   dialog: DialogState | null;
   /** The sidebar row showing an inline rename field. */
   renaming: Renaming | null;
@@ -68,6 +73,8 @@ export const useUI = create<UIState>(() => ({
   selectionDateOpen: false,
   detailsOpen: false,
   duePickerFor: null,
+  labelPickerFor: null,
+  selectionLabelsOpen: false,
   dialog: null,
   renaming: null,
   reveal: null,
@@ -75,7 +82,9 @@ export const useUI = create<UIState>(() => ({
 }));
 
 export function sameView(a: View, b: View): boolean {
-  return a.kind === b.kind && (a.kind !== 'list' || a.listId === (b as typeof a).listId);
+  if (a.kind === 'list') return b.kind === 'list' && a.listId === b.listId;
+  if (a.kind === 'label') return b.kind === 'label' && a.labelId === b.labelId;
+  return a.kind === b.kind;
 }
 
 export function navigate(view: View): void {
@@ -88,10 +97,13 @@ export function navigate(view: View): void {
     selectionDateOpen: false,
     detailsOpen: false,
     duePickerFor: null,
+    labelPickerFor: null,
+    selectionLabelsOpen: false,
   });
 }
 
 export const openList = (listId: string) => navigate({ kind: 'list', listId });
+export const openLabel = (labelId: string) => navigate({ kind: 'label', labelId });
 
 /** Selects one task (and drops any group), making it the start of the next range. */
 export function selectItem(id: string | null): void {
@@ -206,12 +218,25 @@ export function openDetails(id: string): void {
 }
 
 export function closeDetails(): void {
-  useUI.setState({ detailsOpen: false, duePickerFor: null });
+  useUI.setState({ detailsOpen: false, duePickerFor: null, labelPickerFor: null });
 }
 
 /** Opens the details panel with the due-date picker showing. */
 export function pickDueDate(id: string): void {
   useUI.setState({ selectedItemId: id, detailsOpen: true, duePickerFor: id });
+}
+
+/** Opens the details panel with the label picker showing. */
+export function pickLabels(id: string): void {
+  useUI.setState({ selectedItemId: id, detailsOpen: true, labelPickerFor: id });
+}
+
+export function setLabelPickerFor(id: string | null): void {
+  useUI.setState({ labelPickerFor: id });
+}
+
+export function setSelectionLabelsOpen(open: boolean): void {
+  useUI.setState({ selectionLabelsOpen: open });
 }
 
 export function setDuePickerFor(id: string | null): void {

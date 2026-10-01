@@ -28,7 +28,7 @@ export class LocalStorageRepository extends MemoryRepository {
       tables.items = Object.fromEntries(
         Object.entries(tables.items).map(([id, item]) => [
           id,
-          { ...item, sectionId: item.sectionId ?? null },
+          { ...item, sectionId: item.sectionId ?? null, labelIds: item.labelIds ?? [] },
         ]),
       );
       return { tables, settings: parsed.settings ?? {} };

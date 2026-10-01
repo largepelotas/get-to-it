@@ -26,6 +26,8 @@ export interface QuickAddProps {
   onArrowDown?: () => void;
   /** Due date for tasks whose text doesn't give one. */
   defaultDue?: string | null;
+  /** Labels put on every task added here (the label view's field), besides any typed with `@`. */
+  labelIds?: string[];
   placeholder?: string;
   /** Shown at the end of the field, e.g. which list new tasks go to. */
   hint?: ReactNode;
@@ -59,6 +61,7 @@ export function QuickAdd({
   inputRef,
   onArrowDown,
   defaultDue = null,
+  labelIds,
   placeholder = 'Add a task',
   hint,
   onAdded,
@@ -76,12 +79,14 @@ export function QuickAdd({
   const allSections = useData((s) => s.tables.sections);
   const lists = useMemo(() => liveTodoLists({ lists: allLists, folders }), [allLists, folders]);
   const sections = useMemo(() => Object.values(allSections), [allSections]);
+  const allLabels = useData((s) => s.tables.labels);
+  const labels = useMemo(() => Object.values(allLabels), [allLabels]);
   const chips = useMemo(
     () =>
       parseDates && text.trim()
-        ? parseQuickAdd(text, new Date(), { lists, sections, listId, defaultDue }).chips
+        ? parseQuickAdd(text, new Date(), { lists, sections, labels, listId, defaultDue }).chips
         : [],
-    [parseDates, text, lists, sections, listId, defaultDue],
+    [parseDates, text, lists, sections, labels, listId, defaultDue],
   );
 
   const barOpen = !!pasted;
@@ -103,7 +108,7 @@ export function QuickAdd({
 
   const addPasted = () => {
     if (!pasted || tooMany) return;
-    if (quickAddLines(listId, pasted.tasks, { defaultDue, announce })) {
+    if (quickAddLines(listId, pasted.tasks, { defaultDue, announce, labelIds })) {
       setPasted(null);
       field.current?.focus();
       onAdded?.();
@@ -152,7 +157,7 @@ export function QuickAdd({
     }
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (quickAddTask(listId, text, { defaultDue, announce })) {
+      if (quickAddTask(listId, text, { defaultDue, announce, labelIds })) {
         setText('');
         onAdded?.();
       }

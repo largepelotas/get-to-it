@@ -12,11 +12,13 @@ import {
   IndentDecrease,
   IndentIncrease,
   ListPlus,
+  Plus,
   PanelRight,
   Rows3,
   SkipForward,
   Sun,
   Sunrise,
+  Tag,
   Trash,
 } from 'lucide-react';
 import { SHORTCUTS } from '@/lib/keymap';
@@ -29,7 +31,10 @@ import { closeAsWontDo, duplicateTask, moveTaskToList, skipTask } from '@/comman
 import { setDue, setPriority } from '@/store/actions/items';
 import { useData } from '@/store/data';
 import { liveTodoLists } from '@/store/sidebar';
-import { pickDueDate } from '@/store/ui';
+import { toggleLabelOnItems } from '@/store/actions/labels';
+import { sortedLabels } from '@/store/labels';
+import { pickDueDate, pickLabels } from '@/store/ui';
+import { LabelDot } from './LabelPicker';
 import { PRIORITIES, PRIORITY_COLOR } from './priority';
 
 const icon = 'size-3.5';
@@ -133,6 +138,27 @@ function sectionEntries(
   ];
 }
 
+/** Every label with a tick on the task's own, then "New label…" (which opens the picker). */
+function labelEntries(item: Item): MenuEntries {
+  const labels = sortedLabels(useData.getState().tables.labels);
+  const has = new Set(item.labelIds ?? []);
+  return [
+    ...labels.map((l): MenuEntry => ({
+      label: l.name,
+      icon: <LabelDot color={l.color} />,
+      checked: has.has(l.id),
+      onSelect: () => toggleLabelOnItems([item.id], l.id),
+    })),
+    !!labels.length && { kind: 'separator' },
+    {
+      label: 'New label…',
+      icon: <Plus className={icon} />,
+      movesFocus: true,
+      onSelect: () => pickLabels(item.id),
+    },
+  ];
+}
+
 /** The right-click menu of a task. */
 export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntries {
   const inCompleted = item.checked && !item.parentId;
@@ -173,6 +199,12 @@ export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntri
         checked: item.priority === p,
         onSelect: () => setPriority(item.id, p),
       })),
+    },
+    {
+      kind: 'sub',
+      label: 'Labels',
+      icon: <Tag className={icon} />,
+      entries: labelEntries(item),
     },
     {
       kind: 'sub',

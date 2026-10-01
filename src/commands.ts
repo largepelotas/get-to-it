@@ -36,9 +36,11 @@ import {
   snoozeReminder,
   type ReminderSpec,
 } from './store/actions/reminders';
+import { createLabel, deleteLabel, renameLabel } from './store/actions/labels';
 import { createSection, deleteSection, UNTITLED_SECTION } from './store/actions/sections';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
+import { normalizeLabelName, sameLabelName } from './store/labels';
 import { listToMarkdown } from './store/markdown';
 import {
   confirmAction,
@@ -238,6 +240,42 @@ export function removeSection(id: string): void {
   toastWithUndo(`Deleted section ${section.title}`);
 }
 
+/** Where to go if the label whose view is open goes away: home. */
+function leaveLabel(id: string): void {
+  const { view } = useUI.getState();
+  if (view.kind === 'label' && view.labelId === id) navigate(homeView());
+}
+
+/**
+ * Adds a label called "New label" (or "New label 2", …) and opens it for
+ * naming in the sidebar, showing the sidebar first if it is hidden.
+ */
+export function newLabel(): void {
+  const names = Object.values(useData.getState().tables.labels).map((l) => l.name);
+  let name = 'New label';
+  for (let n = 2; names.some((x) => sameLabelName(x, name)); n++) name = `New label ${n}`;
+  const id = createLabel(name);
+  if (!id) return;
+  if (useData.getState().settings.sidebarHidden) setSetting('sidebarHidden', false);
+  startRename({ kind: 'label', id });
+}
+
+/** Renames a label from the sidebar. A name another label has is refused, with a toast. */
+export function renameLabelTo(id: string, name: string): void {
+  const next = normalizeLabelName(name);
+  if (!next || !useData.getState().tables.labels[id]) return;
+  if (!renameLabel(id, next)) toast(`There’s already a label called “${next}”.`);
+}
+
+/** Deletes a label (it comes off every task) and offers Undo. Leaves its view if it is open. */
+export function removeLabel(id: string): void {
+  const label = useData.getState().tables.labels[id];
+  if (!label) return;
+  deleteLabel(id);
+  leaveLabel(id);
+  toastWithUndo(`Deleted label ${label.name}`);
+}
+
 /** Deletes tasks (with their subtasks) and offers Undo. */
 export function trashItems(ids: string[]): void {
   const { items } = useData.getState().tables;
@@ -359,13 +397,20 @@ function afterQuickAdd(ids: string[], fieldListId: string, announce: boolean): v
   toastWithUndo(where ? `${what} to ${where}` : what);
 }
 
+interface QuickAddOptions {
+  defaultDue?: string | null;
+  announce?: boolean;
+  /** Labels put on every task added, besides any typed with `@`. */
+  labelIds?: string[];
+}
+
 /** Adds a task from quick-add text; a `#List` in it may file it elsewhere, which a toast says. */
 export function quickAddTask(
   listId: string,
   raw: string,
-  { defaultDue = null, announce = false }: { defaultDue?: string | null; announce?: boolean } = {},
+  { defaultDue = null, announce = false, labelIds = [] }: QuickAddOptions = {},
 ): boolean {
-  const id = createItemFromText(listId, raw, {}, defaultDue);
+  const id = createItemFromText(listId, raw, {}, defaultDue, labelIds);
   if (!id) return false;
   afterQuickAdd([id], listId, announce);
   return true;
@@ -375,9 +420,9 @@ export function quickAddTask(
 export function quickAddLines(
   listId: string,
   lines: string[],
-  { defaultDue = null, announce = false }: { defaultDue?: string | null; announce?: boolean } = {},
+  { defaultDue = null, announce = false, labelIds = [] }: QuickAddOptions = {},
 ): boolean {
-  const ids = createItemsFromLines(listId, lines, defaultDue);
+  const ids = createItemsFromLines(listId, lines, defaultDue, null, labelIds);
   if (!ids.length) return false;
   afterQuickAdd(ids, listId, announce);
   return true;

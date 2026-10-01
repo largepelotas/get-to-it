@@ -10,6 +10,8 @@ export interface PopoverProps {
   align?: 'start' | 'center' | 'end';
   side?: 'top' | 'right' | 'bottom' | 'left';
   className?: string;
+  /** Names the popover for screen readers (it is a dialog). */
+  label?: string;
   /** Runs as it closes; `preventDefault()` stops focus going back to the trigger. */
   onCloseAutoFocus?: (event: Event) => void;
 }
@@ -22,6 +24,7 @@ export function Popover({
   align = 'start',
   side,
   className,
+  label,
   onCloseAutoFocus,
 }: PopoverProps) {
   return (
@@ -30,6 +33,7 @@ export function Popover({
       <P.Portal>
         <P.Content
           align={align}
+          aria-label={label}
           side={side}
           sideOffset={6}
           onCloseAutoFocus={onCloseAutoFocus}

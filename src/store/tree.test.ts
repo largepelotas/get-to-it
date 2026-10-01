@@ -11,6 +11,7 @@ function item(id: string, parentId: string | null, sortKey: string): Item {
     checked: false,
     wontDo: false,
     sectionId: null,
+    labelIds: [],
     completedAt: null,
     sortKey,
     collapsed: false,
