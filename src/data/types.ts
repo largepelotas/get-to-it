@@ -14,6 +14,10 @@ export const COLOR_NAMES = [
 ] as const;
 export type ColorName = (typeof COLOR_NAMES)[number];
 
+/** The colour schemes, shared with another project. Their colours are in styles/index.css. */
+export const PALETTE_NAMES = ['graphite', 'stone', 'sage', 'midnight', 'dusk'] as const;
+export type PaletteName = (typeof PALETTE_NAMES)[number];
+
 /** Priority 1 is the most urgent. 0 means no priority. */
 export type Priority = 0 | 1 | 2 | 3;
 
@@ -150,6 +154,8 @@ export interface GroceryCategory {
 
 export interface Settings {
   theme: 'system' | 'light' | 'dark';
+  /** The colour scheme, independent of the light/dark theme. */
+  palette: PaletteName;
   /** Closing the window keeps the app running in the tray. */
   closeToTray: boolean;
   /** Read dates, repeats and priority out of quick-add text. */
@@ -181,6 +187,7 @@ export const DEFAULT_GROCERY_CATEGORIES: GroceryCategory[] = [
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
+  palette: 'graphite',
   closeToTray: true,
   parseDates: true,
   weekStartsOn: 1,

@@ -11,6 +11,7 @@ import {
   Keyboard,
   Monitor,
   Moon,
+  Palette,
   Plus,
   Redo2,
   Settings as SettingsIcon,
@@ -26,6 +27,7 @@ import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '
 import type { Settings, Tables } from '@/data/types';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { SHORTCUTS } from '@/lib/keymap';
+import { PALETTES } from '@/lib/theme';
 import { canBackUp } from '@/platform';
 import { queryTerms, scoreText } from '@/store/search';
 import { setSetting } from '@/store/data';
@@ -53,6 +55,7 @@ export interface PaletteContext {
   view: View;
   tables: Pick<Tables, 'lists'>;
   theme: Settings['theme'];
+  palette: Settings['palette'];
   undoLabel: string | null;
   redoLabel: string | null;
 }
@@ -68,6 +71,7 @@ export function paletteCommands({
   view,
   tables,
   theme,
+  palette,
   undoLabel,
   redoLabel,
 }: PaletteContext): PaletteCommand[] {
@@ -149,6 +153,14 @@ export function paletteCommands({
       icon: t.icon,
       keepsFocus: true,
       run: () => setSetting('theme', t.value),
+    })),
+    ...PALETTES.filter((p) => p.value !== palette).map((p): PaletteCommand => ({
+      id: `palette-${p.value}`,
+      label: `Use the ${p.label} colour scheme`,
+      keywords: 'appearance theme palette colour color',
+      icon: Palette,
+      keepsFocus: true,
+      run: () => setSetting('palette', p.value),
     })),
     {
       id: 'settings',

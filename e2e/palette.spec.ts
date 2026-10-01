@@ -28,3 +28,19 @@ test('runs commands, such as switching the theme', async ({ page }) => {
   await page.getByRole('option', { name: /Use dark theme/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
+
+test('switches the colour scheme', async ({ page }) => {
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByRole('combobox').fill('colour midnight');
+  await page.getByRole('option', { name: /Use the Midnight ink colour scheme/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'midnight');
+
+  // It's a setting, so it's still there after a reload. Saves are debounced.
+  await page.waitForTimeout(400);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'midnight');
+  await page.keyboard.press('ControlOrMeta+,');
+  await expect(page.getByRole('combobox', { name: 'Colour scheme' })).toHaveValue('midnight');
+  await page.getByRole('combobox', { name: 'Colour scheme' }).selectOption('Graphite and cobalt');
+  await expect(page.locator('html')).not.toHaveAttribute('data-palette');
+});

@@ -11,6 +11,7 @@ import {
   type Tables,
 } from '@/data/types';
 import { isDateKey, isTimeString } from '@/lib/dates';
+import { isPaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
 
 /*
@@ -192,6 +193,8 @@ function checkSettings(raw: unknown): Partial<Settings> {
       if (isTimeString(value)) out[key] = value;
     } else if (key === 'theme') {
       if (['system', 'light', 'dark'].includes(value as string)) out[key] = value;
+    } else if (key === 'palette') {
+      if (isPaletteName(value)) out[key] = value;
     } else if (key === 'weekStartsOn') {
       if (value === 0 || value === 1) out[key] = value;
     } else if (typeof value === typeof fallback) {

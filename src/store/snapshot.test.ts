@@ -39,6 +39,7 @@ function sampleData() {
   addReminder(item, { kind: 'relative', offsetMinutes: 15 });
   createList({ type: 'note', title: 'Ideas' });
   setSetting('weekStartsOn', 0);
+  setSetting('palette', 'dusk');
   setSetting('lastBackupAt', 5);
   return { list, item };
 }
@@ -51,6 +52,7 @@ describe('snapshots', () => {
     expect(parsed.tables).toEqual(tables);
     expect(parsed.exportedAt).toBe(1000);
     expect(parsed.settings.weekStartsOn).toBe(0);
+    expect(parsed.settings.palette).toBe('dusk');
     expect('lastBackupAt' in parsed.settings).toBe(false);
   });
 
@@ -104,7 +106,13 @@ describe('snapshots', () => {
           },
         ],
       },
-      settings: { theme: 'neon', weekStartsOn: 0, bogus: true, defaultListId: 'missing' },
+      settings: {
+        theme: 'neon',
+        palette: 'neon',
+        weekStartsOn: 0,
+        bogus: true,
+        defaultListId: 'missing',
+      },
     });
     const { tables, settings } = parseSnapshot(json);
     expect(tables.lists.L).toMatchObject({ pinned: false, showCompleted: true, folderId: null });
