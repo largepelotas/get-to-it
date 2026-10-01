@@ -61,10 +61,15 @@ const copyEntry = (list: List): MenuEntry => ({
 export interface ListMenuOptions {
   /** Starts renaming, wherever the menu was opened from. */
   onRename?: () => void;
+  /** Adds a section to the list (to-do lists only). */
+  onAddSection?: () => void;
 }
 
 /** Actions for a list, shown from its context menu and its "…" button. */
-export function listMenuEntries(list: List, { onRename }: ListMenuOptions = {}): MenuEntries {
+export function listMenuEntries(
+  list: List,
+  { onRename, onAddSection }: ListMenuOptions = {},
+): MenuEntries {
   if (list.deletedAt) {
     return [
       {
@@ -126,6 +131,13 @@ export function listMenuEntries(list: List, { onRename }: ListMenuOptions = {}):
       movesFocus: true,
       onSelect: onRename,
     },
+    list.type === 'todo' &&
+      onAddSection && {
+        label: 'Add section',
+        icon: <Plus className={icon} />,
+        movesFocus: true,
+        onSelect: onAddSection,
+      },
     {
       label: list.pinned ? 'Unpin' : 'Pin',
       icon: list.pinned ? <PinOff className={icon} /> : <Pin className={icon} />,

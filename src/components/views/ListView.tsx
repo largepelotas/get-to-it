@@ -1,6 +1,6 @@
 import { Archive, Ellipsis, Pin, Trash } from 'lucide-react';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
-import { restore, unarchive } from '@/commands';
+import { addSection, restore, unarchive } from '@/commands';
 import { GroceryList } from '@/components/grocery/GroceryList';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { SelectionBar } from '@/components/items/SelectionBar';
@@ -114,7 +114,12 @@ export function ListView({ listId }: { listId: string }) {
               {list.pinned && <Pin aria-label="Pinned" className="mr-1 size-4 text-fg-subtle" />}
               <Menu
                 align="end"
-                entries={() => listMenuEntries(list, { onRename: rename })}
+                entries={() =>
+                  listMenuEntries(list, {
+                    onRename: rename,
+                    onAddSection: () => addSection(list.id),
+                  })
+                }
                 trigger={<IconButton label="List actions" icon={<Ellipsis className="size-4" />} />}
               />
             </>

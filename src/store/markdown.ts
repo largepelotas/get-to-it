@@ -1,4 +1,4 @@
-import type { GroceryCategory, Item, List, Tables } from '@/data/types';
+import type { GroceryCategory, Item, List, Section, Tables } from '@/data/types';
 import { bySortKey } from '@/lib/order';
 import { describeRecurrence } from '@/lib/recurrence';
 import { docToMarkdown, escapeMarkdown, parseDoc } from '@/lib/richText';
@@ -11,7 +11,7 @@ import { buildTree, type TreeNode } from './tree';
  * by category, and notes use the editor's own Markdown.
  */
 
-type Source = Pick<Tables, 'items' | 'notes'>;
+type Source = Pick<Tables, 'items' | 'notes'> & Partial<Pick<Tables, 'sections'>>;
 
 const PRIORITY = ['', 'P1', 'P2', 'P3'];
 
@@ -47,13 +47,28 @@ function taskLines(node: TreeNode, depth: number): string[] {
   ];
 }
 
-function todoMarkdown(items: Record<string, Item>, listId: string): string {
+function todoMarkdown(
+  items: Record<string, Item>,
+  listId: string,
+  sectionRows: Record<string, Section> = {},
+): string {
   const live = Object.values(items).filter((i) => i.listId === listId && !i.deletedAt);
   const tree = buildTree(live);
   const open = tree.filter((n) => !n.item.checked);
   const done = tree.filter((n) => n.item.checked);
+  const ordered = Object.values(sectionRows)
+    .filter((s) => s.listId === listId)
+    .sort(bySortKey);
+  const known = new Set(ordered.map((s) => s.id));
+  const loose = open.filter((n) => !n.item.sectionId || !known.has(n.item.sectionId));
   const sections: string[] = [];
-  if (open.length) sections.push(open.flatMap((n) => taskLines(n, 0)).join('\n'));
+  if (loose.length) sections.push(loose.flatMap((n) => taskLines(n, 0)).join('\n'));
+  // Each section is a heading one level below the list's title, with its open tasks under it.
+  for (const section of ordered) {
+    const nodes = open.filter((n) => n.item.sectionId === section.id);
+    const lines = nodes.flatMap((n) => taskLines(n, 0)).join('\n');
+    sections.push(`## ${escapeMarkdown(section.title)}${lines ? `\n\n${lines}` : ''}`);
+  }
   if (done.length) {
     sections.push(`## Completed\n\n${done.flatMap((n) => taskLines(n, 0)).join('\n')}`);
   }
@@ -89,7 +104,7 @@ export function listBodyMarkdown(
 ): string {
   switch (list.type) {
     case 'todo':
-      return todoMarkdown(source.items, list.id);
+      return todoMarkdown(source.items, list.id, source.sections);
     case 'grocery':
       return groceryMarkdown(source.items, list.id, categories);
     case 'note':

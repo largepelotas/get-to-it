@@ -77,6 +77,17 @@ export const SHORTCUT_HELP: { title: string; entries: ShortcutHelp[] }[] = [
     ],
   },
   {
+    title: 'Sections',
+    entries: [
+      {
+        keys: ['ArrowLeft', 'ArrowRight', 'Space'],
+        label: 'Collapse or expand the focused section',
+      },
+      { keys: ['Enter', 'F2'], label: 'Rename the focused section' },
+      { keys: ['Alt+ArrowUp', 'Alt+ArrowDown'], label: 'Move the focused section up or down' },
+    ],
+  },
+  {
     title: 'Grocery lists',
     entries: [
       { keys: ['Space'], label: 'Put in the cart, or take out' },

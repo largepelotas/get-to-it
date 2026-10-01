@@ -22,6 +22,9 @@ function purgeList(tx: Tx, listId: string): void {
       .map((i) => i.id),
   );
   purgeItems(tx, itemIds);
+  for (const section of tx.all('sections')) {
+    if (section.listId === listId) tx.remove('sections', section.id);
+  }
   tx.remove('notes', listId);
   tx.remove('lists', listId);
 }

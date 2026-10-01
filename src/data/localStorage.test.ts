@@ -26,4 +26,22 @@ describe('LocalStorageRepository', () => {
     expect(tables.reminders.R1.constant).toBe(false);
     window.localStorage.removeItem('checklist:data:v1');
   });
+
+  // Bug prevented: data saved before sections existed failing to load, or loading tasks with
+  // sectionId undefined (which later code reads as a real section).
+  it('reads data saved before sections as having none, with tasks unsectioned', async () => {
+    window.localStorage.setItem(
+      'checklist:data:v1',
+      JSON.stringify({
+        tables: {
+          items: { I1: { id: 'I1', listId: 'L1', parentId: null, text: 'Old' } },
+        },
+        settings: {},
+      }),
+    );
+    const { tables } = await new LocalStorageRepository().load();
+    expect(tables.sections).toEqual({});
+    expect(tables.items.I1.sectionId).toBeNull();
+    window.localStorage.removeItem('checklist:data:v1');
+  });
 });

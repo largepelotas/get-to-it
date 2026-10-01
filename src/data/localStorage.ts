@@ -24,6 +24,13 @@ export class LocalStorageRepository extends MemoryRepository {
       tables.reminders = Object.fromEntries(
         Object.entries(tables.reminders).map(([id, r]) => [id, { ...r, constant: !!r.constant }]),
       );
+      // Items saved before sections existed don't have the field.
+      tables.items = Object.fromEntries(
+        Object.entries(tables.items).map(([id, item]) => [
+          id,
+          { ...item, sectionId: item.sectionId ?? null },
+        ]),
+      );
       return { tables, settings: parsed.settings ?? {} };
     } catch {
       return undefined;

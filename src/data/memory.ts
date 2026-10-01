@@ -11,6 +11,9 @@ export class MemoryRepository implements Repository {
     this.settings = structuredClone(initial?.settings ?? {});
     // Reminders saved before constant reminders existed don't have the field.
     for (const r of Object.values(this.tables.reminders)) r.constant = !!r.constant;
+    // Items saved before sections existed don't have the field, and old data has no table.
+    this.tables = { ...emptyTables(), ...this.tables };
+    for (const i of Object.values(this.tables.items)) i.sectionId = i.sectionId ?? null;
   }
 
   async load(): Promise<LoadResult> {
@@ -19,6 +22,7 @@ export class MemoryRepository implements Repository {
 
   async replaceAll(data: LoadResult): Promise<void> {
     this.tables = { ...emptyTables(), ...structuredClone(data.tables) };
+    for (const i of Object.values(this.tables.items)) i.sectionId = i.sectionId ?? null;
     this.settings = structuredClone(data.settings);
   }
 

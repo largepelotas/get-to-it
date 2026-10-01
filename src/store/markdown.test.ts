@@ -4,6 +4,7 @@ import { DEFAULT_GROCERY_CATEGORIES } from '@/data/types';
 import { docFromText } from '@/lib/richText';
 import { createFolder } from './actions/folders';
 import { createItem, setChecked, setItemNotes, setWontDo } from './actions/items';
+import { createSection } from './actions/sections';
 import { archiveList, createList, deleteList, moveListToFolder } from './actions/lists';
 import { setNoteContent } from './actions/notes';
 import { resetForTests, useData } from './data';
@@ -128,5 +129,50 @@ describe('markdownFiles', () => {
       'plan 2.md',
     ]);
     expect(files.find((f) => f.path === 'Work/Plan.md')?.contents).toBe('# Plan\n');
+  });
+});
+
+describe('listToMarkdown with sections', () => {
+  // Bug prevented: sections losing their tasks in an export, or changing a list that has none.
+  it('writes unsectioned tasks first, then each section as a heading under the title', () => {
+    const list = createList({ type: 'todo', title: 'Home' });
+    const kitchen = createSection(list, 'Kitchen')!;
+    const garden = createSection(list, 'Garden')!;
+    createSection(list, 'Empty');
+    createItem(list, { text: 'Water plants', sectionId: garden });
+    const paint = createItem(list, { text: 'Paint', sectionId: kitchen })!;
+    createItem(list, { text: 'Prime walls', parentId: paint });
+    createItem(list, { text: 'Loose' });
+    const done = createItem(list, { text: 'Old', sectionId: kitchen })!;
+    setChecked(done, true);
+    expect(md(list)).toBe(
+      [
+        '# Home',
+        '',
+        '- [ ] Loose',
+        '',
+        '## Kitchen',
+        '',
+        '- [ ] Paint',
+        '  - [ ] Prime walls',
+        '',
+        '## Garden',
+        '',
+        '- [ ] Water plants',
+        '',
+        '## Empty',
+        '',
+        '## Completed',
+        '',
+        '- [x] Old',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('writes a list with no sections exactly as before', () => {
+    const list = createList({ type: 'todo', title: 'Plain' });
+    createItem(list, { text: 'One' });
+    expect(md(list)).toBe('# Plain\n\n- [ ] One\n');
   });
 });

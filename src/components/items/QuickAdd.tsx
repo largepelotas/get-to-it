@@ -73,11 +73,15 @@ export function QuickAdd({
   const parseDates = useData((s) => s.settings.parseDates);
   const allLists = useData((s) => s.tables.lists);
   const folders = useData((s) => s.tables.folders);
+  const allSections = useData((s) => s.tables.sections);
   const lists = useMemo(() => liveTodoLists({ lists: allLists, folders }), [allLists, folders]);
+  const sections = useMemo(() => Object.values(allSections), [allSections]);
   const chips = useMemo(
     () =>
-      parseDates && text.trim() ? parseQuickAdd(text, new Date(), { lists, defaultDue }).chips : [],
-    [parseDates, text, lists, defaultDue],
+      parseDates && text.trim()
+        ? parseQuickAdd(text, new Date(), { lists, sections, listId, defaultDue }).chips
+        : [],
+    [parseDates, text, lists, sections, listId, defaultDue],
   );
 
   const barOpen = !!pasted;

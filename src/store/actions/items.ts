@@ -9,7 +9,7 @@ import { docFromText, docToPlainText, isDocEmpty, parseDoc, type RichNode } from
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
 import { depthOf, descendantIds, MAX_DEPTH, subtreeHeight } from '../tree';
-import { itemIndex, keyAt, listItems, siblings } from './helpers';
+import { itemIndex, keyAt, listItems, listSections, sectionOf, siblings } from './helpers';
 import { liveTodoLists } from '../sidebar';
 import { clearSnoozes, insertReminder } from './reminders';
 
@@ -21,6 +21,12 @@ export interface NewItem {
    * left out for the end.
    */
   after?: string | null;
+  /**
+   * The section for a new top-level task. Left out, a task added after another
+   * task goes into that task's section, and any other goes into none. Ignored
+   * for a subtask, and when it isn't a section of this list.
+   */
+  sectionId?: string | null;
   priority?: Priority;
   dueDate?: string | null;
   dueTime?: string | null;
@@ -59,10 +65,18 @@ function reopenAncestors(tx: Tx, item: Item): void {
 /** Adds an item inside an existing transaction and returns its id. */
 export function insertItem(tx: Tx, listId: string, input: NewItem): string {
   const parentId = input.parentId ?? null;
+  let sectionId: string | null = null;
+  if (!parentId) {
+    const afterItem = input.after ? tx.get('items', input.after) : undefined;
+    const wanted =
+      input.sectionId !== undefined ? input.sectionId : afterItem ? sectionOf(tx, afterItem) : null;
+    if (wanted && tx.get('sections', wanted)?.listId === listId) sectionId = wanted;
+  }
   const item: Item = {
     id: newId(),
     listId,
     parentId,
+    sectionId,
     text: input.text.trim(),
     checked: false,
     wontDo: false,
@@ -103,7 +117,7 @@ interface Prepared {
 function prepareFromText(
   listId: string,
   raw: string,
-  place: Pick<NewItem, 'parentId' | 'after'>,
+  place: Pick<NewItem, 'parentId' | 'after' | 'sectionId'>,
   defaultDue: string | null,
 ): Prepared | null {
   if (!raw.trim()) return null;
@@ -115,6 +129,8 @@ function prepareFromText(
   const plain = !place.parentId && place.after === undefined;
   const parsed = parseQuickAdd(raw, new Date(), {
     lists: plain ? liveTodoLists(tables) : [],
+    sections: plain ? Object.values(tables.sections) : [],
+    listId,
     defaultDue,
   });
   const dueDate = parsed.dueDate ?? defaultDue;
@@ -129,6 +145,7 @@ function prepareFromText(
       recurrence: parsed.recurrence,
       priority: parsed.priority,
       ...place,
+      ...(parsed.sectionId ? { sectionId: parsed.sectionId } : {}),
     },
     reminder,
   };
@@ -148,7 +165,7 @@ function insertPrepared(tx: Tx, p: Prepared): string {
 export function createItemFromText(
   listId: string,
   raw: string,
-  place: Pick<NewItem, 'parentId' | 'after'> = {},
+  place: Pick<NewItem, 'parentId' | 'after' | 'sectionId'> = {},
   /** The due date to use when the text doesn't give one (e.g. today, in the Today view). */
   defaultDue: string | null = null,
 ): string | null {
@@ -162,8 +179,12 @@ export function createItemsFromLines(
   listId: string,
   lines: string[],
   defaultDue: string | null = null,
+  /** The section for lines that don't name one with `/section`. */
+  sectionId: string | null = null,
 ): string[] {
-  const prepared = lines.flatMap((line) => prepareFromText(listId, line, {}, defaultDue) ?? []);
+  const prepared = lines.flatMap(
+    (line) => prepareFromText(listId, line, sectionId ? { sectionId } : {}, defaultDue) ?? [],
+  );
   if (!prepared.length) return [];
   return commit(prepared.length === 1 ? 'New task' : 'New tasks', (tx) =>
     prepared.map((p) => insertPrepared(tx, p)),
@@ -429,11 +450,16 @@ export function indentItem(id: string): boolean {
     const item = tx.get('items', id);
     // Finished top-level tasks are listed by completion time, so there's no "item above".
     if (!item || item.deletedAt || (item.checked && !item.parentId)) return false;
-    const sibs = shownSiblings(tx, item);
+    // At the top level only the tasks in the same section count as "above".
+    const group = item.parentId ? null : sectionOf(tx, item);
+    const sibs = item.parentId
+      ? shownSiblings(tx, item)
+      : shownSiblings(tx, item).filter((s) => sectionOf(tx, s) === group);
     const prev = sibs[sibs.findIndex((s) => s.id === id) - 1];
     if (!prev || !fitsDeeper(tx, item, 1)) return false;
     const moved = tx.update('items', id, {
       parentId: prev.id,
+      sectionId: null,
       sortKey: keyAfter(tx, item.listId, prev.id, undefined, id),
     })!;
     if (prev.collapsed) tx.update('items', prev.id, { collapsed: false });
@@ -450,38 +476,94 @@ export function outdentItem(id: string): boolean {
     if (!item || !parent) return false;
     tx.update('items', id, {
       parentId: parent.parentId,
+      // Back at the top level, it joins the section its parent is in.
+      sectionId: parent.parentId ? null : sectionOf(tx, parent),
       sortKey: keyAfter(tx, item.listId, parent.parentId, parent.id, id),
     });
     return true;
   });
 }
 
-/** Swaps an item with the sibling above (-1) or below (1). Returns false at either end. */
+/**
+ * Swaps an item with the sibling above (-1) or below (1). Returns false at either end.
+ * A top-level task at the edge of its section crosses into the neighbouring one: the
+ * end of the section above, or the start of the one below. "No section" is the first
+ * group; a collapsed or empty section is still entered.
+ */
 export function moveItemBy(id: string, direction: -1 | 1): boolean {
   return commit('Move task', (tx) => {
     const item = tx.get('items', id);
     if (!item || (item.checked && !item.parentId)) return false;
-    const sibs = shownSiblings(tx, item);
+    const shown = shownSiblings(tx, item);
+    const group = item.parentId ? null : sectionOf(tx, item);
+    // Within a section, only its own tasks are neighbours.
+    const sibs = item.parentId ? shown : shown.filter((s) => sectionOf(tx, s) === group);
     const i = sibs.findIndex((s) => s.id === id);
+    if (i < 0) return false;
     const target = i + direction;
-    if (i < 0 || target < 0 || target >= sibs.length) return false;
-    const [before, after] =
-      direction < 0 ? [sibs[target - 1], sibs[target]] : [sibs[target], sibs[target + 1]];
-    tx.update('items', id, {
-      sortKey: keyBetween(before?.sortKey ?? null, after?.sortKey ?? null),
-    });
+    if (target >= 0 && target < sibs.length) {
+      const [before, after] =
+        direction < 0 ? [sibs[target - 1], sibs[target]] : [sibs[target], sibs[target + 1]];
+      tx.update('items', id, {
+        sortKey: keyBetween(before?.sortKey ?? null, after?.sortKey ?? null),
+      });
+      return true;
+    }
+    if (item.parentId) return false;
+    // At the edge: into the neighbouring group.
+    const groups = [null, ...listSections(tx, item.listId).map((s) => s.id)];
+    const g = groups.indexOf(group);
+    const next = groups[g + direction];
+    if (g < 0 || next === undefined) return false;
+    const others = shown.filter((s) => s.id !== id);
+    if (direction < 0) {
+      tx.update('items', id, { sectionId: next, sortKey: keyAt(others, others.length) });
+    } else {
+      const first = others.findIndex((s) => sectionOf(tx, s) === next);
+      tx.update('items', id, {
+        sectionId: next,
+        sortKey: keyAt(others, first < 0 ? others.length : first),
+      });
+    }
     return true;
   });
 }
 
-/** Moves an item (with its subtasks) under `parentId`, after the sibling `after` (null = first). */
-export function moveItem(id: string, parentId: string | null, after: string | null): void {
+/** The section of the top-level task above `item` (or of `item` itself if it is one). */
+function topSection(tx: Tx, item: Item): string | null {
+  let top = item;
+  for (let guard = 0; top.parentId && guard < 50; guard++) {
+    const parent = tx.get('items', top.parentId);
+    if (!parent) break;
+    top = parent;
+  }
+  return sectionOf(tx, top);
+}
+
+/**
+ * Moves an item (with its subtasks) under `parentId`, after the sibling `after` (null = first).
+ * For a top-level drop, `sectionId` is the section it lands in (null = none); left out, a
+ * top-level task stays where it is and a subtask takes the section of its top-level ancestor.
+ * Becoming a subtask clears the section. `after` should be a task in the target section.
+ */
+export function moveItem(
+  id: string,
+  parentId: string | null,
+  after: string | null,
+  sectionId?: string | null,
+): void {
   commit('Move task', (tx) => {
     const item = tx.get('items', id);
     if (!item || id === parentId) return;
     if (parentId && descendantIds(itemIndex(tx, item.listId), id).includes(parentId)) return;
+    let section: string | null = null;
+    if (!parentId) {
+      const wanted = sectionId !== undefined ? sectionId : topSection(tx, item);
+      if (wanted && tx.get('sections', wanted)?.listId === item.listId) section = wanted;
+    }
     const moved = tx.update('items', id, {
       parentId,
+      sectionId: section,
       sortKey: keyAfter(tx, item.listId, parentId, after, id),
     })!;
     if (parentId && tx.get('items', parentId)?.collapsed) {
@@ -505,6 +587,7 @@ export function moveItemToList(id: string, listId: string): void {
     tx.update('items', id, {
       listId,
       parentId: null,
+      sectionId: null,
       sortKey: keyAfter(tx, listId, null, undefined),
     });
     for (const childId of subtasks) tx.update('items', childId, { listId });
@@ -540,6 +623,7 @@ export function moveItemsToList(ids: string[], listId: string): void {
       tx.update('items', id, {
         listId,
         parentId: null,
+        sectionId: null,
         sortKey: keyAfter(tx, listId, null, undefined),
       });
       for (const childId of subtasks) tx.update('items', childId, { listId });

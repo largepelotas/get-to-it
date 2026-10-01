@@ -72,6 +72,17 @@ const SCHEMA: Record<TableName, Column[]> = {
     deletedAt: 'int',
     // Added in migration 2.
     wontDo: 'bool',
+    // Added in migration 4.
+    sectionId: 'text',
+  }),
+  sections: columns({
+    id: 'text',
+    listId: 'text',
+    title: 'text',
+    sortKey: 'text',
+    collapsed: 'bool',
+    createdAt: 'int',
+    updatedAt: 'int',
   }),
   reminders: columns({
     id: 'text',
@@ -192,6 +203,20 @@ export const MIGRATIONS: string[][] = [
   [`ALTER TABLE items ADD COLUMN wont_do INTEGER NOT NULL DEFAULT 0`],
   // Reminders that keep notifying until dealt with.
   [`ALTER TABLE reminders ADD COLUMN constant INTEGER NOT NULL DEFAULT 0`],
+  // Sections inside to-do lists, and the section a task sits in.
+  [
+    `CREATE TABLE sections (
+      id TEXT PRIMARY KEY NOT NULL,
+      list_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      sort_key TEXT NOT NULL,
+      collapsed INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX sections_list_id ON sections (list_id)`,
+    `ALTER TABLE items ADD COLUMN section_id TEXT`,
+  ],
 ];
 
 function toColumnValue(value: unknown, type: ColumnType): unknown {

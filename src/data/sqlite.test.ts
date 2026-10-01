@@ -48,6 +48,7 @@ const item: Item = {
   id: 'I1',
   listId: 'L1',
   parentId: null,
+  sectionId: null,
   text: 'Write plan',
   checked: false,
   wontDo: false,
@@ -72,7 +73,7 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.items).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(3);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
   });
 
   it('adds the won’t-do column to a database made before it existed', async () => {
@@ -106,11 +107,48 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.reminders.R1).toMatchObject({ offsetMinutes: 15, constant: false });
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(3);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     await repo.write([
       { kind: 'put', table: 'reminders', row: { ...data.tables.reminders.R1, constant: true } },
     ]);
     expect((await new SqliteRepository(exec).load()).tables.reminders.R1.constant).toBe(true);
+  });
+
+  // Bug prevented: upgrading a version 3 database losing tasks, or leaving them in a
+  // section that does not exist; and sections not surviving a save and reload.
+  it('adds sections to a version 3 database, with every task unsectioned', async () => {
+    const exec = nodeExecutor();
+    exec.raw.exec('BEGIN');
+    for (const sql of MIGRATIONS.slice(0, 3).flat()) exec.raw.exec(sql);
+    exec.raw.exec('PRAGMA user_version = 3');
+    exec.raw.exec('COMMIT');
+    exec.raw.exec(
+      `INSERT INTO items (id, list_id, text, checked, sort_key, created_at, updated_at)
+       VALUES ('OLD', 'L1', 'Old task', 0, 'a0', 1, 1)`,
+    );
+    const repo = new SqliteRepository(exec);
+    const data = await repo.load();
+    expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', sectionId: null });
+    expect(data.tables.sections).toEqual({});
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(4);
+    const section = {
+      id: 'S1',
+      listId: 'L1',
+      title: 'Kitchen',
+      sortKey: 'a0',
+      collapsed: true,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await repo.write([
+      { kind: 'put', table: 'sections', row: section },
+      { kind: 'put', table: 'items', row: { ...data.tables.items.OLD, sectionId: 'S1' } },
+    ]);
+    const again = await new SqliteRepository(exec).load();
+    expect(again.tables.sections.S1).toEqual(section);
+    expect(again.tables.items.OLD.sectionId).toBe('S1');
+    await repo.write([{ kind: 'delete', table: 'sections', id: 'S1' }]);
+    expect((await repo.load()).tables.sections).toEqual({});
   });
 
   it('keeps a task closed as won’t do', async () => {

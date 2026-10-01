@@ -56,6 +56,8 @@ interface UIState {
   renaming: Renaming | null;
   /** An item for its list to scroll to and focus once shown (opened from search). */
   reveal: string | null;
+  /** The section heading showing an inline rename field. */
+  renamingSectionId: string | null;
 }
 
 export const useUI = create<UIState>(() => ({
@@ -69,6 +71,7 @@ export const useUI = create<UIState>(() => ({
   dialog: null,
   renaming: null,
   reveal: null,
+  renamingSectionId: null,
 }));
 
 export function sameView(a: View, b: View): boolean {
@@ -238,4 +241,9 @@ export function startRename(renaming: Renaming): void {
 
 export function stopRename(): void {
   useUI.setState({ renaming: null });
+}
+
+/** Shows the rename field on a section heading (`null` closes it). */
+export function setRenamingSection(id: string | null): void {
+  useUI.setState({ renamingSectionId: id });
 }

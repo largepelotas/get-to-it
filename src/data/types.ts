@@ -72,6 +72,12 @@ export interface Item {
   wontDo: boolean;
   completedAt: number | null;
   sortKey: string;
+  /**
+   * The section this task sits in, or null. Only top-level tasks carry one; a
+   * subtask's is always null and it belongs wherever its top-level ancestor is.
+   * One that names a missing section (or one in another list) means no section.
+   */
+  sectionId: string | null;
   /** Subtasks hidden. */
   collapsed: boolean;
   /** Rich-text notes as TipTap JSON, or null. */
@@ -89,6 +95,18 @@ export interface Item {
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
+}
+
+/** A heading inside a to-do list that groups its top-level tasks. */
+export interface Section {
+  id: string;
+  listId: string;
+  title: string;
+  sortKey: string;
+  /** The section's tasks are hidden. */
+  collapsed: boolean;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface Reminder {
@@ -129,6 +147,7 @@ export interface Tables {
   folders: Record<string, Folder>;
   lists: Record<string, List>;
   items: Record<string, Item>;
+  sections: Record<string, Section>;
   reminders: Record<string, Reminder>;
   completions: Record<string, Completion>;
   notes: Record<string, Note>;
@@ -142,13 +161,22 @@ export const TABLE_NAMES: TableName[] = [
   'folders',
   'lists',
   'items',
+  'sections',
   'reminders',
   'completions',
   'notes',
 ];
 
 export function emptyTables(): Tables {
-  return { folders: {}, lists: {}, items: {}, reminders: {}, completions: {}, notes: {} };
+  return {
+    folders: {},
+    lists: {},
+    items: {},
+    sections: {},
+    reminders: {},
+    completions: {},
+    notes: {},
+  };
 }
 
 export interface GroceryCategory {

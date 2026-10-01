@@ -10,6 +10,7 @@ function item(id: string, fields: Partial<Item> = {}): Item {
     text: id,
     checked: false,
     wontDo: false,
+    sectionId: null,
     completedAt: null,
     sortKey: 'a0',
     collapsed: false,
