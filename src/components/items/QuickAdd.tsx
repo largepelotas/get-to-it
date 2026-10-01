@@ -51,7 +51,7 @@ export function QuickAdd({
 
   return (
     <div className="mb-2">
-      <label className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
+      <label className="flex h-9 items-center gap-2 rounded-lg border border-line-control bg-surface px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-soft">
         <Plus aria-hidden className="size-4 shrink-0 text-fg-subtle" />
         <input
           ref={inputRef}

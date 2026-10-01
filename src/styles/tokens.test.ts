@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PALETTE_NAMES, type PaletteName } from '@/data/types';
+import { COLOR_NAMES, PALETTE_NAMES, type PaletteName } from '@/data/types';
 import { PALETTES } from '@/lib/theme';
 
 /*
  * Parses the design tokens in index.css and checks WCAG AA contrast for every
- * text colour on every surface and wash it's used on, in every palette and
- * both themes. Fails if a colour edit breaks AA or a palette leaves out a
+ * text colour on every surface and wash it's used on, and 3:1 for control
+ * borders, the focus ring and list colours, in every palette and both themes. Fails if a colour edit breaks AA or a palette leaves out a
  * token (which would let Graphite's colour show through).
  */
 
@@ -70,6 +70,10 @@ const texts = ['fg', 'fg-muted', 'fg-subtle', 'accent', 'danger'];
 // a wash over the surface; text on them must still meet AA.
 const washes = ['hover', 'selected', 'accent-soft', 'danger-soft'];
 
+// Non-text contrast (WCAG 1.4.11, 3:1): control borders and the focus ring
+// (an accent outline) against every surface and row wash they sit on.
+const controls = ['line-control', 'accent'];
+
 const CASES = PALETTE_NAMES.flatMap((p) =>
   (['light', 'dark'] as const).map((theme) => [p, theme] as const),
 );
@@ -88,6 +92,30 @@ describe.each(CASES)('%s %s', (palette, theme) => {
           expect(contrast(v(x), wash(v(w), v(s)))).toBeGreaterThanOrEqual(4.5);
         });
     }
+
+  for (const x of controls)
+    for (const s of surfaces) {
+      it(`${x} on ${s} meets 3:1 (non-text)`, () => {
+        expect(contrast(v(x), v(s))).toBeGreaterThanOrEqual(3);
+      });
+      for (const w of ['hover', 'selected'])
+        it(`${x} on ${w} over ${s} meets 3:1 (non-text)`, () => {
+          expect(contrast(v(x), wash(v(w), v(s)))).toBeGreaterThanOrEqual(3);
+        });
+    }
+
+  // List colours are set once per theme, but sit on every palette's surfaces:
+  // icons, swatches and priority rings, on plain, hovered and selected rows.
+  const lists = decls(theme === 'light' ? ':root {' : ":root[data-theme='dark'] {");
+  for (const name of COLOR_NAMES)
+    it(`list colour ${name} meets 3:1 (non-text) on every surface and wash`, () => {
+      const c = lists[`--list-${name}`]!;
+      for (const s of surfaces) {
+        expect(contrast(c, v(s))).toBeGreaterThanOrEqual(3);
+        for (const w of ['hover', 'selected'])
+          expect(contrast(c, wash(v(w), v(s)))).toBeGreaterThanOrEqual(3);
+      }
+    });
 
   for (const [fg, bg] of [
     ['accent-fg', 'accent'],

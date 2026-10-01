@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import type { ComponentProps } from 'react';
 
 export const inputClass =
-  'h-8 w-full rounded-md border border-line-strong bg-surface px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent-soft';
+  'h-8 w-full rounded-md border border-line-control bg-surface px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent-soft';
 
 export function Input({ className, ...props }: ComponentProps<'input'>) {
   return <input className={clsx(inputClass, className)} {...props} />;

@@ -369,10 +369,17 @@ history)`, which only returns categories that still exist.
   accent and danger fills is white in light themes and the rail colour in
   dark. The list colours are the user's choice and stay the same in every
   palette. `styles/tokens.test.ts` checks every text colour on every surface
-  and wash in all ten combinations, and that no palette leaves out a token.
+  and wash in all ten combinations (4.5:1), and that no palette leaves out a
+  token. It also checks non-text contrast (3:1, WCAG 1.4.11) on every
+  surface, hovered and selected rows included: `--line-control` (the
+  palette's `line-strong` moved toward its ink), the accent (focus ring), and
+  the list colours, whose light values were darkened in OKLCH lightness
+  (hue kept) to reach 3:1 on every palette.
 - Tailwind names map to the tokens: `bg-surface`, `bg-sidebar`,
   `bg-elevated`, `bg-hover`, `bg-selected`, `text-fg`, `text-fg-muted`,
-  `text-fg-subtle`, `border-line`, `border-line-strong`, `bg-accent`,
+  `text-fg-subtle`, `border-line`, `border-line-strong`,
+  `border-line-control` (borders that show where a control is: checkbox
+  rings, text fields, the quick-add fields), `bg-accent`,
   `text-accent-fg`, `bg-accent-soft`, `text-danger`, `text-danger-fg`
   (text on `bg-danger`), `bg-danger-soft`, `bg-overlay`, `shadow-popover`.
   Use these, not raw colors.

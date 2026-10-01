@@ -271,7 +271,7 @@ export function DraftRow({ depth, inputRef, value, onChange, onKeyDown, onBlur }
     >
       <span className="w-4 shrink-0" />
       <span className="-ml-1 w-4 shrink-0" />
-      <span className="size-4 shrink-0 rounded-full border-[1.5px] border-dashed border-line-strong" />
+      <span className="size-4 shrink-0 rounded-full border-[1.5px] border-dashed border-line-control" />
       <input
         ref={inputRef}
         aria-label="New task"

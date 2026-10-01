@@ -27,6 +27,10 @@
   --fg-subtle: #5b5e64;
   --line: #dcdcd8;
   --line-strong: #bfbfbc;
+  /* Borders that show where a control is (checkbox rings, text fields): 3:1
+     against every surface and row wash (WCAG 1.4.11). line and line-strong are
+     for dividers and outlines of controls that have text. */
+  --line-control: #7a7b7a;
   --accent: #2c55c9;
   --accent-hover: #274bb1;
   --accent-fg: #ffffff;
@@ -38,17 +42,19 @@
   --overlay: rgb(27 28 30 / 0.35);
   --shadow-popover: 0 8px 24px rgb(27 28 30 / 0.13), 0 1px 3px rgb(27 28 30 / 0.09);
 
-  /* The 10 list and folder colours (ColorName in data/types.ts). */
-  --list-red: #e5484d;
-  --list-orange: #f76b15;
-  --list-amber: #e2a336;
-  --list-green: #30a46c;
-  --list-teal: #12a594;
-  --list-blue: #0090ff;
+  /* The 10 list and folder colours (ColorName in data/types.ts). They mark
+     icons, swatches and priority rings, so each keeps 3:1 against every
+     palette's surfaces, hovered and selected rows included (WCAG 1.4.11). */
+  --list-red: #d53840;
+  --list-orange: #c35104;
+  --list-amber: #9b6a06;
+  --list-green: #018451;
+  --list-teal: #048375;
+  --list-blue: #0375d1;
   --list-indigo: #3e63dd;
   --list-purple: #8e4ec6;
-  --list-pink: #d6409f;
-  --list-gray: #8b8d98;
+  --list-pink: #cb3596;
+  --list-gray: #72747e;
 }
 
 :root[data-theme='dark'] {
@@ -63,6 +69,7 @@
   --fg-subtle: #a4a6ac;
   --line: #34363b;
   --line-strong: #4a4c50;
+  --line-control: #848689;
   --accent: #8faaff;
   --accent-hover: #9cb4ff;
   --accent-fg: #151618;
@@ -105,6 +112,7 @@
   --fg-subtle: #5d5a55;
   --line: #d6d3cb;
   --line-strong: #bbb8b1;
+  --line-control: #787671;
   --accent: #3c6528;
   --accent-hover: #355923;
   --accent-fg: #ffffff;
@@ -129,6 +137,7 @@
   --fg-subtle: #acaba4;
   --line: #393835;
   --line-strong: #4f4e4b;
+  --line-control: #8b8a87;
   --accent: #a6cf82;
   --accent-hover: #b1d591;
   --accent-fg: #181817;
@@ -155,6 +164,7 @@
   --fg-subtle: #4f5b53;
   --line: #cbd6c7;
   --line-strong: #b0bbad;
+  --line-control: #6d776d;
   --accent: #33479e;
   --accent-hover: #2d3e8b;
   --accent-fg: #ffffff;
@@ -179,6 +189,7 @@
   --fg-subtle: #a3aea6;
   --line: #303b33;
   --line-strong: #465048;
+  --line-control: #848d86;
   --accent: #a3b3ff;
   --accent-hover: #aebcff;
   --accent-fg: #141a16;
@@ -205,6 +216,7 @@
   --fg-subtle: #535c72;
   --line: #d3d8e3;
   --line-strong: #b6bcc8;
+  --line-control: #727886;
   --accent: #845000;
   --accent-hover: #744600;
   --accent-fg: #ffffff;
@@ -229,6 +241,7 @@
   --fg-subtle: #9fa7bb;
   --line: #26314a;
   --line-strong: #3d475e;
+  --line-control: #808798;
   --accent: #f2b84b;
   --accent-hover: #f4c161;
   --accent-fg: #0d1320;
@@ -255,6 +268,7 @@
   --fg-subtle: #5b546f;
   --line: #d6d0e2;
   --line-strong: #bab5c6;
+  --line-control: #777283;
   --accent: #5a37c4;
   --accent-hover: #4f30ac;
   --accent-fg: #ffffff;
@@ -279,6 +293,7 @@
   --fg-subtle: #a9a3b8;
   --line: #353045;
   --line-strong: #4b465a;
+  --line-control: #888494;
   --accent: #bba8ff;
   --accent-hover: #c3b2ff;
   --accent-fg: #16141d;
@@ -303,6 +318,7 @@
   --color-fg-subtle: var(--fg-subtle);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-line-control: var(--line-control);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
