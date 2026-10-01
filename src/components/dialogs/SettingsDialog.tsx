@@ -33,7 +33,7 @@ function Row({
       <label htmlFor={htmlFor} className="flex-1 text-sm text-fg">
         {label}
       </label>
-      <div className="w-36 shrink-0">{children}</div>
+      <div className="w-48 shrink-0">{children}</div>
     </div>
   );
 }
