@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRepository } from '@/data/memory';
 import type { Priority } from '@/data/types';
 import { archiveList, createList } from './actions/lists';
-import { createItem, setChecked } from './actions/items';
+import { createItem, setChecked, setEndTime } from './actions/items';
 import { resetForTests, useData } from './data';
 import {
   dueRows,
   next7Count,
   next7Model,
+  scheduledMinutes,
   todayCount,
   todayModel,
   tomorrowCount,
@@ -141,5 +142,19 @@ describe('Next 7 days', () => {
     add(work, 'Last day', '2026-10-06');
     add(work, 'Day eight', '2026-10-07');
     expect(next7Count(rows(), today)).toBe(3);
+  });
+});
+
+describe('scheduledMinutes', () => {
+  // Bug it prevents: Today's total counted tasks without a range, or the Overdue ones.
+  it('sums end minus start over the rows that have both times', () => {
+    const a = add(home, 'A', '2026-10-05', { dueTime: '09:00' });
+    setEndTime(a, '10:30');
+    const b = add(home, 'B', '2026-10-05', { dueTime: '14:00' });
+    setEndTime(b, '14:45');
+    add(home, 'No end', '2026-10-05', { dueTime: '16:00' });
+    add(home, 'No time', '2026-10-05');
+    expect(scheduledMinutes(rows())).toBe(135);
+    expect(scheduledMinutes([])).toBe(0);
   });
 });

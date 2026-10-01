@@ -9,7 +9,7 @@ import { SmartList, type SmartSection } from '@/components/items/SmartList';
 import { Button, Popover } from '@/components/ui';
 import type { List, Priority } from '@/data/types';
 import { useToday } from '@/hooks/useToday';
-import { addDaysKey, formatDateKey, formatLongDate } from '@/lib/dates';
+import { addDaysKey, formatDateKey, formatDuration, formatLongDate } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { useData } from '@/store/data';
 import { groupRows, sortRows, type GroupContext } from '@/store/arrange';
@@ -17,6 +17,7 @@ import { useUI, type View } from '@/store/ui';
 import {
   dueRows,
   next7Model,
+  scheduledMinutes,
   todayModel,
   tomorrowModel,
   upcomingModel,
@@ -205,6 +206,7 @@ export function TodayView() {
   }
 
   const count = overdue.length + dueToday.length;
+  const planned = scheduledMinutes(dueToday);
 
   return (
     <SmartLayout
@@ -220,6 +222,7 @@ export function TodayView() {
                   <span aria-hidden> · </span>
                   <span className="text-fg-subtle">
                     {count === 1 ? '1 task' : `${count} tasks`}
+                    {planned > 0 && ` · ${formatDuration(planned)}`}
                   </span>
                 </>
               )}

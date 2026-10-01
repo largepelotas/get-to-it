@@ -157,7 +157,9 @@ export function dailyReviewAt(time: string, now: number): number {
 /** Notification text: the task, then when it's due and which list it's in. */
 export function notificationFor(entry: Pick<ReminderEntry, 'item' | 'list'>, now = new Date()) {
   const { item, list } = entry;
-  const due = item.dueDate ? `Due ${formatDue(item.dueDate, item.dueTime, now)}` : null;
+  const due = item.dueDate
+    ? `Due ${formatDue(item.dueDate, item.dueTime, now, item.endTime)}`
+    : null;
   return { title: item.text, body: [due, list.title].filter(Boolean).join(' · ') };
 }
 

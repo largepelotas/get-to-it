@@ -142,3 +142,13 @@ export function next7Count(rows: DueRow[], today: DateKey): number {
   const { overdue, days } = next7Model(rows, today);
   return overdue.length + days.reduce((sum, d) => sum + d.rows.length, 0);
 }
+
+/** Minutes from start to end, summed over the rows that have both a due time and an end time. */
+export function scheduledMinutes(rows: DueRow[]): number {
+  const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+  let total = 0;
+  for (const { item } of rows) {
+    if (item.dueTime && item.endTime) total += minutes(item.endTime) - minutes(item.dueTime);
+  }
+  return total;
+}

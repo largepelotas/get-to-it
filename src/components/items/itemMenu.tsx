@@ -9,6 +9,7 @@ import {
   Copy,
   Flag,
   FolderInput,
+  Hourglass,
   IndentDecrease,
   IndentIncrease,
   ListPlus,
@@ -28,12 +29,12 @@ import type { Item } from '@/data/types';
 import { addDaysKey, nextWeekKey, todayKey } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { closeAsWontDo, duplicateTask, moveTaskToList, skipTask } from '@/commands';
-import { setDue, setPriority } from '@/store/actions/items';
+import { setDeadline, setDue, setPriority } from '@/store/actions/items';
 import { useData } from '@/store/data';
 import { liveTodoLists } from '@/store/sidebar';
 import { toggleLabelOnItems } from '@/store/actions/labels';
 import { sortedLabels } from '@/store/labels';
-import { pickDueDate, pickLabels } from '@/store/ui';
+import { pickDeadline, pickDueDate, pickLabels } from '@/store/ui';
 import { LabelDot } from './LabelPicker';
 import { PRIORITIES, PRIORITY_COLOR } from './priority';
 
@@ -97,6 +98,45 @@ function dueEntries(item: Item): MenuEntries {
     !!item.dueDate && { kind: 'separator' },
     !!item.dueDate && {
       label: 'No date',
+      icon: <CalendarX className={icon} />,
+      onSelect: set(null),
+    },
+  ];
+}
+
+/** Quick deadlines, plus the full chooser in the details panel. */
+function deadlineEntries(item: Item): MenuEntries {
+  const today = todayKey();
+  const nextWeek = nextWeekKey(today, useData.getState().settings.weekStartsOn);
+  const set = (date: string | null) => () => setDeadline(item.id, date);
+  return [
+    {
+      label: 'Today',
+      icon: <Sun className={icon} />,
+      checked: item.deadline === today,
+      onSelect: set(today),
+    },
+    {
+      label: 'Tomorrow',
+      icon: <Sunrise className={icon} />,
+      checked: item.deadline === addDaysKey(today, 1),
+      onSelect: set(addDaysKey(today, 1)),
+    },
+    {
+      label: 'Next week',
+      icon: <ArrowRight className={icon} />,
+      checked: item.deadline === nextWeek,
+      onSelect: set(nextWeek),
+    },
+    {
+      label: 'Pick a date…',
+      icon: <CalendarSearch className={icon} />,
+      movesFocus: true,
+      onSelect: () => pickDeadline(item.id),
+    },
+    !!item.deadline && { kind: 'separator' },
+    !!item.deadline && {
+      label: 'No deadline',
       icon: <CalendarX className={icon} />,
       onSelect: set(null),
     },
@@ -186,6 +226,12 @@ export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntri
       label: 'Due date',
       icon: <CalendarDays className={icon} />,
       entries: dueEntries(item),
+    },
+    {
+      kind: 'sub',
+      label: 'Deadline',
+      icon: <Hourglass className={icon} />,
+      entries: deadlineEntries(item),
     },
     {
       kind: 'sub',

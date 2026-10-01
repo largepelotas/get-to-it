@@ -7,9 +7,16 @@ import { IconButton, Select } from '@/components/ui';
 import { inputClass } from '@/components/ui/Input';
 import type { Item, Recurrence, Weekday } from '@/data/types';
 import { useToday } from '@/hooks/useToday';
-import { addDaysKey, fromDateKey, nextWeekKey, toDateKey, type DateKey } from '@/lib/dates';
+import {
+  addDaysKey,
+  fromDateKey,
+  isTimeAfter,
+  nextWeekKey,
+  toDateKey,
+  type DateKey,
+} from '@/lib/dates';
 import { describeRecurrence, WORKDAYS } from '@/lib/recurrence';
-import { setDue, setDueTime, setRecurrence } from '@/store/actions/items';
+import { setDue, setDueTime, setEndTime, setRecurrence } from '@/store/actions/items';
 import { useData } from '@/store/data';
 
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -230,6 +237,46 @@ function RepeatField({ item }: { item: Item }) {
   );
 }
 
+/**
+ * The end of a time range. The field keeps what's being typed and saves only an
+ * end after the start: a time input reports every keystroke, and typing over the
+ * hour of 15:30 passes through 01:30, which must not wipe the field. Leaving the
+ * field puts back what's stored.
+ */
+function EndField({ item }: { item: Item }) {
+  // What's being typed while it isn't a valid end yet; null shows the stored end.
+  const [draft, setDraft] = useState<string | null>(null);
+  const change = (value: string) => {
+    if (!value || (item.dueTime && isTimeAfter(value, item.dueTime))) {
+      setDraft(null);
+      setEndTime(item.id, value || null);
+    } else {
+      setDraft(value);
+    }
+  };
+  return (
+    <FieldRow label="End" htmlFor="due-picker-end">
+      <input
+        id="due-picker-end"
+        type="time"
+        value={draft ?? item.endTime ?? ''}
+        onChange={(e) => change(e.target.value)}
+        onBlur={() => setDraft(null)}
+        className={clsx(inputClass, 'h-7 flex-1 text-xs')}
+      />
+      {item.endTime && (
+        <IconButton
+          size="sm"
+          label="Clear end time"
+          tooltip={false}
+          icon={<X className="size-3.5" />}
+          onClick={() => setEndTime(item.id, null)}
+        />
+      )}
+    </FieldRow>
+  );
+}
+
 export interface DuePickerProps {
   item: Item;
   /** Called after choosing a day, so a popover can close. */
@@ -308,6 +355,7 @@ export function DuePicker({ item, onPicked }: DuePickerProps) {
             />
           )}
         </FieldRow>
+        {item.dueTime && <EndField item={item} />}
         <RepeatField item={item} />
       </div>
     </div>

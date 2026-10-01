@@ -3,6 +3,7 @@ import {
   CalendarDays,
   ChevronUp,
   Flag,
+  Hourglass,
   Plus,
   Repeat,
   SkipForward,
@@ -15,13 +16,21 @@ import { skipTask, toggleItem, trashItems } from '@/commands';
 import { RichTextField } from '@/components/editor/RichTextField';
 import { Button, IconButton, Popover } from '@/components/ui';
 import type { Item } from '@/data/types';
-import { formatDue, formatShortDate, formatTimestamp, isOverdue } from '@/lib/dates';
+import {
+  formatDateKey,
+  formatDue,
+  formatShortDate,
+  formatTimestamp,
+  isOverdue,
+  todayKey,
+} from '@/lib/dates';
 import { describeRecurrence } from '@/lib/recurrence';
 import { colorVar } from '@/lib/theme';
 import {
   clearDue,
   createItemFromText,
   setItemNotes,
+  setDeadline,
   setItemText,
   setPriority,
 } from '@/store/actions/items';
@@ -29,7 +38,14 @@ import { useData } from '@/store/data';
 import { childrenIndex, depthOf, MAX_DEPTH } from '@/store/tree';
 import { setItemLabels } from '@/store/actions/labels';
 import { itemLabels } from '@/store/labels';
-import { closeDetails, openDetails, setDuePickerFor, setLabelPickerFor, useUI } from '@/store/ui';
+import {
+  closeDetails,
+  openDetails,
+  setDeadlinePickerFor,
+  setDuePickerFor,
+  setLabelPickerFor,
+  useUI,
+} from '@/store/ui';
 import { Checkbox } from './Checkbox';
 import { LabelChips } from './LabelChips';
 import { LabelDot, LabelPicker } from './LabelPicker';
@@ -38,6 +54,7 @@ import { ReminderField } from './ReminderField';
 
 // The calendar is only needed once the picker opens, so it loads separately.
 const DuePicker = lazy(() => import('./DuePicker').then((m) => ({ default: m.DuePicker })));
+const DateChoices = lazy(() => import('./DateChoices').then((m) => ({ default: m.DateChoices })));
 
 const fieldClass =
   'w-full resize-none rounded-md bg-transparent outline-none placeholder:text-fg-subtle focus:bg-hover';
@@ -132,7 +149,9 @@ function DueField({ item, readOnly }: { item: Item; readOnly: boolean }) {
     <>
       <CalendarDays aria-hidden className="size-4 shrink-0" />
       <span className="min-w-0 flex-1 text-left">
-        {item.dueDate ? formatDue(item.dueDate, item.dueTime) : 'Add due date'}
+        {item.dueDate
+          ? formatDue(item.dueDate, item.dueTime, undefined, item.endTime)
+          : 'Add due date'}
         {item.recurrence && (
           <span className="flex items-center gap-1 text-xs text-fg-subtle">
             <Repeat aria-hidden className="size-3" />
@@ -161,7 +180,9 @@ function DueField({ item, readOnly }: { item: Item; readOnly: boolean }) {
           <button
             type="button"
             aria-label={
-              item.dueDate ? `Due ${formatDue(item.dueDate, item.dueTime)}, change` : 'Add due date'
+              item.dueDate
+                ? `Due ${formatDue(item.dueDate, item.dueTime, undefined, item.endTime)}, change`
+                : 'Add due date'
             }
             className={clsx(boxClass, 'hover:bg-hover')}
           >
@@ -179,6 +200,68 @@ function DueField({ item, readOnly }: { item: Item; readOnly: boolean }) {
           label="Clear due date"
           icon={<X className="size-3.5" />}
           onClick={() => clearDue(item.id)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The deadline: a day apart from the due date, with a chooser in a popover. */
+function DeadlineField({ item, readOnly }: { item: Item; readOnly: boolean }) {
+  const open = useUI((s) => s.deadlinePickerFor === item.id);
+  const passed = !item.checked && !!item.deadline && item.deadline < todayKey();
+  const summary = (
+    <>
+      <Hourglass aria-hidden className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1 text-left">
+        {item.deadline ? `Deadline ${formatDateKey(item.deadline)}` : 'Add deadline'}
+      </span>
+    </>
+  );
+  const boxClass = clsx(
+    'flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-sm',
+    passed ? 'text-danger' : item.deadline ? 'text-fg' : 'text-fg-subtle',
+  );
+
+  if (readOnly) {
+    return item.deadline ? <div className={clsx(boxClass, 'bg-sidebar')}>{summary}</div> : null;
+  }
+  return (
+    <div className="flex items-center gap-1 rounded-md bg-sidebar pr-1">
+      <Popover
+        open={open}
+        onOpenChange={(next) => setDeadlinePickerFor(next ? item.id : null)}
+        align="start"
+        label="Choose deadline"
+        className="p-2"
+        trigger={
+          <button
+            type="button"
+            aria-label={
+              item.deadline ? `Deadline ${formatDateKey(item.deadline)}, change` : 'Add deadline'
+            }
+            className={clsx(boxClass, 'hover:bg-hover')}
+          >
+            {summary}
+          </button>
+        }
+      >
+        <Suspense fallback={<div className="h-[340px] w-[252px]" />}>
+          <DateChoices
+            allowNone={!!item.deadline}
+            onPick={(date) => {
+              setDeadline(item.id, date);
+              setDeadlinePickerFor(null);
+            }}
+          />
+        </Suspense>
+      </Popover>
+      {item.deadline && (
+        <IconButton
+          size="sm"
+          label="Clear deadline"
+          icon={<X className="size-3.5" />}
+          onClick={() => setDeadline(item.id, null)}
         />
       )}
     </div>
@@ -362,6 +445,7 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
         </div>
 
         <DueField item={item} readOnly={readOnly} />
+        <DeadlineField item={item} readOnly={readOnly} />
         {!readOnly && !item.checked && !!item.recurrence && !!item.dueDate && (
           <Button size="sm" variant="ghost" onClick={() => skipTask(item.id)}>
             <SkipForward aria-hidden className="size-3.5" />
