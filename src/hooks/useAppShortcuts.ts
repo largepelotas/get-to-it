@@ -74,7 +74,12 @@ export function useAppShortcuts(): void {
       if (is(SHORTCUTS.settings)) return run(() => openDialog({ kind: 'settings' }));
       if (is(SHORTCUTS.help)) return run(() => openDialog({ kind: 'shortcuts' }));
       if (is(SHORTCUTS.newList)) return run(() => openDialog({ kind: 'newList', folderId: null }));
-      if (is(SHORTCUTS.newTask)) return run(() => void focusQuickAdd());
+      if (is(SHORTCUTS.quickAddDialog)) return run(() => openDialog({ kind: 'quickAdd' }));
+      if (is(SHORTCUTS.newTask)) {
+        return run(() => {
+          if (!focusQuickAdd()) openDialog({ kind: 'quickAdd' });
+        });
+      }
       for (const [shortcut, target] of VIEWS) {
         if (is(shortcut)) return run(() => navigate(target));
       }

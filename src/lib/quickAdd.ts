@@ -1,6 +1,14 @@
 import * as chrono from 'chrono-node';
 import type { Priority, Recurrence, Weekday } from '@/data/types';
-import { formatDue, toDateKey, toTimeString, todayKey, type DateKey } from './dates';
+import {
+  formatDue,
+  formatTimestamp,
+  toDateKey,
+  toTimeString,
+  todayKey,
+  type DateKey,
+} from './dates';
+import type { ReminderSpec } from './reminders';
 import { describeRecurrence, firstOccurrence, WORKDAYS } from './recurrence';
 
 export interface QuickAddResult {
@@ -9,6 +17,10 @@ export interface QuickAddResult {
   dueTime: string | null;
   recurrence: Recurrence | null;
   priority: Priority;
+  /** The list named with `#List`, if it matched one of `options.lists`. */
+  listId: string | null;
+  /** From a `!` token. A relative one only means something on a task with a due date. */
+  reminder: ReminderSpec | null;
   /** Short labels for what was understood, shown as a preview. */
   chips: string[];
 }
@@ -124,6 +136,124 @@ function findPriority(text: string): { priority: Priority; start: number; end: n
   return { priority, start, end: start + m[2].length };
 }
 
+type Parsed = ReturnType<typeof chrono.parse>[number]['start'];
+
+/**
+ * The moment chrono read. A small hour with no am/pm ("at 5") most likely
+ * means the afternoon, not 5 AM.
+ */
+function resolveHour(s: Parsed, now: Date): Date {
+  const dayGiven = s.isCertain('day') || s.isCertain('weekday');
+  const date = s.date();
+  if (!s.isCertain('hour')) return date;
+  const hours = date.getHours();
+  if (s.isCertain('meridiem') || hours < 1 || hours > 6) return date;
+  if (dayGiven) {
+    date.setHours(hours + 12);
+    return date;
+  }
+  // A time on its own means the next time it comes round.
+  const next = new Date(now);
+  next.setHours(hours + 12, date.getMinutes(), 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+export interface QuickAddOptions {
+  /** Lists a `#List` token can name. */
+  lists?: { id: string; title: string }[];
+  /** The due date the caller will give a task without one; lets a relative reminder show. */
+  defaultDue?: string | null;
+}
+
+/** A `#List` token: the longest list title right after a `#` that starts a word. */
+function findList(
+  text: string,
+  lists: { id: string; title: string }[],
+): { id: string; title: string; start: number; end: number } | null {
+  const candidates = lists
+    .map((l) => ({ ...l, key: l.title.trim().toLowerCase() }))
+    .filter((l) => l.key)
+    .sort((a, b) => b.key.length - a.key.length);
+  const lower = text.toLowerCase();
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '#' || (i > 0 && !/\s/.test(text[i - 1]))) continue;
+    for (const l of candidates) {
+      const end = i + 1 + l.key.length;
+      if (!lower.startsWith(l.key, i + 1)) continue;
+      if (end < text.length && !/\s/.test(text[end])) continue;
+      return { id: l.id, title: l.title.trim(), start: i, end };
+    }
+  }
+  return null;
+}
+
+const REMINDER_UNIT = /^(\d+)\s*(m|mins?|minutes?|h|hrs?|hours?|d|days?)(?:\s+before)?(?=\s|$)/i;
+
+/** Reads the reminder token starting at the `!` at `start`, or null if it isn't one. */
+function readReminder(
+  text: string,
+  start: number,
+  now: Date,
+): { spec: ReminderSpec; start: number; end: number } | null {
+  const rest = text.slice(start + 1);
+
+  const due = /^due(?=\s|$)/i.exec(rest);
+  if (due) {
+    return { spec: { kind: 'relative', offsetMinutes: 0 }, start, end: start + 1 + due[0].length };
+  }
+  const rel = REMINDER_UNIT.exec(rest);
+  if (rel) {
+    const unit = rel[2].toLowerCase()[0];
+    const per = unit === 'm' ? 1 : unit === 'h' ? 60 : 1440;
+    return {
+      spec: { kind: 'relative', offsetMinutes: Number(rel[1]) * per },
+      start,
+      end: start + 1 + rel[0].length,
+    };
+  }
+  const found = chrono
+    .parse(rest, now, { forwardDate: true })
+    .find((res) => res.index === 0 && res.start.isCertain('hour'));
+  if (!found) return null;
+  const at = resolveHour(found.start, now).getTime();
+  return { spec: { kind: 'absolute', at }, start, end: start + 1 + found.text.length };
+}
+
+/** A `!` reminder token: "!30min", "!2 hours before", "!due", "!tomorrow 9am". The first valid one. */
+function findReminder(
+  text: string,
+  now: Date,
+): { spec: ReminderSpec; start: number; end: number } | null {
+  for (const m of text.matchAll(/(^|\s)!(?=[^\s!])/g)) {
+    const found = readReminder(text, m.index + m[1].length, now);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Marks `!word` tokens that are not reminders so the date step can't read into them. */
+const HOLD = String.fromCharCode(0xe000);
+
+function describeReminder(spec: ReminderSpec, now: Date): string {
+  if (spec.kind === 'absolute') return `Remind ${formatTimestamp(spec.at, now)}`;
+  const n = spec.offsetMinutes;
+  if (n === 0) return 'Remind at due time';
+  if (n % 1440 === 0) return `Remind ${n / 1440} ${n === 1440 ? 'day' : 'days'} before`;
+  if (n % 60 === 0) return `Remind ${n / 60} hr before`;
+  return `Remind ${n} min before`;
+}
+
+const LIST_MARKER = /^\s*(?:[-*•]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/;
+
+/** The non-empty lines of pasted text, with bullets, numbers and checkboxes removed. */
+export function splitLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(LIST_MARKER, '').trim())
+    .filter(Boolean);
+}
+
 function cut(text: string, start: number, end: number): string {
   return `${text.slice(0, start)} ${text.slice(end)}`;
 }
@@ -140,18 +270,44 @@ function tidy(text: string): string {
  * Reads a due date, time, repeat rule and priority out of quick-add text,
  * e.g. "Send report fri 3pm p1" or "Standup every weekday 9:30".
  */
-export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddResult {
+export function parseQuickAdd(
+  input: string,
+  now: Date = new Date(),
+  options: QuickAddOptions = {},
+): QuickAddResult {
   let text = input;
+  let listId: string | null = null;
+  let listTitle = '';
+  let reminder: ReminderSpec | null = null;
   let priority: Priority = 0;
   let recurrence: Recurrence | null = null;
   let dueDate: DateKey | null = null;
   let dueTime: string | null = null;
+
+  const l = options.lists?.length ? findList(text, options.lists) : null;
+  if (l) {
+    listId = l.id;
+    listTitle = l.title;
+    text = cut(text, l.start, l.end);
+  }
 
   const p = findPriority(text);
   if (p) {
     priority = p.priority;
     text = cut(text, p.start, p.end);
   }
+
+  const rem = findReminder(text, now);
+  if (rem) {
+    reminder = rem.spec;
+    text = cut(text, rem.start, rem.end);
+  }
+  // A "!word" that isn't a reminder stays in the title exactly as typed.
+  const held: string[] = [];
+  text = text.replace(/(^|\s)(!(?=[^\s!])\S*)/g, (_, space: string, token: string) => {
+    held.push(token);
+    return space + HOLD.repeat(token.length);
+  });
 
   const r = findRecurrence(text);
   if (r) {
@@ -170,24 +326,8 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   });
   if (result) {
     const s = result.start;
-    const dayGiven = s.isCertain('day') || s.isCertain('weekday');
-    let date = s.date();
-    if (s.isCertain('hour')) {
-      const hours = date.getHours();
-      // "at 5" most likely means 5 PM, not 5 AM.
-      if (!s.isCertain('meridiem') && hours >= 1 && hours <= 6) {
-        if (dayGiven) {
-          date.setHours(hours + 12);
-        } else {
-          // A time on its own means the next time it comes round.
-          const next = new Date(now);
-          next.setHours(hours + 12, date.getMinutes(), 0, 0);
-          if (next <= now) next.setDate(next.getDate() + 1);
-          date = next;
-        }
-      }
-      dueTime = toTimeString(date);
-    }
+    const date = resolveHour(s, now);
+    if (s.isCertain('hour')) dueTime = toTimeString(date);
     dueDate = toDateKey(date);
     text = cut(text, result.index, result.index + result.text.length);
   }
@@ -201,8 +341,12 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   if (dueDate) chips.push(formatDue(dueDate, dueTime, now));
   if (recurrence) chips.push(describeRecurrence(recurrence, dueDate));
   if (priority) chips.push(`P${priority}`);
+  if (listId) chips.push(`#${listTitle}`);
+  if (reminder && (reminder.kind === 'absolute' || dueDate || options.defaultDue)) {
+    chips.push(describeReminder(reminder, now));
+  }
 
-  const clean = tidy(text);
+  const clean = tidy(text).replace(new RegExp(`${HOLD}+`, 'g'), () => held.shift() ?? '');
   return {
     // If everything was consumed, keep the original words as the title.
     text: clean || input.trim(),
@@ -210,6 +354,8 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
     dueTime,
     recurrence,
     priority,
+    listId,
+    reminder,
     chips,
   };
 }

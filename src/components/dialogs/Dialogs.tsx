@@ -1,12 +1,15 @@
 import clsx from 'clsx';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { LIST_TYPE_ICON } from '@/components/listTypeIcons';
+import { QuickAdd } from '@/components/items/QuickAdd';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { Button, Dialog, Input, Label, Select } from '@/components/ui';
 import type { ListType } from '@/data/types';
+import { todayKey } from '@/lib/dates';
 import { bySortKey } from '@/lib/order';
 import { createList, LIST_TYPE_LABEL } from '@/store/actions/lists';
 import { useData } from '@/store/data';
+import { liveTodoLists } from '@/store/sidebar';
 import { closeDialog, openList, useUI, type DialogState } from '@/store/ui';
 import { CommandPalette, preloadDialogs, SettingsDialog, ShortcutsDialog } from './lazy';
 
@@ -115,6 +118,66 @@ function NewListDialog({ dialog }: { dialog: Extract<DialogState, { kind: 'newLi
   );
 }
 
+/** The list the quick-add dialog starts on: the open list, else the default list, else the Inbox. */
+function startingList(todo: { id: string; title: string }[]): string {
+  const { view } = useUI.getState();
+  const has = (id: string | null | undefined) => !!id && todo.some((l) => l.id === id);
+  if (view.kind === 'list' && has(view.listId)) return view.listId;
+  const { defaultListId } = useData.getState().settings;
+  if (has(defaultListId)) return defaultListId!;
+  return (todo.find((l) => l.title === 'Inbox') ?? todo[0])?.id ?? '';
+}
+
+/** "Add a task to…": the quick-add field plus a choice of list, from any screen. */
+function QuickAddDialog() {
+  const allLists = useData((s) => s.tables.lists);
+  const folders = useData((s) => s.tables.folders);
+  const todo = useMemo(() => liveTodoLists({ lists: allLists, folders }), [allLists, folders]);
+  const [listId, setListId] = useState(() => startingList(todo));
+  // Today's own quick add gives new tasks today's date, so this does too.
+  const [defaultDue] = useState(() => (useUI.getState().view.kind === 'today' ? todayKey() : null));
+  // Whether the dialog's own field has its paste bar up (not one in the view behind).
+  const [pasteBar, setPasteBar] = useState(false);
+  const chosen = todo.some((l) => l.id === listId) ? listId : startingList(todo);
+
+  return (
+    <Dialog
+      open
+      // While the paste bar is up, Escape only dismisses the bar.
+      onOpenChange={(open) => {
+        if (!open && !pasteBar) closeDialog();
+      }}
+      title="Add a task"
+      description={chosen ? undefined : 'Create a to-do list first, then add tasks to it.'}
+      footer={<Button onClick={closeDialog}>Cancel</Button>}
+    >
+      {chosen && (
+        <div className="space-y-3">
+          <QuickAdd
+            inDialog
+            listId={chosen}
+            defaultDue={defaultDue}
+            announce
+            onPasteBarChange={setPasteBar}
+            onAdded={closeDialog}
+            placeholder="e.g. Call Sam tomorrow 3pm #Work"
+          />
+          <div>
+            <Label htmlFor="quick-add-list">List</Label>
+            <Select id="quick-add-list" value={chosen} onChange={(e) => setListId(e.target.value)}>
+              {todo.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.title}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 function ConfirmDialog({ dialog }: { dialog: Extract<DialogState, { kind: 'confirm' }> }) {
   return (
     <Dialog
@@ -151,6 +214,7 @@ export function Dialogs() {
   }, []);
   if (!dialog) return null;
   if (dialog.kind === 'newList') return <NewListDialog dialog={dialog} />;
+  if (dialog.kind === 'quickAdd') return <QuickAddDialog />;
   if (dialog.kind === 'confirm') return <ConfirmDialog dialog={dialog} />;
   return (
     <Suspense fallback={null}>

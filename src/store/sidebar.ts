@@ -148,3 +148,11 @@ export function resolveSidebarDrop(
   if (was.folderId === now.folderId && was.index === now.index) return null;
   return { kind: 'list', id: active.id, ...now };
 }
+
+/** Every live to-do list, in the order the sidebar shows them: where a quick-add task can go. */
+export function liveTodoLists(tables: Pick<Tables, 'lists' | 'folders'>): List[] {
+  const model = sidebarModel(tables);
+  return [...model.unfiled, ...model.folders.flatMap((f) => f.lists)].filter(
+    (list) => list.type === 'todo',
+  );
+}

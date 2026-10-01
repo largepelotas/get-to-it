@@ -7,6 +7,7 @@ import { addReminder, snoozeReminder } from './reminders';
 import {
   createItem,
   createItemFromText,
+  createItemsFromLines,
   deleteItems,
   duplicateItem,
   indentItem,
@@ -614,5 +615,77 @@ describe("won't do", () => {
     setWontDo(a);
     undo();
     expect(Object.values(items()).every((i) => !i.checked && !i.wontDo)).toBe(true);
+  });
+});
+
+describe('quick add: #List, reminders and several lines', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 30, 10, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const reminders = () => Object.values(useData.getState().tables.reminders);
+
+  // Bug: a task and its reminder were two undo steps, so one Undo left a stray reminder.
+  it('creates the task and its reminder in one undo step', () => {
+    const id = createItemFromText(list, 'Call Sam tomorrow 3pm !30min')!;
+    expect(item(id)).toMatchObject({ text: 'Call Sam', dueDate: '2026-10-01', dueTime: '15:00' });
+    expect(reminders()).toMatchObject([{ itemId: id, kind: 'relative', offsetMinutes: 30 }]);
+    undo();
+    expect(Object.keys(items())).toHaveLength(0);
+    expect(reminders()).toHaveLength(0);
+  });
+
+  it('keeps an absolute reminder on a task with no due date', () => {
+    const id = createItemFromText(list, 'Call Sam !tomorrow 9am')!;
+    expect(item(id).dueDate).toBeNull();
+    expect(reminders()).toMatchObject([{ itemId: id, kind: 'absolute' }]);
+  });
+
+  // Bug: a relative reminder with nothing to be relative to would never fire.
+  it('drops a relative reminder when the task ends up with no due date', () => {
+    const id = createItemFromText(list, 'Call Sam !30min')!;
+    expect(item(id).text).toBe('Call Sam');
+    expect(reminders()).toHaveLength(0);
+    const dated = createItemFromText(list, 'Call Sam !30min', {}, '2026-10-05')!;
+    expect(item(dated).dueDate).toBe('2026-10-05');
+    expect(reminders()).toHaveLength(1);
+  });
+
+  // Bug: "#Work" stayed in the title and the task landed in the open list.
+  it('files the task in the #List and still applies the default due date', () => {
+    const work = createList({ type: 'todo', title: 'Work' });
+    const id = createItemFromText(list, 'Call Sam #work', {}, '2026-10-05')!;
+    expect(item(id)).toMatchObject({ text: 'Call Sam', listId: work, dueDate: '2026-10-05' });
+  });
+
+  it('ignores #List for subtasks and inline inserts, and for archived lists', () => {
+    const work = createList({ type: 'todo', title: 'Work' });
+    const parent = add('Parent');
+    const sub = createItemFromText(list, 'Child #Work', { parentId: parent })!;
+    expect(item(sub)).toMatchObject({ text: 'Child #Work', listId: list });
+    archiveList(work);
+    const id = createItemFromText(list, 'Call Sam #Work')!;
+    expect(item(id)).toMatchObject({ text: 'Call Sam #Work', listId: list });
+  });
+
+  it('takes #List and ! literally when parsing is off', () => {
+    createList({ type: 'todo', title: 'Work' });
+    setSetting('parseDates', false);
+    const id = createItemFromText(list, 'Call Sam #Work !30min')!;
+    expect(item(id)).toMatchObject({ text: 'Call Sam #Work !30min', listId: list });
+    expect(reminders()).toHaveLength(0);
+  });
+
+  // Bug: pasting a list made one undo step per line.
+  it('creates several tasks in order, in one undo step', () => {
+    add('Existing');
+    const ids = createItemsFromLines(list, ['One p1', 'Two', 'Three tomorrow']);
+    expect(ids).toHaveLength(3);
+    expect(open()).toEqual(['Existing@0', 'One@0', 'Two@0', 'Three@0']);
+    expect(item(ids[0]).priority).toBe(1);
+    undo();
+    expect(open()).toEqual(['Existing@0']);
   });
 });

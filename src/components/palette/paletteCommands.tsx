@@ -110,6 +110,14 @@ export function paletteCommands({
       run: () => void focusQuickAdd(),
     },
     {
+      id: 'quick-add',
+      label: 'Add a task to…',
+      keywords: 'new create quick list',
+      icon: Plus,
+      shortcut: SHORTCUTS.quickAddDialog,
+      run: () => openDialog({ kind: 'quickAdd' }),
+    },
+    {
       id: 'new-list',
       label: 'New list…',
       keywords: 'add create note grocery todo',

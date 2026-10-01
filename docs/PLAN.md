@@ -68,6 +68,8 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - Quick-add understands typed dates, repeats and priority, e.g.
   "Review deck tomorrow 3pm", "Standup every weekday 9:30", "Pay invoice p1".
   A preview shows what was understood.
+  `#List` files the task in that list and `!30min` / `!fri 9am` sets a
+  reminder; pasting several lines offers one task per line.
 - Subtasks: Tab and Shift+Tab indent and outdent. A parent shows progress like
   2/5, and checking a parent completes its subtasks.
 - Drag to reorder. Alt+↑/↓ moves an item.
