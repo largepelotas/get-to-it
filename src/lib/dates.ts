@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, format, isValid, parse } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, isValid, parse, startOfWeek } from 'date-fns';
 
 /** Local calendar date as YYYY-MM-DD. */
 export type DateKey = string;
@@ -142,6 +142,22 @@ export function nextWeekKey(today: DateKey, weekStartsOn: 0 | 1): DateKey {
   const weekday = fromDateKey(today).getDay();
   const daysLeft = (7 - weekday + weekStartsOn) % 7 || 7;
   return addDaysKey(today, daysLeft);
+}
+
+/** The first day of the week that holds `key` (Monday or Sunday, following the setting). */
+export function startOfWeekKey(key: DateKey, weekStartsOn: 0 | 1): DateKey {
+  return toDateKey(startOfWeek(fromDateKey(key), { weekStartsOn }));
+}
+
+/** The seven days of the week that holds `key`, first day first. */
+export function weekDays(key: DateKey, weekStartsOn: 0 | 1): DateKey[] {
+  const first = startOfWeekKey(key, weekStartsOn);
+  return Array.from({ length: 7 }, (_, i) => addDaysKey(first, i));
+}
+
+/** The day Upcoming starts from: the stored day, or today if there is none or it has passed. */
+export function upcomingStart(upcomingFrom: DateKey | null, today: DateKey): DateKey {
+  return upcomingFrom && upcomingFrom > today ? upcomingFrom : today;
 }
 
 /** Milliseconds until the next local midnight. */

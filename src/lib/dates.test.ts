@@ -10,6 +10,9 @@ import {
   isTimeAfter,
   msUntilTomorrow,
   nextWeekKey,
+  startOfWeekKey,
+  upcomingStart,
+  weekDays,
 } from './dates';
 
 describe('dates', () => {
@@ -19,6 +22,34 @@ describe('dates', () => {
     expect(nextWeekKey('2026-09-30', 0)).toBe('2026-10-04');
     // On the first day of the week, it's a week later.
     expect(nextWeekKey('2026-10-05', 1)).toBe('2026-10-12');
+  });
+
+  // Bug prevented: the Upcoming strip starting on the wrong weekday, or splitting a week across months.
+  it('finds the week that holds a date, Monday or Sunday first', () => {
+    // 30 September 2026 is a Wednesday.
+    expect(startOfWeekKey('2026-09-30', 1)).toBe('2026-09-28');
+    expect(startOfWeekKey('2026-09-30', 0)).toBe('2026-09-27');
+    expect(startOfWeekKey('2026-09-28', 1)).toBe('2026-09-28');
+    expect(startOfWeekKey('2026-09-27', 1)).toBe('2026-09-21');
+    expect(weekDays('2026-09-30', 1)).toEqual([
+      '2026-09-28',
+      '2026-09-29',
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+      '2026-10-03',
+      '2026-10-04',
+    ]);
+    expect(weekDays('2026-09-30', 0)[0]).toBe('2026-09-27');
+    expect(weekDays('2026-09-30', 0)[6]).toBe('2026-10-03');
+  });
+
+  // Bug prevented: a stored Upcoming start day that slipped into the past dating things in the past.
+  it('never starts Upcoming before today', () => {
+    expect(upcomingStart(null, '2026-10-02')).toBe('2026-10-02');
+    expect(upcomingStart('2026-09-01', '2026-10-02')).toBe('2026-10-02');
+    expect(upcomingStart('2026-10-02', '2026-10-02')).toBe('2026-10-02');
+    expect(upcomingStart('2026-10-12', '2026-10-02')).toBe('2026-10-12');
   });
 
   it('labels dates relative to today', () => {

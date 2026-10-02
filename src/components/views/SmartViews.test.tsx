@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '@/App';
 import { MemoryRepository } from '@/data/memory';
 import type { Item } from '@/data/types';
@@ -111,22 +111,139 @@ describe('Today', () => {
 });
 
 describe('Upcoming', () => {
-  it('groups future tasks by day and adds tasks for tomorrow', async () => {
-    createItem(work, { text: 'Later', dueDate: addDaysKey(today, 5) });
-    createItem(home, { text: 'Soon', dueDate: tomorrow });
-    createItem(work, { text: 'Now', dueDate: today });
-    navigate({ kind: 'upcoming' });
+  // The clock is fixed to Friday 2 October 2026 (weeks start on Monday), so the
+  // strip always holds Mon 28 Sep to Sun 4 Oct, whatever day the suite runs on.
+  const fri = '2026-10-02';
+  const sat = '2026-10-03';
+  const nextTue = '2026-10-06';
+  const main = () => within(screen.getByRole('main'));
+  const strip = () => within(screen.getByRole('group', { name: 'Week' }));
+  const dayButton = (name: RegExp | string) => strip().getByRole('button', { name });
+  const quickAddTarget = async () => {
     const user = userEvent.setup();
     render(<App />);
-    const groups = within(screen.getByRole('main')).getAllByRole('region');
-    expect(groups).toHaveLength(2);
-    expect(within(groups[0]).getByRole('heading')).toHaveTextContent(/^Tomorrow · /);
-    expect(within(groups[0]).getByRole('listitem', { name: 'Soon' })).toBeInTheDocument();
-    expect(within(groups[1]).getByRole('listitem', { name: 'Later' })).toBeInTheDocument();
-    expect(screen.queryByRole('listitem', { name: 'Now' })).not.toBeInTheDocument();
+    return user;
+  };
 
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 2, 12));
+    navigate({ kind: 'upcoming' });
+    useUI.setState({ upcomingFrom: null });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows overdue, today and later days', () => {
+    createItem(work, { text: 'Late', dueDate: '2026-09-30' });
+    createItem(work, { text: 'Now', dueDate: fri });
+    createItem(home, { text: 'Soon', dueDate: sat });
+    createItem(work, { text: 'Later', dueDate: nextTue });
+    render(<App />);
+    expect(section('Overdue').getByRole('listitem', { name: 'Late' })).toBeInTheDocument();
+    expect(
+      section('Today · Friday, October 2').getByRole('listitem', { name: 'Now' }),
+    ).toBeVisible();
+    expect(
+      section('Tomorrow · Saturday, October 3').getByRole('listitem', { name: 'Soon' }),
+    ).toBeVisible();
+    expect(section('Tuesday, October 6').getByRole('listitem', { name: 'Later' })).toBeVisible();
+    expect(screen.getByText('October 2026')).toBeVisible();
+  });
+
+  // Bug prevented: empty days of the week vanishing, so there is nothing to drop a task on.
+  it('shows the empty days of the week with "Nothing due"', () => {
+    render(<App />);
+    expect(section('Tomorrow · Saturday, October 3').getByText('Nothing due')).toBeVisible();
+    expect(section('Sunday, October 4').getByText('Nothing due')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Monday, October 5' })).not.toBeInTheDocument();
+  });
+
+  it('draws the strip with names, counts, past days disabled and the start day pressed', () => {
+    createItem(work, { text: 'A', dueDate: fri });
+    createItem(work, { text: 'B', dueDate: fri });
+    createItem(work, { text: 'C', dueDate: sat });
+    render(<App />);
+    expect(strip().getAllByRole('button')).toHaveLength(7);
+    expect(dayButton('Monday, September 28')).toBeDisabled();
+    expect(dayButton('Thursday, October 1')).toBeDisabled();
+    expect(dayButton('Friday, October 2, 2 tasks')).toHaveAttribute('aria-pressed', 'true');
+    expect(dayButton('Saturday, October 3, 1 task')).toHaveAttribute('aria-pressed', 'false');
+    expect(dayButton('Sunday, October 4')).toBeEnabled();
+  });
+
+  it('starts from a day clicked in the strip and hides the days before it', async () => {
+    createItem(work, { text: 'Late', dueDate: '2026-09-30' });
+    const user = await quickAddTarget();
+    await user.click(dayButton(/^Sunday, October 4/));
+    expect(useUI.getState().upcomingFrom).toBe('2026-10-04');
+    expect(screen.queryByRole('region', { name: /^Today/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: 'Tomorrow · Saturday, October 3' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Overdue' })).not.toBeInTheDocument();
+    expect(section('Sunday, October 4').getByText('Nothing due')).toBeVisible();
+    expect(dayButton(/^Sunday, October 4/)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('moves by week with Next week, Previous week and Today', async () => {
+    const user = await quickAddTarget();
+    const prev = screen.getByRole('button', { name: 'Previous week' });
+    expect(prev).toBeDisabled();
+    expect(main().getByRole('button', { name: 'Today' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(useUI.getState().upcomingFrom).toBe('2026-10-05');
+    expect(strip().getAllByRole('button')[0]).toHaveAccessibleName('Monday, October 5');
+    expect(prev).toBeEnabled();
+    expect(main().getByRole('button', { name: 'Today' })).toBeEnabled();
+
+    await user.click(prev);
+    expect(useUI.getState().upcomingFrom).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Next week' }));
+    await user.click(main().getByRole('button', { name: 'Today' }));
+    expect(useUI.getState().upcomingFrom).toBeNull();
+    expect(strip().getAllByRole('button')[0]).toHaveAccessibleName('Monday, September 28');
+  });
+
+  // Bug prevented: a day left in the store from the past hiding today's tasks.
+  it('treats a stored start day in the past as today', () => {
+    useUI.setState({ upcomingFrom: '2026-09-01' });
+    createItem(work, { text: 'Now', dueDate: fri });
+    render(<App />);
+    expect(
+      section('Today · Friday, October 2').getByRole('listitem', { name: 'Now' }),
+    ).toBeVisible();
+  });
+
+  // Bug prevented: the quick-add dialog dating a task in the past from a stale stored start day.
+  it('dates a task from the quick-add dialog today when the stored start day is past', async () => {
+    useUI.setState({ upcomingFrom: '2026-09-01' });
+    const user = await quickAddTarget();
+    act(() => openDialog({ kind: 'quickAdd' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add a task' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Add a task' }), 'Stale{Enter}');
+    expect(find('Stale').dueDate).toBe(fri);
+  });
+
+  // Bug prevented: Previous week from two weeks ahead jumping back to today instead of one week.
+  it('goes back one week from two weeks ahead', async () => {
+    const user = await quickAddTarget();
+    await user.click(screen.getByRole('button', { name: 'Next week' }));
+    await user.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(useUI.getState().upcomingFrom).toBe('2026-10-12');
+    await user.click(screen.getByRole('button', { name: 'Previous week' }));
+    expect(useUI.getState().upcomingFrom).toBe('2026-10-05');
+  });
+
+  it('dates a task added by quick add on the start day', async () => {
+    const user = await quickAddTarget();
     await user.type(screen.getByRole('textbox', { name: 'Add a task' }), 'Pack bags{Enter}');
-    expect(find('Pack bags').dueDate).toBe(tomorrow);
+    expect(find('Pack bags').dueDate).toBe(fri);
+    await user.click(screen.getByRole('button', { name: 'Next week' }));
+    await user.type(screen.getByRole('textbox', { name: 'Add a task' }), 'Book trip{Enter}');
+    expect(find('Book trip').dueDate).toBe('2026-10-05');
   });
 });
 

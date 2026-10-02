@@ -1,6 +1,6 @@
 import type { Item, List } from '@/data/types';
 import { bySortKey } from '@/lib/order';
-import { addDaysKey, type DateKey } from '@/lib/dates';
+import { addDaysKey, weekDays, type DateKey } from '@/lib/dates';
 import type { FlatRow } from './tree';
 
 /** A task shown in Today or Upcoming, with the list it comes from. */
@@ -88,17 +88,52 @@ export function todayModel(rows: DueRow[], today: DateKey): TodayModel {
   };
 }
 
-/** Tasks due after today, grouped by day in date order. */
-export function upcomingModel(rows: DueRow[], today: DateKey): DayGroup[] {
-  const groups: DayGroup[] = [];
+export interface UpcomingModel {
+  /** Tasks due before today; only when the view starts today. */
+  overdue: DueRow[];
+  /** From the starting day to the end of its week, every day; then later days that have tasks. */
+  days: DayGroup[];
+}
+
+/**
+ * What Upcoming shows from `from` (today or later): overdue tasks when `from`
+ * is today, every day to the end of `from`'s week (empty ones too), then only
+ * the later days that have tasks. Days between today and `from` are left out.
+ */
+export function upcomingModel(
+  rows: DueRow[],
+  today: DateKey,
+  from: DateKey,
+  weekStartsOn: 0 | 1,
+): UpcomingModel {
+  const week = weekDays(from, weekStartsOn).filter((d) => d >= from);
+  const lastOfWeek = week[week.length - 1];
+  const days: DayGroup[] = week.map((date) => ({ date, rows: [] }));
+  const overdue: DueRow[] = [];
   for (const row of rows) {
     const date = row.item.dueDate!;
-    if (date <= today) continue;
-    const last = groups[groups.length - 1];
-    if (last?.date === date) last.rows.push(row);
-    else groups.push({ date, rows: [row] });
+    if (date < today) {
+      if (from === today) overdue.push(row);
+    } else if (date >= from) {
+      if (date <= lastOfWeek) days.find((d) => d.date === date)?.rows.push(row);
+      else {
+        const last = days[days.length - 1];
+        if (last.date === date) last.rows.push(row);
+        else days.push({ date, rows: [row] });
+      }
+    }
   }
-  return groups;
+  return { overdue, days };
+}
+
+/** How many open tasks are due on each date, for the week strip's badges. */
+export function countByDay(rows: DueRow[]): Map<DateKey, number> {
+  const counts = new Map<DateKey, number>();
+  for (const row of rows) {
+    const date = row.item.dueDate!;
+    counts.set(date, (counts.get(date) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /** How many tasks Today shows, for the sidebar. */

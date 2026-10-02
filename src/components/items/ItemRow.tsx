@@ -201,6 +201,18 @@ export function ItemRow({
       .join('. ') || '';
   const descriptionId = `row-desc-${item.id}`;
 
+  const gripButton = drag && (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label="Drag to move"
+      {...drag.handle}
+      className="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-fg-subtle opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+    >
+      <GripVertical aria-hidden className="size-3.5" />
+    </button>
+  );
+
   return (
     <ContextMenu entries={menu}>
       <div
@@ -242,22 +254,15 @@ export function ItemRow({
         )}
       >
         {origin ? (
-          <span className="w-1 shrink-0" />
+          // Rows outside their list have no tree controls, but can still be dragged (Upcoming).
+          drag && !readOnly ? (
+            gripButton
+          ) : (
+            <span className="w-1 shrink-0" />
+          )
         ) : (
           <>
-            {drag && !readOnly ? (
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label="Drag to move"
-                {...drag.handle}
-                className="flex h-6 w-4 shrink-0 cursor-grab items-center justify-center text-fg-subtle opacity-0 group-hover:opacity-100 active:cursor-grabbing"
-              >
-                <GripVertical aria-hidden className="size-3.5" />
-              </button>
-            ) : (
-              <span className="w-4 shrink-0" />
-            )}
+            {drag && !readOnly ? gripButton : <span className="w-4 shrink-0" />}
             {childCount > 0 ? (
               <button
                 type="button"

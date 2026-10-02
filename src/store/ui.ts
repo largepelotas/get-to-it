@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ListType } from '@/data/types';
+import type { DateKey } from '@/lib/dates';
 
 export type View =
   | { kind: 'today' }
@@ -69,6 +70,8 @@ interface UIState {
   reveal: string | null;
   /** The section heading showing an inline rename field. */
   renamingSectionId: string | null;
+  /** The day Upcoming starts from; null means today. */
+  upcomingFrom: DateKey | null;
 }
 
 export const useUI = create<UIState>(() => ({
@@ -86,6 +89,7 @@ export const useUI = create<UIState>(() => ({
   renaming: null,
   reveal: null,
   renamingSectionId: null,
+  upcomingFrom: null,
 }));
 
 export function sameView(a: View, b: View): boolean {
@@ -108,7 +112,13 @@ export function navigate(view: View): void {
     deadlinePickerFor: null,
     labelPickerFor: null,
     selectionLabelsOpen: false,
+    upcomingFrom: null,
   });
+}
+
+/** Sets the day Upcoming starts from (null for today). */
+export function setUpcomingFrom(date: DateKey | null): void {
+  useUI.setState({ upcomingFrom: date });
 }
 
 export const openList = (listId: string) => navigate({ kind: 'list', listId });
