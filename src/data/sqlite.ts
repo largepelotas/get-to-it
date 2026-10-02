@@ -343,6 +343,8 @@ export const MIGRATIONS: string[][] = [
     )`,
     `CREATE INDEX check_ins_item_id ON check_ins (item_id)`,
   ],
+  // Tombstones recorded deleted rows for a sync that was never built. Nothing read them.
+  [`DROP TABLE tombstones`],
 ];
 
 function toColumnValue(value: unknown, type: ColumnType): unknown {
@@ -442,28 +444,18 @@ export class SqliteRepository implements Repository {
   }
 
   /**
-   * Swaps in a whole new data set in one transaction. Rows that don't come
-   * back get a tombstone, as if they'd been deleted.
+   * Swaps in a whole new data set in one transaction.
    */
   async replaceAll({ tables, settings }: LoadResult): Promise<void> {
     await this.migrate();
-    const now = Date.now();
     const statements: { sql: string; params: unknown[] }[] = [];
     for (const table of TABLE_NAMES) {
       statements.push(
-        {
-          sql: `INSERT OR REPLACE INTO tombstones (entity, id, deleted_at) SELECT '${table}', id, ? FROM ${sqlTable(table)}`,
-          params: [now],
-        },
         { sql: `DELETE FROM ${sqlTable(table)}`, params: [] },
         ...Object.values(tables[table] ?? {}).map((row) => ({
           sql: putSql(table),
           params: rowToRecord(table, row),
         })),
-        {
-          sql: `DELETE FROM tombstones WHERE entity = '${table}' AND id IN (SELECT id FROM ${sqlTable(table)})`,
-          params: [],
-        },
       );
     }
     statements.push({ sql: 'DELETE FROM settings', params: [] });
@@ -479,7 +471,6 @@ export class SqliteRepository implements Repository {
   async write(ops: WriteOp[]): Promise<void> {
     if (!ops.length) return;
     await this.migrate();
-    const now = Date.now();
     const statements = ops.flatMap((op) => {
       switch (op.kind) {
         case 'setting':
@@ -492,13 +483,7 @@ export class SqliteRepository implements Repository {
         case 'put':
           return [{ sql: putSql(op.table), params: rowToRecord(op.table, op.row) }];
         case 'delete':
-          return [
-            { sql: `DELETE FROM ${sqlTable(op.table)} WHERE id = ?`, params: [op.id] },
-            {
-              sql: 'INSERT OR REPLACE INTO tombstones (entity, id, deleted_at) VALUES (?, ?, ?)',
-              params: [op.table, op.id, now],
-            },
-          ];
+          return [{ sql: `DELETE FROM ${sqlTable(op.table)} WHERE id = ?`, params: [op.id] }];
       }
     });
     await this.db.batch(statements);

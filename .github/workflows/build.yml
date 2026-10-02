@@ -1,11 +1,11 @@
 name: Build installers
 
-# Unsigned builds for macOS and Windows, uploaded as workflow artifacts.
+# Unsigned builds for macOS and Windows, uploaded as workflow artifacts. They
+# take a while, so they run for a version tag or when started by hand, not on
+# every push.
 on:
   push:
-    branches: [main, 'claude/**']
     tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 permissions:

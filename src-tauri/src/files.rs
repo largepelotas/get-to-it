@@ -1,12 +1,21 @@
-//! File helpers for export, import and backups. Paths for export and import
-//! come from the native save/open dialogs.
+//! File helpers for export, import and backups. The save and open dialogs
+//! are shown from here, so the webview never names a path: it can only read
+//! a file the user picked, or write where the user chose.
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 use tauri::{AppHandle, Runtime};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+
+/// The kind of file a dialog offers, e.g. "Checklist export" with `json`.
+#[derive(Debug, Deserialize)]
+pub struct FileFilter {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct OutFile {
@@ -61,27 +70,76 @@ pub fn prune_backups(dir: &Path, keep: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// Asks where to save a file and writes it there. Returns false if the user cancelled.
 #[tauri::command]
-pub fn write_text_file(path: String, contents: String) -> Result<(), String> {
-    fs::write(path, contents).map_err(|e| e.to_string())
+pub async fn save_text_file<R: Runtime>(
+    app: AppHandle<R>,
+    default_name: String,
+    contents: String,
+    filter: FileFilter,
+) -> Result<bool, String> {
+    let extensions: Vec<&str> = filter.extensions.iter().map(String::as_str).collect();
+    let picked = app
+        .dialog()
+        .file()
+        .set_file_name(default_name)
+        .add_filter(filter.name, &extensions)
+        .blocking_save_file();
+    let Some(path) = picked else {
+        return Ok(false);
+    };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    fs::write(path, contents).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
+/// Asks for a file and returns what's in it, or `None` if the user cancelled.
 #[tauri::command]
-pub fn read_text_file(path: String) -> Result<String, String> {
-    fs::read_to_string(path).map_err(|e| e.to_string())
+pub async fn open_text_file<R: Runtime>(
+    app: AppHandle<R>,
+    filter: FileFilter,
+) -> Result<Option<String>, String> {
+    let extensions: Vec<&str> = filter.extensions.iter().map(String::as_str).collect();
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter(filter.name, &extensions)
+        .blocking_pick_file();
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    fs::read_to_string(path)
+        .map(Some)
+        .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn write_files(dir: String, files: Vec<OutFile>) -> Result<(), String> {
-    let base = PathBuf::from(dir);
+/// Writes `files` under `base`, making folders as needed. A path that would leave `base` is refused.
+pub fn write_files_into(base: &Path, files: &[OutFile]) -> Result<(), String> {
     for file in files {
-        let target = safe_join(&base, &file.path)?;
+        let target = safe_join(base, &file.path)?;
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        fs::write(&target, file.contents).map_err(|e| e.to_string())?;
+        fs::write(&target, &file.contents).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Asks for a folder and writes the files into it. Returns false if the user cancelled.
+#[tauri::command]
+pub async fn save_files<R: Runtime>(
+    app: AppHandle<R>,
+    title: String,
+    files: Vec<OutFile>,
+) -> Result<bool, String> {
+    let picked = app.dialog().file().set_title(title).blocking_pick_folder();
+    let Some(dir) = picked else {
+        return Ok(false);
+    };
+    let base = dir.into_path().map_err(|e| e.to_string())?;
+    write_files_into(&base, &files)?;
+    Ok(true)
 }
 
 /// Writes a backup into the app's data folder and keeps the newest `keep`.
@@ -130,6 +188,20 @@ mod tests {
         assert!(safe_join(base, "../etc/passwd").is_err());
         assert!(safe_join(base, "/etc/passwd").is_err());
         assert!(safe_join(base, "").is_err());
+    }
+
+    #[test]
+    fn writes_files_into_folders_and_refuses_to_leave_the_base() {
+        let dir = std::env::temp_dir().join(format!("checklist-files-{}", std::process::id()));
+        let file = |path: &str| OutFile {
+            path: path.into(),
+            contents: "x".into(),
+        };
+        write_files_into(&dir, &[file("Export/Work/Plan.md")]).unwrap();
+        assert!(dir.join("Export/Work/Plan.md").exists());
+        assert!(write_files_into(&dir, &[file("../escape.md")]).is_err());
+        assert!(!dir.parent().unwrap().join("escape.md").exists());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

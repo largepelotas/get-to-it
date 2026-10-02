@@ -42,9 +42,10 @@ preinstalled browsers don't match the Playwright version.
 
 CI (`.github/workflows/ci.yml`) runs all of the above, the end-to-end tests
 in their own job (the HTML report is uploaded when they fail). `build.yml`
-builds an unsigned macOS universal `.dmg` and a Windows `.exe` installer on
-every push and uploads them as workflow artifacts. Pushing a `v*` tag also
-attaches them to a **draft** GitHub release; publish it by hand.
+builds an unsigned macOS universal `.dmg` and a Windows `.exe` installer
+for a `v*` tag, or when it's run by hand, and uploads them as workflow
+artifacts. A tag also attaches them to a **draft** GitHub release; publish
+it by hand.
 
 The version lives in `package.json` only: `tauri.conf.json` reads it from
 there (`"version": "../package.json"`). Bump it before tagging.
@@ -70,8 +71,12 @@ there (`"version": "../package.json"`). Bump it before tagging.
   remembers which `(id, at)` pairs it fired and ignores them if they're sent
   again, since the frontend may resend one before it hears it fired; it
   forgets a pair once it's no longer sent.
-- `files.rs`: `write_text_file`, `read_text_file`, `write_files(dir, files)`
-  (relative paths only), `write_backup(name, contents, keep)` (into
+- `files.rs`: `save_text_file(default_name, contents, filter)`,
+  `open_text_file(filter)` and `save_files(title, files)` each show the
+  native save, open or folder dialog themselves and then write or read, so
+  the webview never names a path (the dialog plugin has no permissions in
+  `capabilities/default.json`). `save_files` takes relative paths only.
+  `write_backup(name, contents, keep)` (into
   `<app data>/backups`, keeps the newest `keep`), `open_backups_folder`.
 - `tray.rs`: tray icon with Show/Quit; `set_tray_status(tooltip, title)`.
 - `lib.rs`: app lifecycle.
@@ -103,9 +108,7 @@ there (`"version": "../package.json"`). Bump it before tagging.
 - `data/repository.ts`: the `Repository` interface (`load`, `write(ops)`,
   and `replaceAll(data)` for imports). Adapters:
   - `sqlite.ts`: column mapping plus migrations tracked with
-    `PRAGMA user_version`. Hard deletes write a `tombstones` row.
-    `replaceAll` runs in one transaction and tombstones every row that
-    doesn't come back.
+    `PRAGMA user_version`. `replaceAll` runs in one transaction.
   - `localStorage.ts`: browser preview.
   - `memory.ts`: tests.
 - `platform/index.ts`: `isTauri`, `isMac`, `createRepository()`, `appReady()`,
@@ -117,11 +120,10 @@ there (`"version": "../package.json"`). Bump it before tagging.
   tab in the browser). Native events go
   through `listenNative`, which returns an unsubscribe function right away.
   `copyText` (clipboard plugin, else `navigator.clipboard`),
-  `saveTextFile(name, contents, filter)` (save dialog, then
-  `write_text_file`; the browser downloads), `openTextFile(filter)` (open
-  dialog, then `read_text_file`; the browser uses a hidden file input),
-  `saveFolder(folderName, files)` (asks for a folder and writes the files
-  into a new subfolder with `write_files`; the browser downloads one
+  `saveTextFile(name, contents, filter)` (`save_text_file`; the browser
+  downloads), `openTextFile(filter)` (`open_text_file`; the browser uses a
+  hidden file input), `saveFolder(folderName, files)` (`save_files`, into a
+  new subfolder of the folder picked; the browser downloads one
   combined `.md`), `canBackUp` (desktop only), `writeBackup` and
   `openBackupsFolder`. All return false or null when the user cancels.
   Put every other native call here too, with a browser fallback.
@@ -1184,15 +1186,8 @@ or TickTick do.
 
 Data and safety:
 
-- The file commands (`write_text_file`, `read_text_file`, `write_files`) take
-  any path from the webview. The content security policy is tight and
-  nothing remote is loaded, so the risk is low, but the dialogs should move
-  into Rust so the webview never names a path.
 - Undo history doesn't know about settings, so removing a grocery category
   can't be undone.
-- The `tombstones` table is written and never read, grows without limit, and
-  isn't cleared when a removal is undone. It was meant for sync; drop it or
-  design sync properly.
 - The WAL isn't checkpointed on exit, so copying `checklist.db` alone can
   miss recent changes. Backups and exports are written in place, not to a
   temporary file first.
@@ -1216,8 +1211,6 @@ Features and behaviour:
 
 - The calendar is drag-only: no adding a task on a day, completing one or
   moving one from the keyboard; month cells have no "+N more".
-- The default list (where quick add files tasks from Today) has no setting;
-  it's whatever was seeded.
 - Grocery and habit lists have no multi-select or one-key actions.
 - A title being edited when a shortcut switches the view may not be saved
   (it commits on blur). Not confirmed.
@@ -1246,7 +1239,6 @@ Shipping:
   drives the desktop app, and the SQLite repository is tested against
   `node:sqlite`, not the Rust executor. Rust lint and tests run on Linux
   only.
-- `build.yml` builds installers on every push and pull request.
 - Accessibility was checked with axe and by keyboard, not with VoiceOver or
   NVDA.
 - `sync`, a system-wide quick-capture hotkey, templates and web or mobile

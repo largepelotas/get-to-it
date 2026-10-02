@@ -8,6 +8,7 @@ import { PALETTES } from '@/lib/theme';
 import { canBackUp, getLaunchAtLogin, isTauri, setLaunchAtLogin } from '@/platform';
 import { BACKUPS_KEPT } from '@/store/backup';
 import { setSetting, useData } from '@/store/data';
+import { liveTodoLists } from '@/store/sidebar';
 import { closeDialog } from '@/store/ui';
 import { GroceryCategoriesEditor } from './GroceryCategoriesEditor';
 import { MatrixSettingsFields } from './MatrixSettingsFields';
@@ -287,6 +288,35 @@ function DataSection() {
   );
 }
 
+/** Which to-do list the app opens on, and where quick add files a task from Today and the other views. */
+function DefaultList() {
+  const lists = useData((s) => s.tables.lists);
+  const folders = useData((s) => s.tables.folders);
+  const defaultListId = useData((s) => s.settings.defaultListId);
+  const choices = liveTodoLists({ lists, folders });
+  if (!choices.length) return null;
+  const current = choices.some((l) => l.id === defaultListId) ? defaultListId! : '';
+  return (
+    <Row label="Default list" htmlFor="settings-default-list">
+      <Select
+        id="settings-default-list"
+        value={current}
+        onChange={(e) => setSetting('defaultListId', e.target.value || null)}
+      >
+        {!current && <option value="">None</option>}
+        {choices.map((list) => {
+          const folder = list.folderId ? folders[list.folderId]?.name : null;
+          return (
+            <option key={list.id} value={list.id}>
+              {folder ? `${folder} › ${list.title}` : list.title}
+            </option>
+          );
+        })}
+      </Select>
+    </Row>
+  );
+}
+
 export function SettingsDialog() {
   const settings = useData((s) => s.settings);
   const set =
@@ -342,6 +372,7 @@ export function SettingsDialog() {
               <option value={0}>Sunday</option>
             </Select>
           </Row>
+          <DefaultList />
           <Toggle
             id="settings-parse-dates"
             label="Read dates in new tasks"

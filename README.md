@@ -25,7 +25,8 @@ an installed copy's. The dates are worked out on the day the data is made;
 
 ## Installing a build
 
-Every push builds unsigned installers. They're under **Actions → Build
+Unsigned installers are built for each version tag, or when the **Build
+installers** workflow is run by hand. They're under **Actions → Build
 installers → the latest run → Artifacts**. Tagged versions (`v1.0.0`) also
 get a draft release with the installers attached.
 

@@ -77,7 +77,7 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.items).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
   });
 
   it('adds the won’t-do column to a database made before it existed', async () => {
@@ -94,7 +94,7 @@ describe('SqliteRepository', () => {
     );
     const data = await new SqliteRepository(exec).load();
     expect(data.tables.items.OLD).toMatchObject({ checked: true, wontDo: false });
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
   });
 
   // Bug prevented: an upgrade losing reminders, or leaving old ones unreadable without the new column.
@@ -111,7 +111,7 @@ describe('SqliteRepository', () => {
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
     expect(data.tables.reminders.R1).toMatchObject({ offsetMinutes: 15, constant: false });
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     await repo.write([
       { kind: 'put', table: 'reminders', row: { ...data.tables.reminders.R1, constant: true } },
     ]);
@@ -134,7 +134,7 @@ describe('SqliteRepository', () => {
     const data = await repo.load();
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', sectionId: null });
     expect(data.tables.sections).toEqual({});
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     const section = {
       id: 'S1',
       listId: 'L1',
@@ -179,14 +179,24 @@ describe('SqliteRepository', () => {
     expect(data.settings.theme).toBe('dark');
   });
 
-  it('deletes rows and leaves a tombstone', async () => {
+  it('deletes rows', async () => {
     const exec = nodeExecutor();
     const repo = new SqliteRepository(exec);
     await repo.write([{ kind: 'put', table: 'items', row: item }]);
     await repo.write([{ kind: 'delete', table: 'items', id: 'I1' }]);
     expect((await repo.load()).tables.items).toEqual({});
-    const tombstones = await exec.select('SELECT entity, id FROM tombstones');
-    expect(tombstones).toEqual([{ entity: 'items', id: 'I1' }]);
+  });
+
+  it('drops the tombstones table from a version 9 database', async () => {
+    const exec = nodeExecutor();
+    for (const migration of MIGRATIONS.slice(0, 9)) for (const sql of migration) exec.raw.exec(sql);
+    exec.raw.exec(`INSERT INTO tombstones (entity, id, deleted_at) VALUES ('items', 'I1', 1)`);
+    exec.raw.exec('PRAGMA user_version = 9');
+    const repo = new SqliteRepository(exec);
+    await repo.write([{ kind: 'put', table: 'items', row: item }]);
+    await repo.write([{ kind: 'delete', table: 'items', id: 'I1' }]);
+    const tables = await exec.select(`SELECT name FROM sqlite_master WHERE name = 'tombstones'`);
+    expect(tables).toEqual([]);
   });
 
   it('applies nothing when a write fails', async () => {
@@ -203,7 +213,7 @@ describe('SqliteRepository', () => {
     expect((await repo.load()).tables.lists).toEqual({});
   });
 
-  it('replaces everything, tombstoning rows that are gone', async () => {
+  it('replaces everything', async () => {
     const exec = nodeExecutor();
     const repo = new SqliteRepository(exec);
     await repo.write([
@@ -220,8 +230,6 @@ describe('SqliteRepository', () => {
     expect(data.tables.lists.L1.title).toBe('Renamed');
     expect(data.tables.items).toEqual({});
     expect(data.settings).toEqual({ weekStartsOn: 0 });
-    const tombstones = await exec.select('SELECT entity, id FROM tombstones');
-    expect(tombstones).toEqual([{ entity: 'items', id: 'I1' }]);
   });
 });
 
@@ -288,8 +296,8 @@ describe('labels migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect(MIGRATIONS).toHaveLength(9);
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect(MIGRATIONS).toHaveLength(10);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task', labelIds: [] });
     expect(data.tables.labels).toEqual({});
     const label = {
@@ -326,8 +334,8 @@ describe('filters migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect(MIGRATIONS).toHaveLength(9);
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect(MIGRATIONS).toHaveLength(10);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     expect(data.tables.items.OLD).toMatchObject({ text: 'Old task' });
     expect(data.tables.filters).toEqual({});
     const filter = {
@@ -362,8 +370,8 @@ describe('deadlines and end times migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect(MIGRATIONS).toHaveLength(9);
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect(MIGRATIONS).toHaveLength(10);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     expect(data.tables.items.OLD).toMatchObject({ endTime: null, deadline: null });
     const item = { ...data.tables.items.OLD, dueDate: '2026-10-03', dueTime: '14:00' };
     await repo.write([
@@ -389,7 +397,7 @@ describe('focus sessions migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     expect(data.tables.focusSessions).toEqual({});
     expect(data.tables.items.OLD.text).toBe('Old task');
     const session: FocusSession = {
@@ -426,7 +434,7 @@ describe('habits migration', () => {
     );
     const repo = new SqliteRepository(exec);
     const data = await repo.load();
-    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(9);
+    expect((await exec.select('PRAGMA user_version'))[0].user_version).toBe(MIGRATIONS.length);
     expect(data.tables.lists.OLDL).toEqual({
       id: 'OLDL',
       folderId: 'F9',

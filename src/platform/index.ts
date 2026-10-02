@@ -196,21 +196,13 @@ export async function saveTextFile(
     );
     return true;
   }
-  const { save } = await import('@tauri-apps/plugin-dialog');
-  const path = await save({ defaultPath: defaultName, filters: [filter] });
-  if (!path) return false;
-  await invoke('write_text_file', { path, contents });
-  return true;
+  // The dialog is shown by the native side, so a path never passes through here.
+  return invoke<boolean>('save_text_file', { defaultName, contents, filter });
 }
 
 /** Asks for a file and reads it. Returns null if the user cancelled. */
 export async function openTextFile(filter: FileFilter): Promise<string | null> {
-  if (isTauri) {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({ multiple: false, directory: false, filters: [filter] });
-    if (typeof path !== 'string') return null;
-    return invoke<string>('read_text_file', { path });
-  }
+  if (isTauri) return invoke<string | null>('open_text_file', { filter });
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -239,14 +231,10 @@ export async function saveFolder(
     download(`${folderName}.md`, `${combined}\n`, 'text/markdown');
     return true;
   }
-  const { open } = await import('@tauri-apps/plugin-dialog');
-  const dir = await open({ directory: true, multiple: false, title: 'Choose where to export' });
-  if (typeof dir !== 'string') return false;
-  await invoke('write_files', {
-    dir,
+  return invoke<boolean>('save_files', {
+    title: 'Choose where to export',
     files: files.map((f) => ({ path: `${folderName}/${f.path}`, contents: f.contents })),
   });
-  return true;
 }
 
 /** True where automatic backups are written (the desktop app). */
