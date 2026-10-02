@@ -39,8 +39,8 @@ test('saves a filter, opens its view, sorts and groups Today, and uses the matri
   await sidebarButton(page, 'Today').click();
   const tasks = page.getByRole('listitem');
   await expect(tasks).toHaveText([/^Pay the bill/, /^Call the bank/, /^Water the plants/]);
-  await page.getByRole('button', { name: 'Sort and group' }).click();
-  const options = page.getByRole('dialog', { name: 'Sort and group' });
+  await page.getByRole('button', { name: 'View options' }).click();
+  const options = page.getByRole('dialog', { name: 'View options' });
   await options
     .getByRole('radiogroup', { name: 'Sort by' })
     .getByRole('radio', { name: 'Name' })

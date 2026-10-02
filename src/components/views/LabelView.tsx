@@ -10,7 +10,13 @@ import { labelRows } from '@/store/labels';
 import type { View } from '@/store/ui';
 import { SmartLayout } from './SmartViews';
 import { EmptyState, ViewHeader } from './ViewHeader';
-import { groupChoices, SMART_SORTS, toSmartSections, useViewOptions } from './arrangement';
+import {
+  groupChoices,
+  SMART_SORTS,
+  toSmartSections,
+  useBoard,
+  useViewOptions,
+} from './arrangement';
 import { ViewOptionsMenu } from './viewOptions';
 
 /**
@@ -26,6 +32,7 @@ export function LabelView({ labelId }: { labelId: string }) {
   const rows = useMemo(() => labelRows(items, lists, labelId), [items, lists, labelId]);
   const view = useMemo<View>(() => ({ kind: 'label', labelId }), [labelId]);
   const { sort, group } = useViewOptions(view);
+  const board = useBoard(view, rows);
   const sections = useMemo<SmartSection[]>(() => {
     const sorted = sortRows(rows, sort);
     if (group === 'default' || group === 'none') {
@@ -59,6 +66,7 @@ export function LabelView({ labelId }: { labelId: string }) {
       }
       labelIds={[labelId]}
       sections={sections}
+      board={board}
       empty={<EmptyState title="No tasks with this label." />}
     />
   );

@@ -65,6 +65,8 @@ export interface ItemRowProps {
   focusing?: boolean;
   /** One of several selected tasks. */
   multiSelected?: boolean;
+  /** Drawn as a board card: the text takes the first line, the details wrap onto a second. */
+  card?: boolean;
   menu: () => MenuEntries;
   onKeyDown: (event: KeyboardEvent<HTMLElement>, mode: RowKeyMode) => void;
   /** The row took focus; `editing` when it was the text field. */
@@ -84,17 +86,20 @@ function ItemText({
   text,
   checked,
   readOnly,
+  fill = false,
 }: {
   id: string;
   text: string;
   checked: boolean;
   readOnly: boolean;
+  /** Takes the rest of the line (a card), so clicking beside the text edits it. */
+  fill?: boolean;
 }) {
   // Holds what's typed while it's blank or has extra spaces the store trims away.
   const [draft, setDraft] = useState<string | null>(null);
   const value = draft ?? text;
   return (
-    <span className="grid min-w-0 text-sm">
+    <span className={clsx('grid min-w-0 text-sm', fill && 'flex-1')}>
       <span aria-hidden className="invisible col-start-1 row-start-1 truncate pr-1 whitespace-pre">
         {value || ' '}
       </span>
@@ -183,6 +188,7 @@ export function ItemRow({
   hasReminder = false,
   focusing = false,
   multiSelected = false,
+  card = false,
   menu,
   onKeyDown,
   onSelect,
@@ -200,6 +206,17 @@ export function ItemRow({
       .filter(Boolean)
       .join('. ') || '';
   const descriptionId = `row-desc-${item.id}`;
+  // A card with nothing to say under its text stays one line.
+  const hasMeta =
+    childCount > 0 ||
+    focusing ||
+    hasReminder ||
+    hasNotes ||
+    labels.length > 0 ||
+    !!(item.dueDate && (!timeOnly || item.dueTime || item.recurrence)) ||
+    !!item.deadline ||
+    item.priority > 0 ||
+    !!origin;
 
   const gripButton = drag && (
     <button
@@ -225,6 +242,7 @@ export function ItemRow({
         aria-describedby={description ? descriptionId : undefined}
         aria-current={selected ? 'true' : undefined}
         data-multi-selected={multiSelected ? '' : undefined}
+        data-card={card ? '' : undefined}
         onFocus={(e) => onSelect((e.target as HTMLElement).tagName === 'INPUT')}
         // A modifier-click on the row picks it, so keep the browser from moving focus or text selection.
         onMouseDown={(e) => {
@@ -245,7 +263,8 @@ export function ItemRow({
           onKeyDown(e, (e.target as HTMLElement).tagName === 'INPUT' ? 'text' : 'row')
         }
         className={clsx(
-          'group relative flex h-8 items-center gap-1.5 rounded-md pr-1 outline-none',
+          'group relative flex items-center gap-1.5 rounded-md pr-1 outline-none',
+          card ? 'min-h-8 flex-wrap py-0.5' : 'h-8',
           'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
           selected || multiSelected ? 'bg-selected' : 'hover:bg-hover',
           // Keeps a row reached with Shift+arrows clear of the selection bar.
@@ -290,70 +309,84 @@ export function ItemRow({
           label={item.text}
           onChange={(checked) => (onToggle ? onToggle(checked) : toggleItem(item.id, checked))}
         />
-        <ItemText id={item.id} text={item.text} checked={item.checked} readOnly={readOnly} />
-        <span className="min-w-0 flex-1 self-stretch" />
+        <ItemText
+          id={item.id}
+          text={item.text}
+          checked={item.checked}
+          readOnly={readOnly}
+          fill={card}
+        />
+        {!card && <span className="min-w-0 flex-1 self-stretch" />}
         {description && (
           <span id={descriptionId} hidden>
             {description}
           </span>
         )}
-        <span className="flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle">
-          {childCount > 0 && (
-            <span aria-hidden className="tabular-nums">
-              {doneCount}/{childCount}
-            </span>
-          )}
-          {focusing && <Timer aria-hidden className="size-3.5 text-accent" />}
-          {hasReminder && <Bell aria-hidden className="size-3.5" />}
-          {hasNotes && <NotebookText aria-hidden className="size-3.5" />}
-          <LabelChips labels={labels} />
-          {item.dueDate && (!timeOnly || item.dueTime || item.recurrence) && (
-            <DueLabel
-              label={
-                timeOnly
-                  ? (item.dueTime && formatTimeRange(item.dueTime, item.endTime)) || ''
-                  : formatDue(item.dueDate, item.dueTime, undefined, item.endTime)
-              }
-              fullLabel={formatDue(item.dueDate, item.dueTime, undefined, item.endTime)}
-              repeats={!!item.recurrence}
-              overdue={overdue}
-              onPick={readOnly ? undefined : () => pickDueDate(item.id)}
-            />
-          )}
-          {item.deadline && (
-            <span
-              aria-hidden
-              className={clsx(
-                'flex items-center gap-1',
-                !item.checked && item.deadline < todayKey() && 'text-danger',
-              )}
-            >
-              <Hourglass className="size-3" />
-              {formatDateKey(item.deadline)}
-            </span>
-          )}
-          {item.priority > 0 && (
-            <Flag
-              aria-hidden
-              className="size-3.5"
-              style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }}
-            />
-          )}
-          {origin && (
-            <span
-              aria-hidden
-              className="flex max-w-48 min-w-0 items-center gap-1.5"
-              title={originTitle(origin)}
-            >
-              <span className="truncate">{originTitle(origin)}</span>
+        {(!card || hasMeta) && (
+          <span
+            className={clsx(
+              'flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle',
+              // Under the text: past the grip, the chevron slot (no origin) and the checkbox.
+              card && ['order-last basis-full flex-wrap', origin ? 'pl-11' : 'pl-16'],
+            )}
+          >
+            {childCount > 0 && (
+              <span aria-hidden className="tabular-nums">
+                {doneCount}/{childCount}
+              </span>
+            )}
+            {focusing && <Timer aria-hidden className="size-3.5 text-accent" />}
+            {hasReminder && <Bell aria-hidden className="size-3.5" />}
+            {hasNotes && <NotebookText aria-hidden className="size-3.5" />}
+            <LabelChips labels={labels} />
+            {item.dueDate && (!timeOnly || item.dueTime || item.recurrence) && (
+              <DueLabel
+                label={
+                  timeOnly
+                    ? (item.dueTime && formatTimeRange(item.dueTime, item.endTime)) || ''
+                    : formatDue(item.dueDate, item.dueTime, undefined, item.endTime)
+                }
+                fullLabel={formatDue(item.dueDate, item.dueTime, undefined, item.endTime)}
+                repeats={!!item.recurrence}
+                overdue={overdue}
+                onPick={readOnly ? undefined : () => pickDueDate(item.id)}
+              />
+            )}
+            {item.deadline && (
               <span
                 aria-hidden
-                className="size-2 shrink-0 rounded-full"
-                style={{ background: colorVar(origin.list.color) ?? 'var(--line-strong)' }}
+                className={clsx(
+                  'flex items-center gap-1',
+                  !item.checked && item.deadline < todayKey() && 'text-danger',
+                )}
+              >
+                <Hourglass className="size-3" />
+                {formatDateKey(item.deadline)}
+              </span>
+            )}
+            {item.priority > 0 && (
+              <Flag
+                aria-hidden
+                className="size-3.5"
+                style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }}
               />
-            </span>
-          )}
-        </span>
+            )}
+            {origin && (
+              <span
+                aria-hidden
+                className="flex max-w-48 min-w-0 items-center gap-1.5"
+                title={originTitle(origin)}
+              >
+                <span className="truncate">{originTitle(origin)}</span>
+                <span
+                  aria-hidden
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ background: colorVar(origin.list.color) ?? 'var(--line-strong)' }}
+                />
+              </span>
+            )}
+          </span>
+        )}
         <IconButton
           size="sm"
           label="Open details"

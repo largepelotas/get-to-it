@@ -248,12 +248,12 @@ describe('filter view', () => {
 
 describe('sort and group', () => {
   type User = ReturnType<typeof userEvent.setup>;
-  /** Opens "Sort and group" (if it isn't) and picks a choice in one of its two groups. */
+  /** Opens "View options" (if it isn't) and picks a choice in one of its groups. */
   const pick = async (user: User, group: 'Sort by' | 'Group by', choice: string) => {
-    if (!screen.queryByRole('dialog', { name: 'Sort and group' })) {
-      await user.click(screen.getByRole('button', { name: 'Sort and group' }));
+    if (!screen.queryByRole('dialog', { name: 'View options' })) {
+      await user.click(screen.getByRole('button', { name: 'View options' }));
     }
-    const popover = await screen.findByRole('dialog', { name: 'Sort and group' });
+    const popover = await screen.findByRole('dialog', { name: 'View options' });
     await user.click(
       within(within(popover).getByRole('radiogroup', { name: group })).getByRole('radio', {
         name: choice,

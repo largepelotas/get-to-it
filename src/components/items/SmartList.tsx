@@ -55,6 +55,8 @@ export interface SmartListProps {
   onExitTop?: () => void;
   /** Lay the sections out as boxes in two columns (the Eisenhower matrix). */
   grid?: boolean;
+  /** Lay the sections out as kanban columns side by side (exclusive with `grid`). */
+  board?: boolean;
   /** The list this view is of: its own top-level tasks don't say which list they're in. */
   homeListId?: string;
   /** Rows can be dragged (to a section with a `dropId`); the view supplies the DndContext. */
@@ -100,6 +102,7 @@ export function SmartList({
   sections,
   onExitTop,
   grid = false,
+  board = false,
   homeListId,
   draggable = false,
 }: SmartListProps) {
@@ -223,17 +226,25 @@ export function SmartList({
     <div
       ref={containerRef}
       tabIndex={-1}
-      className={clsx('outline-none', grid && 'grid gap-4 md:grid-cols-2')}
+      className={clsx(
+        'outline-none',
+        grid && !board && 'grid gap-4 md:grid-cols-2',
+        board && 'flex items-start gap-3 overflow-x-auto pb-2',
+      )}
     >
       {sections.map((section, sectionIndex) => {
         const boxProps = {
           'aria-label':
             section.label ?? (typeof section.title === 'string' ? section.title : section.key),
-          className: grid ? 'min-w-0 rounded-lg border border-line px-2 pb-2' : 'mb-5',
+          className: board
+            ? 'w-72 shrink-0 rounded-lg border border-line bg-sidebar/40 px-2 pb-2'
+            : grid
+              ? 'min-w-0 rounded-lg border border-line px-2 pb-2'
+              : 'mb-5',
         };
         const content = (
           <>
-            {!section.bare && (
+            {(!section.bare || board) && (
               <h2
                 className={clsx(
                   'flex h-8 items-center gap-2 border-b border-line px-2 text-[13px] font-semibold',
@@ -242,6 +253,16 @@ export function SmartList({
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">{section.title}</span>
+                {board && (
+                  <span
+                    aria-label={
+                      section.rows.length === 1 ? '1 task' : `${section.rows.length} tasks`
+                    }
+                    className="font-normal text-fg-subtle"
+                  >
+                    {section.rows.length}
+                  </span>
+                )}
                 {section.actions}
               </h2>
             )}
@@ -256,6 +277,7 @@ export function SmartList({
                   <ItemRow
                     key={id}
                     drag={drag}
+                    card={board}
                     row={row}
                     origin={
                       row.list.id === homeListId && !row.parent
