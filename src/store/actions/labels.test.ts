@@ -19,6 +19,7 @@ import {
   renameLabel,
   setItemLabels,
   setLabelColor,
+  swapLabelOnItems,
   toggleLabelOnItems,
 } from './labels';
 import { archiveList, createList, deleteList, duplicateList, restoreList } from './lists';
@@ -320,5 +321,59 @@ describe('label model', () => {
     const dangling = { ...tables.items, [t]: task };
     expect(labelCounts(dangling, tables.lists).get('dangling')).toBe(1);
     expect(labelRows(dangling, tables.lists, a).map((r) => r.item.id)).toEqual([t]);
+  });
+});
+
+// Bug prevented: a board drop between label columns leaving the old label on the card (or
+// needing one undo per card).
+describe('swapLabelOnItems', () => {
+  it('removes the old label and appends the new one', () => {
+    const a = createLabel('a')!;
+    const b = createLabel('b')!;
+    const c = createLabel('c')!;
+    const t = createItem(list, { text: 'x', labelIds: [a, c] })!;
+    swapLabelOnItems([t], a, b);
+    expect(items()[t].labelIds).toEqual([c, b]);
+  });
+
+  it('adds only when there is no from, and removes only when there is no to', () => {
+    const a = createLabel('a')!;
+    const b = createLabel('b')!;
+    const t = createItem(list, { text: 'x', labelIds: [a] })!;
+    swapLabelOnItems([t], null, b);
+    expect(items()[t].labelIds).toEqual([a, b]);
+    swapLabelOnItems([t], a, null);
+    expect(items()[t].labelIds).toEqual([b]);
+  });
+
+  it('ignores an unknown target label', () => {
+    const a = createLabel('a')!;
+    const t = createItem(list, { text: 'x', labelIds: [a] })!;
+    swapLabelOnItems([t], a, 'nope');
+    expect(items()[t].labelIds).toEqual([]);
+  });
+
+  it('writes nothing for a task that would not change', () => {
+    const a = createLabel('a')!;
+    const b = createLabel('b')!;
+    const t = createItem(list, { text: 'x', labelIds: [b] })!;
+    const before = items()[t];
+    const n = steps();
+    swapLabelOnItems([t], a, b);
+    expect(items()[t]).toBe(before);
+    expect(steps()).toBe(n);
+  });
+
+  it('is one undo step for several tasks', () => {
+    const a = createLabel('a')!;
+    const b = createLabel('b')!;
+    const t1 = createItem(list, { text: '1', labelIds: [a] })!;
+    const t2 = createItem(list, { text: '2', labelIds: [a] })!;
+    const n = steps();
+    swapLabelOnItems([t1, t2], a, b);
+    expect(steps()).toBe(n + 1);
+    undo();
+    expect(items()[t1].labelIds).toEqual([a]);
+    expect(items()[t2].labelIds).toEqual([a]);
   });
 });

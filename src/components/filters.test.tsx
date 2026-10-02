@@ -276,7 +276,11 @@ describe('sort and group', () => {
     expect(screen.getByRole('region', { name: 'Work' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Home' })).toBeInTheDocument();
     expect(rowTexts()).toEqual(['Old thing', 'Write report', 'Buy milk']);
-    expect(useData.getState().settings.viewOptions.today).toEqual({ sort: 'name', group: 'list' });
+    expect(useData.getState().settings.viewOptions.today).toEqual({
+      sort: 'name',
+      group: 'list',
+      layout: 'list',
+    });
 
     await sortBy(user, 'Priority');
     expect(rowTexts()).toEqual(['Write report', 'Old thing', 'Buy milk']);
@@ -311,6 +315,7 @@ describe('sort and group', () => {
     expect(useData.getState().settings.viewOptions[`list:${work}`]).toEqual({
       sort: 'priority',
       group: 'default',
+      layout: 'list',
     });
 
     await sortBy(user, 'List order');
