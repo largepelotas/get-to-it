@@ -157,8 +157,8 @@ describe('loading settings', () => {
       }),
     );
     expect(useData.getState().settings.viewOptions).toEqual({
-      upcoming: { sort: 'priority', group: 'label' },
-      'label:X': { sort: 'manual', group: 'date' },
+      upcoming: { sort: 'priority', group: 'label', layout: 'list' },
+      'label:X': { sort: 'manual', group: 'date', layout: 'list' },
     });
     expect(useData.getState().settings.matrix).toEqual({ urgent: 'today', important: 'p1' });
     await initData(new MemoryRepository({ settings: { matrix: 'nope' as never } }));

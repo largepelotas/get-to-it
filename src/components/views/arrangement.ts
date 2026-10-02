@@ -1,7 +1,11 @@
 import { setViewOptions } from '@/commands';
 import type { SmartSection } from '@/components/items/SmartList';
-import type { GroupKey, SortKey, ViewOptions } from '@/data/types';
-import type { RowGroup } from '@/store/arrange';
+import type { GroupKey, SortKey, ViewLayout, ViewOptions } from '@/data/types';
+import { sortRows, type RowGroup } from '@/store/arrange';
+import { boardColumns, boardGroup, type BoardColumn } from '@/store/board';
+import type { DueRow } from '@/store/smart';
+import { useToday } from '@/hooks/useToday';
+import { useMemo } from 'react';
 import { useData } from '@/store/data';
 import type { View } from '@/store/ui';
 import { effectiveSort, viewOptionsFor } from '@/store/viewOptions';
@@ -57,6 +61,7 @@ export function useViewOptions(view: View): {
   options: ViewOptions;
   sort: SortKey;
   group: GroupKey;
+  layout: ViewLayout;
   set: (options: ViewOptions) => void;
 } {
   const viewOptions = useData((s) => s.settings.viewOptions);
@@ -65,6 +70,7 @@ export function useViewOptions(view: View): {
     options,
     sort: effectiveSort(view, options.sort),
     group: options.group,
+    layout: options.layout,
     set: (next) => setViewOptions(view, next),
   };
 }
@@ -79,4 +85,22 @@ export function toSmartSections(groups: RowGroup[]): SmartSection[] {
     timeOnly: g.timeOnly,
     bare: g.bare,
   }));
+}
+
+/**
+ * The columns of a smart view shown as a board, or null while it is a list.
+ * `rows` is every row the view would list.
+ */
+export function useBoard(view: View, rows: DueRow[]): BoardColumn[] | null {
+  const { sort, group, layout } = useViewOptions(view);
+  const lists = useData((s) => s.tables.lists);
+  const labels = useData((s) => s.tables.labels);
+  const today = useToday();
+  return useMemo(
+    () =>
+      layout === 'board'
+        ? boardColumns(sortRows(rows, sort), boardGroup(view, group), { today, lists, labels })
+        : null,
+    [layout, rows, sort, view, group, today, lists, labels],
+  );
 }

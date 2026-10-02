@@ -300,14 +300,14 @@ describe('snapshots with filters', () => {
   it('round-trips filters and the view and matrix settings, without changing the version', () => {
     const list = createList({ type: 'todo', title: 'Home' });
     const f = createFilter({ name: 'Week', query: '#Home & 7 days', color: 'teal' })!;
-    setSetting('viewOptions', { today: { sort: 'priority', group: 'list' } });
+    setSetting('viewOptions', { today: { sort: 'priority', group: 'list', layout: 'list' } });
     setSetting('matrix', { urgent: '3 days', important: 'p1' });
     const { tables } = useData.getState();
     const parsed = parseSnapshot(exportNow());
     expect(parsed.tables).toEqual(tables);
     expect(parsed.tables.filters[f]).toMatchObject({ name: 'Week', query: '#Home & 7 days' });
     expect(parsed.settings).toMatchObject({
-      viewOptions: { today: { sort: 'priority', group: 'list' } },
+      viewOptions: { today: { sort: 'priority', group: 'list', layout: 'list' } },
       matrix: { urgent: '3 days', important: 'p1' },
     });
     expect(parsed.tables.lists[list]).toBeTruthy();
@@ -334,7 +334,9 @@ describe('snapshots with filters', () => {
     });
     const { tables, settings } = parseSnapshot(json);
     expect(tables.filters).toEqual({});
-    expect(settings.viewOptions).toEqual({ today: { sort: 'name', group: 'default' } });
+    expect(settings.viewOptions).toEqual({
+      today: { sort: 'name', group: 'default', layout: 'list' },
+    });
     expect(settings.matrix).toBeUndefined();
   });
 

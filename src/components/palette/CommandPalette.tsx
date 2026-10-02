@@ -135,6 +135,7 @@ export function CommandPalette() {
   const sidebarHidden = useData((s) => s.settings.sidebarHidden);
   const undoLabel = useData((s) => s.past[s.past.length - 1]?.label ?? null);
   const redoLabel = useData((s) => s.future[s.future.length - 1]?.label ?? null);
+  const viewOptions = useData((s) => s.settings.viewOptions);
   const view = useUI((s) => s.view);
   const timer = useFocus((s) => s.timer);
   // Whether the chosen action moves focus itself; otherwise focus goes back where it was.
@@ -155,13 +156,25 @@ export function CommandPalette() {
       undoLabel,
       redoLabel,
       timer,
+      viewOptions,
     });
     if (!terms.length) return all.map((command) => ({ command, score: 0 }));
     return all
       .map((command) => ({ command, score: commandScore(command, terms) }))
       .filter((c): c is { command: PaletteCommand; score: number } => c.score !== null)
       .sort((a, b) => b.score - a.score);
-  }, [view, tables, theme, palette, sidebarHidden, undoLabel, redoLabel, timer, terms]);
+  }, [
+    view,
+    tables,
+    theme,
+    palette,
+    sidebarHidden,
+    undoLabel,
+    redoLabel,
+    timer,
+    viewOptions,
+    terms,
+  ]);
   const allLists = useMemo(() => {
     if (terms.length) return [];
     const model = sidebarModel(tables);

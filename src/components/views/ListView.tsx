@@ -87,13 +87,15 @@ function NoteBody({ list }: { list: List }) {
 }
 
 function ListBody({ list, view }: { list: List; view: View }) {
-  const { sort, group } = useViewOptions(view);
+  const { sort, group, layout } = useViewOptions(view);
   if (list.type === 'note') return <NoteBody list={list} />;
   if (list.type === 'grocery') return <GroceryList list={list} />;
   // A list arranged some other way than its own is drawn flat; a stored list keeps its order.
   const arranged =
-    (sort !== 'manual' || group !== 'default') && !list.deletedAt && !list.archivedAt;
-  if (arranged) return <ArrangedTodoList list={list} sort={sort} group={group} />;
+    (sort !== 'manual' || group !== 'default' || layout === 'board') &&
+    !list.deletedAt &&
+    !list.archivedAt;
+  if (arranged) return <ArrangedTodoList list={list} sort={sort} group={group} layout={layout} />;
   return <TodoList list={list} />;
 }
 

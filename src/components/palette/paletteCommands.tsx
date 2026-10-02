@@ -6,6 +6,7 @@ import {
   CalendarRange,
   Check,
   ClipboardCopy,
+  Columns3,
   Coffee,
   Download,
   FileDown,
@@ -15,6 +16,7 @@ import {
   LayoutGrid,
   HardDriveDownload,
   Keyboard,
+  List as ListIcon,
   Monitor,
   Moon,
   Palette,
@@ -37,6 +39,7 @@ import {
 } from 'lucide-react';
 import {
   confirmEmptyTrash,
+  setViewOptions,
   copyAsMarkdown,
   newFilter,
   newFolder,
@@ -61,6 +64,7 @@ import { sortedFilters } from '@/store/filters';
 import { sortedLabels } from '@/store/labels';
 import { queryTerms, scoreText } from '@/store/search';
 import { setSetting } from '@/store/data';
+import { viewKey, viewOptionsFor } from '@/store/viewOptions';
 import { navigate, openDialog, openFilter, openLabel, type View } from '@/store/ui';
 
 export interface PaletteCommand {
@@ -90,6 +94,8 @@ export interface PaletteContext {
   undoLabel: string | null;
   redoLabel: string | null;
   timer: FocusTimer | null;
+  /** The view's options as saved, for the layout command. */
+  viewOptions: Settings['viewOptions'];
 }
 
 const THEMES: { value: Settings['theme']; label: string; icon: LucideIcon }[] = [
@@ -108,6 +114,7 @@ export function paletteCommands({
   undoLabel,
   redoLabel,
   timer,
+  viewOptions,
 }: PaletteContext): PaletteCommand[] {
   const list = view.kind === 'list' ? tables.lists[view.listId] : undefined;
   const editable = list && !list.deletedAt && !list.archivedAt;
@@ -129,6 +136,10 @@ export function paletteCommands({
       shortcut,
       run: () => navigate({ kind: target } as View),
     };
+
+  const key = viewKey(view);
+  const options = viewOptionsFor({ viewOptions }, view);
+  const layout = options.layout;
 
   const commands: (PaletteCommand | false | undefined)[] = [
     hasQuickAdd && {
@@ -176,6 +187,16 @@ export function paletteCommands({
       icon: Funnel,
       run: newFilter,
     },
+    key !== null &&
+      (view.kind !== 'list' || (editable && list.type === 'todo')) && {
+        id: 'toggle-layout',
+        label: layout === 'board' ? 'Show as list' : 'Show as board',
+        keywords: 'kanban layout columns',
+        icon: layout === 'board' ? ListIcon : Columns3,
+        keepsFocus: true,
+        run: () =>
+          setViewOptions(view, { ...options, layout: layout === 'board' ? 'list' : 'board' }),
+      },
     goTo('today', 'Today', CalendarDays, SHORTCUTS.today),
     goTo('tomorrow', 'Tomorrow', Sunrise),
     goTo('next7', 'Next 7 days', CalendarRange),

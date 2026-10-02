@@ -2,8 +2,9 @@ import clsx from 'clsx';
 import { useMemo, useRef } from 'react';
 import { EmptyState } from '@/components/views/ViewHeader';
 import { groupRows, sortRows } from '@/store/arrange';
+import { boardColumns, boardGroup, type BoardColumn } from '@/store/board';
 import { toSmartSections } from '@/components/views/arrangement';
-import type { GroupKey, List, SortKey } from '@/data/types';
+import type { GroupKey, List, SortKey, ViewLayout } from '@/data/types';
 import { useToday } from '@/hooks/useToday';
 import { ListIcon } from '@/components/ListIcon';
 import { useData } from '@/store/data';
@@ -11,8 +12,9 @@ import type { DueRow } from '@/store/smart';
 import { buildTree, flatten } from '@/store/tree';
 import { todoModel } from '@/store/todo';
 import { useUI } from '@/store/ui';
+import { Board } from './Board';
 import { QuickAdd } from './QuickAdd';
-import { SmartList } from './SmartList';
+import { SmartList, type SmartSection } from './SmartList';
 
 /**
  * A to-do list sorted or grouped some way other than its own: a flat list of
@@ -23,10 +25,12 @@ export function ArrangedTodoList({
   list,
   sort,
   group,
+  layout = 'list',
 }: {
   list: List;
   sort: SortKey;
   group: GroupKey;
+  layout?: ViewLayout;
 }) {
   const items = useData((s) => s.tables.items);
   const lists = useData((s) => s.tables.lists);
@@ -41,7 +45,10 @@ export function ArrangedTodoList({
     () => todoModel(items, list.id, sectionTable),
     [items, list.id, sectionTable],
   );
-  const sections = useMemo(() => {
+  const { sections, columns } = useMemo<{
+    sections: SmartSection[];
+    columns: BoardColumn[] | null;
+  }>(() => {
     // Every open task of the list, subtasks of collapsed parents included, as rows Today
     // would show, so the same sorts and groups apply. List order is the tree order.
     const live = Object.values(items).filter((i) => i.listId === list.id && !i.deletedAt);
@@ -59,16 +66,23 @@ export function ArrangedTodoList({
         parent: (row.item.parentId && items[row.item.parentId]) || null,
       }));
     const sorted = sortRows(rows, sort);
-    const grouped = groupRows(sorted, group === 'default' ? 'section' : group, {
+    const ctx = {
       today,
       lists,
       labels,
       sections: sectionTable,
       items,
       listId: list.id,
-    });
-    return toSmartSections(grouped);
-  }, [sort, group, list, items, lists, labels, sectionTable, today]);
+    };
+    if (layout === 'board') {
+      return {
+        sections: [],
+        columns: boardColumns(sorted, boardGroup({ kind: 'list', listId: list.id }, group), ctx),
+      };
+    }
+    const grouped = groupRows(sorted, group === 'default' ? 'section' : group, ctx);
+    return { sections: toSmartSections(grouped), columns: null };
+  }, [sort, group, layout, list, items, lists, labels, sectionTable, today]);
 
   return (
     <div className={clsx('px-6', several ? 'pb-24' : 'pb-10')}>
@@ -79,7 +93,15 @@ export function ArrangedTodoList({
           onArrowDown={() => listRef.current?.querySelector<HTMLElement>('[data-item-id]')?.focus()}
         />
       </div>
-      {sections.length ? (
+      {columns ? (
+        <div ref={listRef} className="mt-4 px-2">
+          <Board
+            columns={columns}
+            homeListId={list.id}
+            onExitTop={() => quickAddRef.current?.focus()}
+          />
+        </div>
+      ) : sections.length ? (
         <div ref={listRef} className="mt-4 px-2">
           <SmartList
             sections={sections}

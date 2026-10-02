@@ -105,12 +105,12 @@ for (const palette of PALETTES)
       await filterDialog.getByRole('button', { name: 'Create' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Phone calls' })).toBeVisible();
       await expectAccessible(page);
-      await page.getByRole('button', { name: 'Sort and group' }).click();
-      await expect(page.getByRole('dialog', { name: 'Sort and group' })).toBeVisible();
+      await page.getByRole('button', { name: 'View options' }).click();
+      await expect(page.getByRole('dialog', { name: 'View options' })).toBeVisible();
       await settled(page);
       await expectAccessible(page);
       await page.keyboard.press('Escape');
-      await expect(page.getByRole('dialog', { name: 'Sort and group' })).toBeHidden();
+      await expect(page.getByRole('dialog', { name: 'View options' })).toBeHidden();
 
       for (const view of [
         'Today',

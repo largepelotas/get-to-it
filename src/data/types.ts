@@ -260,6 +260,10 @@ export type BuiltInView = (typeof BUILT_IN_VIEWS)[number];
 export const CALENDAR_LAYOUTS = ['month', 'week', 'days'] as const;
 export type CalendarLayout = (typeof CALENDAR_LAYOUTS)[number];
 
+/** How a view shows its tasks: as a list, or as a board with a column per group. */
+export const VIEW_LAYOUTS = ['list', 'board'] as const;
+export type ViewLayout = (typeof VIEW_LAYOUTS)[number];
+
 /** How a view orders its tasks. `manual` is the list's own order (a smart view treats it as `date`). */
 export const SORT_KEYS = ['manual', 'date', 'priority', 'name', 'added'] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
@@ -276,10 +280,11 @@ export const GROUP_KEYS = [
 ] as const;
 export type GroupKey = (typeof GROUP_KEYS)[number];
 
-/** A view's sort and grouping, kept per view in `Settings.viewOptions`. */
+/** A view's sort, grouping and layout, kept per view in `Settings.viewOptions`. */
 export interface ViewOptions {
   sort: SortKey;
   group: GroupKey;
+  layout: ViewLayout;
 }
 
 /** The two searches the Eisenhower matrix is built from. */
@@ -315,7 +320,7 @@ export interface Settings {
   /** When the "Plan your day" reminder goes off, HH:mm. Null is off. */
   dailyReviewTime: string | null;
   /**
-   * Sort and grouping per view, by view key (`today`, `list:<id>`, `label:<id>`,
+   * Sort, grouping and layout per view, by view key (`today`, `list:<id>`, `label:<id>`,
    * `filter:<id>`). A view that isn't here uses its defaults.
    */
   viewOptions: Record<string, ViewOptions>;

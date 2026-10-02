@@ -2,11 +2,16 @@ import clsx from 'clsx';
 import { ArrowDownUp, Check } from 'lucide-react';
 import { useState } from 'react';
 import { IconButton, Popover } from '@/components/ui';
-import type { GroupKey, SortKey } from '@/data/types';
+import type { GroupKey, SortKey, ViewLayout } from '@/data/types';
 import type { View } from '@/store/ui';
 import { useViewOptions, type Choice } from './arrangement';
 
-/** One of the two sets of choices: a radio group drawn as a list. */
+const LAYOUTS: Choice<ViewLayout>[] = [
+  { key: 'list', label: 'List' },
+  { key: 'board', label: 'Board' },
+];
+
+/** One set of choices: a radio group drawn as a list. */
 function Choices<K extends string>({
   label,
   choices,
@@ -45,8 +50,8 @@ function Choices<K extends string>({
 }
 
 /**
- * The "Sort and group" control in a view's header: a popover with the sorts
- * and the groupings as two radio groups. Every view that lists tasks has one.
+ * The "View options" control in a view's header: a popover with the layout,
+ * the sorts and the groupings as radio groups. Every view that lists tasks has one.
  */
 export function ViewOptionsMenu({
   view,
@@ -57,25 +62,31 @@ export function ViewOptionsMenu({
   sorts: Choice<SortKey>[];
   groups: Choice<GroupKey>[];
 }) {
-  const { options, sort, group, set } = useViewOptions(view);
+  const { options, sort, group, layout, set } = useViewOptions(view);
   const [open, setOpen] = useState(false);
-  const custom = sort !== sorts[0].key || group !== 'default';
+  const custom = sort !== sorts[0].key || group !== 'default' || layout === 'board';
   return (
     <Popover
       open={open}
       onOpenChange={setOpen}
       align="end"
-      label="Sort and group"
+      label="View options"
       className="p-1"
       trigger={
         <IconButton
-          label="Sort and group"
+          label="View options"
           icon={<ArrowDownUp className="size-4" />}
           className={custom ? 'text-accent' : undefined}
         />
       }
     >
       <div className="flex gap-1">
+        <Choices
+          label="Layout"
+          choices={LAYOUTS}
+          value={layout}
+          onChange={(key) => set({ ...options, layout: key })}
+        />
         <Choices
           label="Sort by"
           choices={sorts}

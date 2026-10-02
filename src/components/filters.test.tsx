@@ -248,12 +248,12 @@ describe('filter view', () => {
 
 describe('sort and group', () => {
   type User = ReturnType<typeof userEvent.setup>;
-  /** Opens "Sort and group" (if it isn't) and picks a choice in one of its two groups. */
+  /** Opens "View options" (if it isn't) and picks a choice in one of its groups. */
   const pick = async (user: User, group: 'Sort by' | 'Group by', choice: string) => {
-    if (!screen.queryByRole('dialog', { name: 'Sort and group' })) {
-      await user.click(screen.getByRole('button', { name: 'Sort and group' }));
+    if (!screen.queryByRole('dialog', { name: 'View options' })) {
+      await user.click(screen.getByRole('button', { name: 'View options' }));
     }
-    const popover = await screen.findByRole('dialog', { name: 'Sort and group' });
+    const popover = await screen.findByRole('dialog', { name: 'View options' });
     await user.click(
       within(within(popover).getByRole('radiogroup', { name: group })).getByRole('radio', {
         name: choice,
@@ -276,7 +276,11 @@ describe('sort and group', () => {
     expect(screen.getByRole('region', { name: 'Work' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Home' })).toBeInTheDocument();
     expect(rowTexts()).toEqual(['Old thing', 'Write report', 'Buy milk']);
-    expect(useData.getState().settings.viewOptions.today).toEqual({ sort: 'name', group: 'list' });
+    expect(useData.getState().settings.viewOptions.today).toEqual({
+      sort: 'name',
+      group: 'list',
+      layout: 'list',
+    });
 
     await sortBy(user, 'Priority');
     expect(rowTexts()).toEqual(['Write report', 'Old thing', 'Buy milk']);
@@ -311,6 +315,7 @@ describe('sort and group', () => {
     expect(useData.getState().settings.viewOptions[`list:${work}`]).toEqual({
       sort: 'priority',
       group: 'default',
+      layout: 'list',
     });
 
     await sortBy(user, 'List order');

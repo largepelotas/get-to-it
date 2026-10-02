@@ -13,7 +13,13 @@ import { compileQuery, filterRows, resolvedDefaults } from '@/store/filters';
 import type { View } from '@/store/ui';
 import { SmartLayout } from './SmartViews';
 import { EmptyState, ViewHeader } from './ViewHeader';
-import { groupChoices, SMART_SORTS, toSmartSections, useViewOptions } from './arrangement';
+import {
+  groupChoices,
+  SMART_SORTS,
+  toSmartSections,
+  useBoard,
+  useViewOptions,
+} from './arrangement';
 import { ViewOptionsMenu } from './viewOptions';
 
 /**
@@ -43,6 +49,8 @@ export function FilterView({ filterId }: { filterId: string }) {
     () => resolvedDefaults(query, { lists, labels }),
     [query, lists, labels],
   );
+  // The hook runs whatever the query does; a filter that can't run has no rows to show.
+  const board = useBoard(view, rows);
   const sections = useMemo<SmartSection[]>(() => {
     const sorted = sortRows(rows, sort);
     if (group === 'default' || group === 'none') {
@@ -103,6 +111,7 @@ export function FilterView({ filterId }: { filterId: string }) {
       }
       defaultPriority={defaults.priority ?? undefined}
       sections={sections}
+      board={compiled.ok ? board : null}
       empty={
         compiled.ok ? (
           <EmptyState title="No tasks match this filter." />

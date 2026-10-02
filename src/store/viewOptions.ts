@@ -2,10 +2,12 @@ import {
   DEFAULT_MATRIX,
   GROUP_KEYS,
   SORT_KEYS,
+  VIEW_LAYOUTS,
   type GroupKey,
   type MatrixSettings,
   type Settings,
   type SortKey,
+  type ViewLayout,
   type ViewOptions,
 } from '@/data/types';
 import type { View } from './ui';
@@ -18,6 +20,7 @@ import type { View } from './ui';
 
 export const isSortKey = (v: unknown): v is SortKey => SORT_KEYS.includes(v as SortKey);
 export const isGroupKey = (v: unknown): v is GroupKey => GROUP_KEYS.includes(v as GroupKey);
+export const isViewLayout = (v: unknown): v is ViewLayout => VIEW_LAYOUTS.includes(v as ViewLayout);
 
 /** The settings key of a view that can be sorted and grouped, or null for one that can't (Archive, Trash…). */
 export function viewKey(view: View): string | null {
@@ -39,10 +42,14 @@ export function viewKey(view: View): string | null {
 }
 
 /** A list keeps its own order; every other view is by date. Grouping starts as the view's own. */
-export const DEFAULT_VIEW_OPTIONS: ViewOptions = { sort: 'manual', group: 'default' };
+export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
+  sort: 'manual',
+  group: 'default',
+  layout: 'list',
+};
 
 export function sameViewOptions(a: ViewOptions, b: ViewOptions): boolean {
-  return a.sort === b.sort && a.group === b.group;
+  return a.sort === b.sort && a.group === b.group && a.layout === b.layout;
 }
 
 /** The options a view uses: what was saved for it, with defaults for anything missing. */
@@ -63,10 +70,11 @@ export function cleanViewOptions(raw: unknown): Record<string, ViewOptions> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!value || typeof value !== 'object') continue;
-    const { sort, group } = value as Record<string, unknown>;
+    const { sort, group, layout } = value as Record<string, unknown>;
     const options: ViewOptions = {
       sort: isSortKey(sort) ? sort : DEFAULT_VIEW_OPTIONS.sort,
       group: isGroupKey(group) ? group : DEFAULT_VIEW_OPTIONS.group,
+      layout: isViewLayout(layout) ? layout : DEFAULT_VIEW_OPTIONS.layout,
     };
     if (!sameViewOptions(options, DEFAULT_VIEW_OPTIONS)) out[key] = options;
   }

@@ -146,3 +146,22 @@ export function toggleLabelOnItems(ids: string[], labelId: string): void {
     }
   });
 }
+
+/**
+ * Moves tasks from one label to another (a drop between board columns): takes
+ * `fromId` off and appends `toId` where missing. Either may be null. A task
+ * that ends up unchanged is not written. One undo step.
+ */
+export function swapLabelOnItems(ids: string[], fromId: string | null, toId: string | null): void {
+  commit('Labels', (tx) => {
+    const target = toId && tx.get('labels', toId) ? toId : null;
+    for (const id of ids) {
+      if (!canLabel(tx, id)) continue;
+      const current = tx.get('items', id)!.labelIds ?? [];
+      let next = fromId ? current.filter((l) => l !== fromId) : current;
+      if (target && !next.includes(target)) next = [...next, target];
+      if (next.length === current.length && next.every((l, i) => l === current[i])) continue;
+      tx.update('items', id, { labelIds: next });
+    }
+  });
+}

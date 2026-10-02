@@ -10,8 +10,8 @@ import { compareDue, type DueRow } from './smart';
  * and Today, Upcoming's days, a list's sections) or hands them to `groupRows`.
  */
 
-const PRIORITY_ORDER = [1, 2, 3, 0];
-const PRIORITY_TITLE: Record<number, string> = {
+export const PRIORITY_ORDER = [1, 2, 3, 0];
+export const PRIORITY_TITLE: Record<number, string> = {
   1: 'Priority 1',
   2: 'Priority 2',
   3: 'Priority 3',
@@ -76,6 +76,27 @@ export function dayTitle(date: DateKey, today: DateKey): string {
 }
 
 /**
+ * The section a row is shown under: its top-level ancestor's, or null when that
+ * task is unsectioned or names a section not in `known`. Shared with the board.
+ */
+export function sectionOfRow(row: DueRow, ctx: GroupContext, known: Set<string>): string | null {
+  // A subtask follows its parent's section; a task naming a missing section is unsectioned.
+  let top = row.parent ?? row.item;
+  if (ctx.items) {
+    // Subtasks carry no section of their own: walk up to the top-level ancestor.
+    top = row.item;
+    const seen = new Set<string>([top.id]);
+    while (top.parentId) {
+      const up: Item | undefined = ctx.items[top.parentId];
+      if (!up || seen.has(up.id)) break;
+      seen.add(up.id);
+      top = up;
+    }
+  }
+  return top.sectionId && known.has(top.sectionId) ? top.sectionId : null;
+}
+
+/**
  * Splits rows (already sorted) into groups, keeping each row's place within
  * its group. Empty groups are left out; with `none` (or `default`) there is
  * one bare group, or none when there are no rows.
@@ -137,22 +158,7 @@ export function groupRows(rows: DueRow[], group: GroupKey, ctx: GroupContext): R
         .filter((s) => s.listId === ctx.listId)
         .sort(bySortKey);
       const known = new Set(sections.map((s) => s.id));
-      // A subtask follows its parent's section; a task naming a missing section is unsectioned.
-      const sectionOf = (r: DueRow) => {
-        let top = r.parent ?? r.item;
-        if (ctx.items) {
-          // Subtasks carry no section of their own: walk up to the top-level ancestor.
-          top = r.item;
-          const seen = new Set<string>([top.id]);
-          while (top.parentId) {
-            const up: Item | undefined = ctx.items[top.parentId];
-            if (!up || seen.has(up.id)) break;
-            seen.add(up.id);
-            top = up;
-          }
-        }
-        return top.sectionId && known.has(top.sectionId) ? top.sectionId : null;
-      };
+      const sectionOf = (r: DueRow) => sectionOfRow(r, ctx, known);
       const groups: RowGroup[] = [];
       const loose = rows.filter((r) => !sectionOf(r));
       if (loose.length)

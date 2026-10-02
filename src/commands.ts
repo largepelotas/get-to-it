@@ -39,8 +39,13 @@ import {
   type ReminderSpec,
 } from './store/actions/reminders';
 import { createFilter, deleteFilter, renameFilter, updateFilter } from './store/actions/filters';
-import { createLabel, deleteLabel, renameLabel } from './store/actions/labels';
-import { createSection, deleteSection, UNTITLED_SECTION } from './store/actions/sections';
+import { createLabel, deleteLabel, renameLabel, swapLabelOnItems } from './store/actions/labels';
+import {
+  createSection,
+  deleteSection,
+  moveItemsToSection,
+  UNTITLED_SECTION,
+} from './store/actions/sections';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
 import {
   pauseTimer,
@@ -53,6 +58,7 @@ import {
   type FocusResult,
 } from './store/focus';
 import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
+import type { ColumnDrop } from './store/board';
 import { normalizeLabelName, sameLabelName } from './store/labels';
 import { DEFAULT_VIEW_OPTIONS, sameViewOptions, viewKey } from './store/viewOptions';
 import { listToMarkdown } from './store/markdown';
@@ -470,6 +476,55 @@ export function moveTasksToDay(ids: string[], date: string): void {
   if (!live.length || !recorded(() => setDueDates(live, date))) return;
   const day = formatDateKey(date);
   toastWithUndo(live.length === 1 ? `Moved to ${day}` : `Moved ${tasks(live.length)} to ${day}`);
+}
+
+/** Puts top-level tasks in a section (null: none), from a drop on a board column. One Undo toast. */
+export function moveTasksToSection(ids: string[], sectionId: string | null): void {
+  const { items, sections } = useData.getState().tables;
+  const live = liveIds(ids).filter(
+    (id) => !items[id].parentId && (items[id].sectionId ?? null) !== sectionId,
+  );
+  if (!live.length || !recorded(() => moveItemsToSection(live, sectionId))) return;
+  const name = sectionId ? (sections[sectionId]?.title ?? 'section') : 'No section';
+  toastWithUndo(live.length === 1 ? `Moved to ${name}` : `Moved ${tasks(live.length)} to ${name}`);
+}
+
+/**
+ * Takes a label off tasks and puts another on (a drop between label columns);
+ * a null `toId` only removes. One Undo toast.
+ */
+export function moveTasksToLabel(ids: string[], fromId: string | null, toId: string | null): void {
+  const { items, labels } = useData.getState().tables;
+  const to = toId && labels[toId] ? toId : null;
+  // Only the tasks the swap will change count in the toast.
+  const live = liveIds(ids).filter((id) => {
+    const current = items[id].labelIds ?? [];
+    return (fromId !== null && current.includes(fromId)) || (to !== null && !current.includes(to));
+  });
+  if (!live.length || !recorded(() => swapLabelOnItems(live, fromId, toId))) return;
+  const count = live.length === 1 ? '' : ` ${tasks(live.length)}`;
+  if (to)
+    toastWithUndo(count ? `Moved${count} to ${labels[to].name}` : `Moved to ${labels[to].name}`);
+  else {
+    const from = fromId ? (labels[fromId]?.name ?? 'label') : 'label';
+    toastWithUndo(`Removed label ${from}${count && ` from${count}`}`);
+  }
+}
+
+/** What a card dropped on a board column changes: its section, priority, date, label or list. */
+export function dropOnColumn(ids: string[], drop: ColumnDrop, from: ColumnDrop | null): void {
+  switch (drop.kind) {
+    case 'section':
+      return moveTasksToSection(ids, drop.sectionId);
+    case 'priority':
+      return setTasksPriority(ids, drop.priority);
+    case 'date':
+      return drop.date === null ? setTasksDue(ids, null) : moveTasksToDay(ids, drop.date);
+    case 'label':
+      return moveTasksToLabel(ids, from?.kind === 'label' ? from.labelId : null, drop.labelId);
+    case 'list':
+      return moveTasksToList(ids, drop.listId);
+  }
 }
 
 /**
