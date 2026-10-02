@@ -2,6 +2,8 @@ import { Archive, Ellipsis, Pin, Trash } from 'lucide-react';
 import { useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { addSection, restore, unarchive } from '@/commands';
 import { GroceryList } from '@/components/grocery/GroceryList';
+import { HabitDetailsPanel } from '@/components/habits/HabitDetails';
+import { HabitList } from '@/components/habits/HabitList';
 import { ArrangedTodoList } from '@/components/items/ArrangedTodoList';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { SelectionBar } from '@/components/items/SelectionBar';
@@ -90,6 +92,7 @@ function ListBody({ list, view }: { list: List; view: View }) {
   const { sort, group, layout } = useViewOptions(view);
   if (list.type === 'note') return <NoteBody list={list} />;
   if (list.type === 'grocery') return <GroceryList list={list} />;
+  if (list.type === 'habit') return <HabitList list={list} />;
   // A list arranged some other way than its own is drawn flat; a stored list keeps its order.
   const arranged =
     (sort !== 'manual' || group !== 'default' || layout === 'board') &&
@@ -178,6 +181,7 @@ export function ListView({ listId }: { listId: string }) {
         </div>
       </div>
       {list.type === 'todo' && <DetailsPanel listId={list.id} />}
+      {list.type === 'habit' && <HabitDetailsPanel listId={list.id} />}
     </div>
   );
 }

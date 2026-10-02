@@ -20,7 +20,7 @@ import {
   ShortcutsDialog,
 } from './lazy';
 
-const TYPES: ListType[] = ['todo', 'grocery', 'note'];
+const TYPES: ListType[] = ['todo', 'grocery', 'note', 'habit'];
 
 const PLACEHOLDER: Record<ListType, string> = {
   todo: 'e.g. This week',
@@ -72,7 +72,11 @@ function NewListDialog({ dialog }: { dialog: Extract<DialogState, { kind: 'newLi
         }}
         className="space-y-4"
       >
-        <div role="radiogroup" aria-label="List type" className="grid grid-cols-3 gap-2">
+        <div
+          role="radiogroup"
+          aria-label="List type"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+        >
           {TYPES.map((t) => {
             const Icon = LIST_TYPE_ICON[t];
             const selected = t === type;

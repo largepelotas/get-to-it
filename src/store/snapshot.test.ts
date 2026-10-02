@@ -543,8 +543,34 @@ describe('habits in snapshots', () => {
 
   // Bug prevented: a hand-edited goal (0 or 99 times a week) imported as it is.
   it('cleans a goal that is out of range', () => {
-    const parsed = parseSnapshot(habitFile([{ ...row, habit: { period: 'week', times: 99 } }]));
-    expect(parsed.tables.items.H.habit).toEqual({ period: 'week', times: 7 });
+    const list = createList({ type: 'habit' });
+    const habit = addHabit(list, 'Run')!;
+    const file = JSON.parse(exportNow());
+    file.tables.items.find((i: { id: string }) => i.id === habit).habit = {
+      period: 'week',
+      times: 99,
+    };
+    const parsed = parseSnapshot(JSON.stringify(file));
+    expect(parsed.tables.items[habit].habit).toEqual({ period: 'week', times: 7 });
+  });
+
+  // Bug prevented: a habit imported without a goal showing a tick box that does nothing.
+  it('gives a habit with no goal in the file the everyday goal', () => {
+    const list = createList({ type: 'habit' });
+    const habit = addHabit(list, 'Run')!;
+    const file = JSON.parse(exportNow());
+    file.tables.items.find((i: { id: string }) => i.id === habit).habit = null;
+    const parsed = parseSnapshot(JSON.stringify(file));
+    expect(parsed.tables.items[habit].habit).toEqual({ period: 'day' });
+  });
+
+  // Bug prevented: a task imported with a goal being counted as a habit and refusing to move,
+  // and check-ins left behind for something that isn't a habit.
+  it('drops a goal, and its check-ins, from an item outside a habit list', () => {
+    const checkIn = { id: 'C', itemId: 'H', day: '2020-01-02', createdAt: 1 };
+    const parsed = parseSnapshot(habitFile([{ ...row, habit: { period: 'day' } }], [checkIn]));
+    expect(parsed.tables.items.H.habit).toBeNull();
+    expect(parsed.tables.checkIns).toEqual({});
   });
 
   // Bug prevented: a check-in with a day that isn't a date breaking streaks.

@@ -329,6 +329,16 @@ export function parseSnapshot(json: string): LoadResult & { exportedAt: number |
       target[row.id] = row;
     });
   }
+  // A goal belongs on every item of a habit list and on nothing else; a file that says
+  // otherwise would leave habits that can't be ticked or tasks that can't be moved.
+  for (const item of Object.values(tables.items)) {
+    const inHabitList = tables.lists[item.listId]?.type === 'habit';
+    if (!inHabitList) item.habit = null;
+    else if (!item.habit) item.habit = { period: 'day' };
+  }
+  for (const checkIn of Object.values(tables.checkIns)) {
+    if (!tables.items[checkIn.itemId]?.habit) delete tables.checkIns[checkIn.id];
+  }
   const settings = checkSettings(snapshot.settings);
   if (settings.defaultListId && !tables.lists[settings.defaultListId])
     settings.defaultListId = null;
