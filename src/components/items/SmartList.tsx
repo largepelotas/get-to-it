@@ -19,6 +19,7 @@ import {
   toggleSelected,
   useUI,
 } from '@/store/ui';
+import { useFocus } from '@/store/focus';
 import { itemMenuEntries } from './itemMenu';
 import { ItemRow, type RowClickKind, type RowKeyMode } from './ItemRow';
 import { handleSelectionKey } from './selection';
@@ -64,6 +65,7 @@ export function SmartList({ sections, onExitTop, grid = false, homeListId }: Sma
   const selectedId = useUI((s) => s.selectedItemId);
   const multiIds = useUI((s) => s.multiSelectedIds);
   const reminded = useItemsWithReminders();
+  const focusedId = useFocus((s) => s.timer?.itemId ?? null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
   const visible = sections.flatMap((s) => s.rows);
@@ -223,6 +225,7 @@ export function SmartList({ sections, onExitTop, grid = false, homeListId }: Sma
                   selected={id === selectedId}
                   multiSelected={multiIds.includes(id)}
                   hasReminder={reminded.has(id)}
+                  focusing={focusedId === id}
                   tabbable={id === selectedId || (i === 0 && !selectionShown)}
                   onToggle={() => toggle(i)}
                   menu={() =>

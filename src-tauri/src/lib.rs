@@ -120,7 +120,7 @@ pub fn run() {
             files::write_files,
             files::write_backup,
             files::open_backups_folder,
-            tray::set_tray_tooltip,
+            tray::set_tray_status,
             quit_app,
             set_close_to_tray,
             app_ready,

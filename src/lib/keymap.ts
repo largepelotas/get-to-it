@@ -68,6 +68,7 @@ export const SHORTCUT_HELP: { title: string; entries: ShortcutHelp[] }[] = [
       { keys: ['1', '2', '3', '4'], label: 'Set priority 1, 2 or 3, or none' },
       { keys: ['L'], label: 'Add or remove labels' },
       { keys: ['V'], label: 'Move to another list' },
+      { keys: ['F', 'Shift+F'], label: 'Start a Pomodoro or a stopwatch on the task' },
       { keys: ['Shift+A'], label: 'Add a task at the top of the list' },
       {
         keys: ['Mod+Click', 'Shift+Click', 'Shift+ArrowUp', 'Shift+ArrowDown', 'Mod+A'],

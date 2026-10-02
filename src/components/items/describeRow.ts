@@ -19,7 +19,11 @@ export const originTitle = (origin: RowOrigin) =>
  */
 export function describeRow(
   row: FlatRow,
-  { hasReminder = false, origin }: { hasReminder?: boolean; origin?: RowOrigin } = {},
+  {
+    hasReminder = false,
+    origin,
+    focusing = false,
+  }: { hasReminder?: boolean; origin?: RowOrigin; focusing?: boolean } = {},
 ): string {
   const { item, childCount, doneCount } = row;
   const parts: string[] = [];
@@ -43,6 +47,7 @@ export function describeRow(
   }
   if (item.priority > 0) parts.push(PRIORITY_LABEL[item.priority]);
   if (hasReminder) parts.push('Reminder set');
+  if (focusing) parts.push('Focus timer running');
   if (childCount > 0) {
     parts.push(`${doneCount} of ${childCount} subtasks done${item.collapsed ? ', hidden' : ''}`);
   }

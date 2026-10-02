@@ -9,6 +9,7 @@ import { Kbd } from '@/components/ui';
 import type { List } from '@/data/types';
 import { formatDue } from '@/lib/dates';
 import { useData } from '@/store/data';
+import { useFocus } from '@/store/focus';
 import { queryTerms, search, type SearchResult, type Snippet } from '@/store/search';
 import { sidebarModel } from '@/store/sidebar';
 import { closeDialog, openList, useUI } from '@/store/ui';
@@ -135,6 +136,7 @@ export function CommandPalette() {
   const undoLabel = useData((s) => s.past[s.past.length - 1]?.label ?? null);
   const redoLabel = useData((s) => s.future[s.future.length - 1]?.label ?? null);
   const view = useUI((s) => s.view);
+  const timer = useFocus((s) => s.timer);
   // Whether the chosen action moves focus itself; otherwise focus goes back where it was.
   const movesFocus = useRef(false);
 
@@ -152,13 +154,14 @@ export function CommandPalette() {
       sidebarHidden,
       undoLabel,
       redoLabel,
+      timer,
     });
     if (!terms.length) return all.map((command) => ({ command, score: 0 }));
     return all
       .map((command) => ({ command, score: commandScore(command, terms) }))
       .filter((c): c is { command: PaletteCommand; score: number } => c.score !== null)
       .sort((a, b) => b.score - a.score);
-  }, [view, tables, theme, palette, sidebarHidden, undoLabel, redoLabel, terms]);
+  }, [view, tables, theme, palette, sidebarHidden, undoLabel, redoLabel, timer, terms]);
   const allLists = useMemo(() => {
     if (terms.length) return [];
     const model = sidebarModel(tables);

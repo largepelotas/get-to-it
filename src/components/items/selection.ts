@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import { setTasksPriority, toggleItems, trashItems } from '@/commands';
+import { setTasksPriority, startFocus, toggleItems, trashItems } from '@/commands';
 import type { Priority } from '@/data/types';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { matchesShortcut } from '@/lib/shortcuts';
@@ -113,6 +113,10 @@ export function handleSelectionKey(
     else pickLabels(ctx.id);
   } else if (is('v')) {
     openDialog({ kind: 'moveTasks', ids });
+  } else if (!several && is('f')) {
+    startFocus(ctx.id, 'pomodoro');
+  } else if (!several && is('Shift+F')) {
+    startFocus(ctx.id, 'stopwatch');
   } else if (is('Shift+A') && ctx.addAtTop) {
     ctx.addAtTop();
   } else if (several && (is('Backspace') || is('Delete'))) {

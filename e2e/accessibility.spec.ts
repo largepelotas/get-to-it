@@ -63,6 +63,17 @@ for (const palette of PALETTES)
       await row(page, 'Review deck').hover();
       await row(page, 'Review deck').getByRole('button', { name: 'Open details' }).click();
       await expectAccessible(page);
+      // With a focus timer running: the bar across the top and the clock in the panel.
+      await page.getByRole('button', { name: 'Start a stopwatch' }).click();
+      const focusBar = page.getByRole('toolbar', { name: 'Focus timer' });
+      await expect(focusBar).toBeVisible();
+      // A fading toast has part-transparent text, which axe reports as low contrast.
+      await expect(page.getByText('Stopwatch running on')).toBeHidden();
+      await settled(page);
+      await expectAccessible(page);
+      await focusBar.getByRole('button', { name: 'Stop' }).click();
+      await expect(focusBar).toBeHidden();
+      await expect(page.getByText('Stopped · under a minute')).toBeHidden();
       await openList(page, 'Welcome');
       await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
       await expectAccessible(page);

@@ -6,6 +6,7 @@ import { SHORTCUTS } from '@/lib/keymap';
 import { isMac } from '@/platform';
 import { useData } from '@/store/data';
 import { navigate, useUI } from '@/store/ui';
+import { FocusBar } from './focus/FocusBar';
 import { FilterView } from './views/FilterView';
 import { LabelView } from './views/LabelView';
 import { ListView } from './views/ListView';
@@ -67,6 +68,7 @@ export function MainPane() {
   return (
     <main data-region="view" className="flex h-full min-w-0 flex-1 flex-col bg-surface">
       {sidebarHidden && <ShowSidebarButton />}
+      <FocusBar />
       {view.kind === 'list' && listExists ? (
         <ListView key={view.listId} listId={view.listId} />
       ) : view.kind === 'label' ? (

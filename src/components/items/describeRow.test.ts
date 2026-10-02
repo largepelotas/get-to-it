@@ -102,4 +102,12 @@ describe('describeRow', () => {
       'Completed. Deadline Yesterday',
     );
   });
+
+  // Bug prevented: the timer icon on a row being invisible to a screen reader.
+  it('says a focus timer is running, after the reminder', () => {
+    expect(describeRow(row({}), { hasReminder: true, focusing: true })).toBe(
+      'Reminder set. Focus timer running',
+    );
+    expect(describeRow(row({}), { focusing: false })).toBe('');
+  });
 });

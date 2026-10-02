@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from 'react';
-import { announceDailyReview, announceMissed } from '@/commands';
+import { announceDailyReview, announceFocusEnd, announceMissed } from '@/commands';
 import { inboxEntries, reminderEntries, type ReminderEntry } from '@/lib/reminders';
 import { onReminderFired, setReminderSchedule } from '@/platform';
 import { useData } from '@/store/data';
+import { finishTimer } from '@/store/focus';
 import { useNow } from './useNow';
 import { startReminderScheduler } from '@/store/reminderScheduler';
 
@@ -15,6 +16,10 @@ export function useReminderScheduler(): void {
         onFired: onReminderFired,
         onMissed: announceMissed,
         onDailyReview: announceDailyReview,
+        onFocusEnd: () => {
+          const result = finishTimer();
+          if (result) announceFocusEnd(result);
+        },
       }),
     [],
   );

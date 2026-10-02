@@ -13,14 +13,19 @@ import {
   IndentDecrease,
   IndentIncrease,
   ListPlus,
+  Pause,
+  Play,
   Plus,
   PanelRight,
   Rows3,
   SkipForward,
   Sun,
+  Square,
   Sunrise,
   Tag,
+  Timer,
   Trash,
+  Watch,
 } from 'lucide-react';
 import { SHORTCUTS } from '@/lib/keymap';
 import { ListIcon } from '@/components/ListIcon';
@@ -28,9 +33,19 @@ import type { MenuEntries, MenuEntry } from '@/components/ui';
 import type { Item } from '@/data/types';
 import { addDaysKey, nextWeekKey, todayKey } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
-import { closeAsWontDo, duplicateTask, moveTaskToList, skipTask } from '@/commands';
+import {
+  closeAsWontDo,
+  duplicateTask,
+  moveTaskToList,
+  pauseFocus,
+  resumeFocus,
+  skipTask,
+  startFocus,
+  stopFocus,
+} from '@/commands';
 import { setDeadline, setDue, setPriority } from '@/store/actions/items';
 import { useData } from '@/store/data';
+import { useFocus } from '@/store/focus';
 import { liveTodoLists } from '@/store/sidebar';
 import { toggleLabelOnItems } from '@/store/actions/labels';
 import { sortedLabels } from '@/store/labels';
@@ -199,6 +214,35 @@ function labelEntries(item: Item): MenuEntries {
   ];
 }
 
+/** Start a Pomodoro or stopwatch on the task, or pause or stop the one running on it. */
+function focusEntries(item: Item): MenuEntries {
+  const { timer } = useFocus.getState();
+  if (timer?.itemId === item.id) {
+    const paused = timer.pausedAt !== null;
+    return [
+      paused
+        ? { label: 'Resume', icon: <Play className={icon} />, onSelect: resumeFocus }
+        : { label: 'Pause', icon: <Pause className={icon} />, onSelect: pauseFocus },
+      { label: 'Stop', icon: <Square className={icon} />, onSelect: stopFocus },
+    ];
+  }
+  const { focusMinutes } = useData.getState().settings;
+  return [
+    {
+      label: `Start Pomodoro (${focusMinutes} min)`,
+      icon: <Timer className={icon} />,
+      shortcut: 'F',
+      onSelect: () => startFocus(item.id, 'pomodoro'),
+    },
+    {
+      label: 'Start stopwatch',
+      icon: <Watch className={icon} />,
+      shortcut: 'Shift+F',
+      onSelect: () => startFocus(item.id, 'stopwatch'),
+    },
+  ];
+}
+
 /** The right-click menu of a task. */
 export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntries {
   const inCompleted = item.checked && !item.parentId;
@@ -251,6 +295,12 @@ export function itemMenuEntries(item: Item, actions: ItemMenuActions): MenuEntri
       label: 'Labels',
       icon: <Tag className={icon} />,
       entries: labelEntries(item),
+    },
+    !item.checked && {
+      kind: 'sub',
+      label: 'Focus',
+      icon: <Timer className={icon} />,
+      entries: focusEntries(item),
     },
     {
       kind: 'sub',

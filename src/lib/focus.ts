@@ -81,3 +81,31 @@ export function cleanMinutes(value: unknown, fallback: number, max: number): num
     ? value
     : fallback;
 }
+
+/**
+ * What the tray shows: a tooltip (what is due, what is running) and, where the
+ * platform has one, a short title with the clock. `parts` are the due-today
+ * and reminder phrases; `taskName` is the focused task's text.
+ */
+export function trayStatus(
+  parts: string[],
+  timer: FocusTimer | null,
+  now: number,
+  taskName: string | undefined,
+): { title: string | null; tooltip: string } {
+  if (!timer) {
+    return { title: null, tooltip: parts.length ? `Checklist · ${parts.join(', ')}` : 'Checklist' };
+  }
+  const clock = formatClock(clockSeconds(timer, now));
+  const paused = timer.pausedAt !== null;
+  const what =
+    timer.kind === 'break'
+      ? `Break, ${clock} left`
+      : timer.minutes === null
+        ? `${clock} on “${taskName ?? 'a task'}”`
+        : `${clock} left on “${taskName ?? 'a task'}”`;
+  return {
+    title: paused ? `⏸ ${clock}` : clock,
+    tooltip: `Checklist · ${paused ? 'Paused · ' : ''}${what}`,
+  };
+}

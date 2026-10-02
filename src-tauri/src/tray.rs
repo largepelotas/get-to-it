@@ -58,10 +58,12 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Shows a short status, such as how many tasks are due, when hovering the tray icon.
+/// The tooltip (what's due, what's running) and, where the platform shows
+/// one next to the icon (macOS, Linux), a short title such as the time left.
 #[tauri::command]
-pub fn set_tray_tooltip<R: Runtime>(app: AppHandle<R>, text: String) {
+pub fn set_tray_status<R: Runtime>(app: AppHandle<R>, tooltip: String, title: Option<String>) {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some(text));
+        let _ = tray.set_tooltip(Some(tooltip));
+        let _ = tray.set_title(title.as_deref());
     }
 }

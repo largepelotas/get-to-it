@@ -13,6 +13,7 @@ import {
   startTimer,
   stopTimer,
   stopTimerForItems,
+  stopTimerUnder,
   useFocus,
 } from './focus';
 
@@ -161,6 +162,21 @@ describe('stopTimerForItems', () => {
     expect(stopTimerForItems(['other'], T0 + 120 * SEC)).toBeNull();
     expect(timer()).not.toBeNull();
     expect(stopTimerForItems(['other', task], T0 + 120 * SEC)?.session?.seconds).toBe(120);
+    expect(timer()).toBeNull();
+  });
+});
+
+describe('stopTimerUnder', () => {
+  // Bug prevented: trashing a parent leaving a timer on its subtask running, logging time on a deleted task.
+  it('stops a timer on a descendant of the given task, not on a sibling', () => {
+    const child = createItem(list, { text: 'Child', parentId: task })!;
+    const grandchild = createItem(list, { text: 'Grandchild', parentId: child })!;
+    const sibling = createItem(list, { text: 'Sibling' })!;
+    const items = () => useData.getState().tables.items;
+    startTimer('stopwatch', grandchild, null, T0);
+    expect(stopTimerUnder([sibling], items(), T0 + 120 * SEC)).toBeNull();
+    expect(timer()).not.toBeNull();
+    expect(stopTimerUnder([task], items(), T0 + 120 * SEC)?.session?.seconds).toBe(120);
     expect(timer()).toBeNull();
   });
 });

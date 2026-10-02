@@ -8,6 +8,7 @@ import {
   NotebookText,
   PanelRight,
   Repeat,
+  Timer,
 } from 'lucide-react';
 import { useState, type CSSProperties, type KeyboardEvent, type Ref } from 'react';
 import { ContextMenu, IconButton, type MenuEntries } from '@/components/ui';
@@ -60,6 +61,8 @@ export interface ItemRowProps {
   onToggle?: (checked: boolean) => void;
   /** The task has a reminder still to go off. */
   hasReminder?: boolean;
+  /** The focus timer is running on this task. */
+  focusing?: boolean;
   /** One of several selected tasks. */
   multiSelected?: boolean;
   menu: () => MenuEntries;
@@ -178,6 +181,7 @@ export function ItemRow({
   timeOnly = false,
   onToggle,
   hasReminder = false,
+  focusing = false,
   multiSelected = false,
   menu,
   onKeyDown,
@@ -192,7 +196,7 @@ export function ItemRow({
   const hasNotes = !!item.details;
   // A row in a group of selected tasks says so (aria-selected isn't allowed on a list item).
   const description =
-    [multiSelected && 'Selected', describeRow(row, { hasReminder, origin })]
+    [multiSelected && 'Selected', describeRow(row, { hasReminder, origin, focusing })]
       .filter(Boolean)
       .join('. ') || '';
   const descriptionId = `row-desc-${item.id}`;
@@ -294,6 +298,7 @@ export function ItemRow({
               {doneCount}/{childCount}
             </span>
           )}
+          {focusing && <Timer aria-hidden className="size-3.5 text-accent" />}
           {hasReminder && <Bell aria-hidden className="size-3.5" />}
           {hasNotes && <NotebookText aria-hidden className="size-3.5" />}
           <LabelChips labels={labels} />

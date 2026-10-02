@@ -8,6 +8,7 @@ import {
   formatFocusTotal,
   isFinished,
   remainingMs,
+  trayStatus,
   type FocusTimer,
 } from './focus';
 
@@ -97,5 +98,44 @@ describe('cleanMinutes', () => {
       expect(cleanMinutes(bad, 25, 180)).toBe(25);
     expect(cleanMinutes(1, 25, 180)).toBe(1);
     expect(cleanMinutes(180, 25, 180)).toBe(180);
+  });
+});
+
+describe('trayStatus', () => {
+  const t0 = 1_000_000;
+  const name = 'Write plan';
+  // Bug prevented: the tray showing stale or malformed text for a running, paused or break timer.
+  it('has no title and the due summary when nothing runs', () => {
+    expect(trayStatus(['3 due today', '1 reminder'], null, t0, undefined)).toEqual({
+      title: null,
+      tooltip: 'Checklist · 3 due today, 1 reminder',
+    });
+    expect(trayStatus([], null, t0, undefined)).toEqual({ title: null, tooltip: 'Checklist' });
+  });
+
+  it('shows a stopwatch and a countdown', () => {
+    expect(
+      trayStatus([], timer({ kind: 'stopwatch', minutes: null }), 1_000_000 + 754_000, name),
+    ).toEqual({
+      title: '12:34',
+      tooltip: 'Checklist · 12:34 on “Write plan”',
+    });
+    expect(trayStatus([], timer(), 1_000_000 + 1000, name)).toEqual({
+      title: '24:59',
+      tooltip: 'Checklist · 24:59 left on “Write plan”',
+    });
+  });
+
+  it('shows a break and a pause', () => {
+    const br = timer({ kind: 'break', itemId: null, minutes: 5 });
+    expect(trayStatus([], br, 1_000_000 + 1000, undefined)).toEqual({
+      title: '4:59',
+      tooltip: 'Checklist · Break, 4:59 left',
+    });
+    const paused = timer({ kind: 'stopwatch', minutes: null, pausedAt: 1_000_000 + 754_000 });
+    expect(trayStatus([], paused, 1_000_000 + 900_000, name)).toEqual({
+      title: '⏸ 12:34',
+      tooltip: 'Checklist · Paused · 12:34 on “Write plan”',
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { FocusSession } from '@/data/types';
+import type { FocusSession, Item } from '@/data/types';
 import {
   elapsedMs,
   isFinished,
@@ -112,6 +112,26 @@ export function stopTimerForItems(ids: string[], now = Date.now()): FocusResult 
   const { timer } = useFocus.getState();
   if (!timer?.itemId || !ids.includes(timer.itemId)) return null;
   return stopTimer(now);
+}
+
+/** Stops the timer if its task is one of these or lies under one of them (a subtask of a deleted parent). */
+export function stopTimerUnder(
+  ids: string[],
+  items: Record<string, Item>,
+  now = Date.now(),
+): FocusResult | null {
+  const { timer } = useFocus.getState();
+  if (!timer?.itemId) return null;
+  const seen = new Set<string>();
+  for (
+    let id: string | null = timer.itemId;
+    id && !seen.has(id);
+    id = items[id]?.parentId ?? null
+  ) {
+    if (ids.includes(id)) return stopTimer(now);
+    seen.add(id);
+  }
+  return null;
 }
 
 /** A task's logged sessions, newest first. */
