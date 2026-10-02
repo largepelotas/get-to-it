@@ -128,6 +128,8 @@ Note       { listId, content /*rich text JSON*/, plainText, updatedAt }
 - Every view that lists tasks can be sorted (date, priority, name, date
   added; a list also by its own order) and grouped (date, priority, list,
   label; a list by its sections). The choice is remembered per view.
+- Any such view can also be shown as a **board**: a column per group,
+  with cards dragged between columns to change the task.
 - Any built-in view can be hidden from the sidebar in Settings.
 
 ### Grocery lists

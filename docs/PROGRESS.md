@@ -867,6 +867,53 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   block to change its end, no agenda layout, dragging has no keyboard
   path (the due picker covers it), the calendar shows open tasks only,
   and Today/Upcoming still don't list a task on its deadline day.
+- Boards (after M8; step 11 of `docs/todoist-gap.md`). Every view that
+  can be sorted and grouped (a to-do list, Today, Tomorrow, Next 7 days,
+  Upcoming, a label, a filter) can be shown as a board: a column per
+  group, with the tasks as cards that drag between columns. The choice is
+  a third field on `ViewOptions`, `layout` (`list` or `board`;
+  `VIEW_LAYOUTS` in `data/types.ts`), kept per view in
+  `settings.viewOptions` like sort and group, so an old entry without it
+  reads as `list` and no migration is needed; `cleanViewOptions` checks
+  it. The "Sort and group" popover is now "View options" and starts with
+  a Layout group; the palette has "Show as board" / "Show as list".
+  `store/board.ts` is the pure side: `boardGroup(view, group)` picks the
+  grouping a board uses when the view's choice is its own or none (a list
+  → sections, Next 7 days and Upcoming → date, the rest → priority), and
+  `boardColumns(rows, group, ctx)` gives the columns. Unlike `groupRows`
+  every column a card could land in is present even when empty: all four
+  priorities; "No section" then every section of the list; every label
+  then "No label"; for dates one "Overdue" column (only when there is
+  something overdue, and not a drop target), Today and Tomorrow always,
+  later days that have tasks, then "No date"; by list, the lists that have
+  tasks. Each column carries a `ColumnDrop` saying what landing on it
+  does. `sectionOfRow` (a subtask follows its top-level ancestor) moved
+  out of `groupRows` so both share it. Drops go through `dropOnColumn(ids,
+drop, from)` in `commands.ts`: a section column → `moveTasksToSection`
+  (top-level tasks only; wraps `moveItemsToSection`), a priority →
+  `setTasksPriority`, a day → `moveTasksToDay`, "No date" →
+  `setTasksDue(ids, null)`, a label → `moveTasksToLabel(ids, fromId, toId)`
+  (`swapLabelOnItems` in `store/actions/labels.ts` takes the source
+  column's label off and puts the target's on, one undo step; "No label"
+  only removes), a list → `moveTasksToList`. Each is one undo step with a
+  toast. UI: `components/items/Board.tsx` owns the DndContext and overlay
+  (pointer sensor, 5 px; a multi-selection moves together when the
+  dragged card is in it, via `dropIds`; a drop on the source column or on
+  Overdue does nothing; drop ids are `column:<key>` in `boardDrop.ts`) and
+  renders `SmartList` in its new `board` mode: a horizontally scrolling
+  row of `w-72` columns, each a `<section>` named by its title with a
+  count in the heading and "No tasks" when empty; rows are `ItemRow`
+  cards (`card` mode: text on the first line, the date, labels, flag and
+  origin on a second). The arrow keys run down a column and on into the
+  next. `useBoard(view, rows)` in `views/arrangement.ts` gives a view its
+  columns (null in list layout) and `SmartLayout` takes them as `board`;
+  a list in board layout goes through `ArrangedTodoList`, so its
+  completed tasks are not shown (the existing note says so). Not done: no
+  reordering of cards inside a column (the order is the sort, or the
+  list's own), no adding a task from a column, no collapsing or resizing
+  columns, no keyboard path for moving a card (T, 1–4, L and the task
+  menu cover it), and in Upcoming's board layout the week strip is not a
+  drop target (the board's DndContext is nested inside Upcoming's).
 
 ### Accessibility and loading (M8)
 
