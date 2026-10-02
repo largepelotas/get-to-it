@@ -4,6 +4,7 @@ import { toTimestamp } from './dates';
 import {
   describeReminder,
   fireKey,
+  fireMark,
   fireTime,
   formatOffset,
   dailyReviewAt,
@@ -84,14 +85,59 @@ describe('fireTime', () => {
 });
 
 describe('reminderState', () => {
-  const t = 1000;
+  const t = at('2026-10-05', '14:45');
+  const mark = fireMark(reminder(), item(), t);
+
   it('is stored per fire time', () => {
-    expect(reminderState(reminder(), t, 500)).toBe('scheduled');
-    expect(reminderState(reminder(), t, 1000)).toBe('due');
-    expect(reminderState(reminder({ firedFor: t }), t, 2000)).toBe('fired');
-    expect(reminderState(reminder({ firedFor: t, dismissedFor: t }), t, 2000)).toBe('done');
-    // Delivered for an earlier time: pending again.
-    expect(reminderState(reminder({ firedFor: 400, dismissedFor: 400 }), t, 500)).toBe('scheduled');
+    expect(reminderState(reminder(), item(), t, t - 1)).toBe('scheduled');
+    expect(reminderState(reminder(), item(), t, t)).toBe('due');
+    expect(reminderState(reminder({ firedFor: mark }), item(), t, t + 1)).toBe('fired');
+    const done = reminder({ firedFor: mark, dismissedFor: mark });
+    expect(reminderState(done, item(), t, t + 1)).toBe('done');
+    // Delivered for an earlier date: pending again.
+    const next = item({ dueDate: '2026-10-06' });
+    expect(reminderState(done, next, at('2026-10-06', '14:45'), t + 1)).toBe('scheduled');
+  });
+
+  it('still reads a fire time stored as it was before marks', () => {
+    expect(reminderState(reminder({ firedFor: t }), item(), t, t + 1)).toBe('fired');
+    expect(reminderState(reminder({ dismissedFor: t }), item(), t, t + 1)).toBe('done');
+  });
+
+  it('marks a fixed moment or a snooze with the moment itself', () => {
+    const absolute = reminder({ kind: 'absolute', offsetMinutes: null, at: 123 });
+    expect(fireMark(absolute, item(), 123)).toBe(123);
+    const until = at('2026-10-05', '16:00');
+    expect(fireMark(reminder({ snoozedUntil: until }), item(), until)).toBe(until);
+  });
+
+  // Bug prevented: every delivered reminder coming back as new after flying somewhere, or
+  // after changing when all-day reminders go off.
+  it('keeps a reminder dealt with when the time zone or the all-day time changes', () => {
+    const zone = process.env.TZ;
+    const entry = (r: Reminder, i: Item, allDay: string) =>
+      reminderEntries(
+        { reminders: { r }, items: { i }, lists: { l: list } },
+        allDay,
+        Date.now(),
+      )[0];
+    try {
+      process.env.TZ = 'America/New_York';
+      const timed = entry(reminder(), item(), '09:00');
+      const fired = reminder({ firedFor: fireMark(reminder(), item(), timed.at) });
+      const allDay = item({ dueTime: null });
+      const early = entry(reminder(), allDay, '09:00');
+      const dismissed = reminder({ dismissedFor: fireMark(reminder(), allDay, early.at) });
+
+      process.env.TZ = 'Asia/Tokyo';
+      const moved = entry(fired, item(), '09:00');
+      expect(moved.at).not.toBe(timed.at);
+      expect(moved.state).toBe('fired');
+      expect(entry(dismissed, allDay, '07:30').state).toBe('done');
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
   });
 });
 

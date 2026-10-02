@@ -40,11 +40,17 @@ const HISTORY_LIMIT = 200;
 const COALESCE_MS = 2000;
 const FLUSH_MS = 150;
 const RETRY_MS = 2000;
+const RETRY_MAX_MS = 30_000;
 
 let repo: Repository | null = null;
 let pending = new Map<string, WriteOp>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let chain: Promise<void> = Promise.resolve();
+/** A save has failed and its changes are back in `pending`, waiting to be tried again. */
+let failed = false;
+let retryMs = RETRY_MS;
+/** Goes up when the data is replaced, so a save that fails afterwards isn't tried again. */
+let epoch = 0;
 let nextEntryId = 1;
 
 function normalizeSettings(stored: Partial<Settings>): Settings {
@@ -94,8 +100,13 @@ function queue(ops: WriteOp[]): void {
   if (!timer) timer = setTimeout(() => void flushWrites(), FLUSH_MS);
 }
 
-/** Writes queued changes now. Resolves once everything queued so far is saved (or failed). */
-export function flushWrites(retry = true): Promise<void> {
+/**
+ * Writes queued changes now. Resolves once everything queued so far has been
+ * tried. Changes that couldn't be saved go back in the queue and are tried again,
+ * a little later each time, for as long as the app runs; `hasUnsavedChanges`
+ * says whether any are left.
+ */
+export function flushWrites(): Promise<void> {
   if (timer) {
     clearTimeout(timer);
     timer = null;
@@ -103,31 +114,49 @@ export function flushWrites(retry = true): Promise<void> {
   if (!repo || pending.size === 0) return chain;
   const ops = [...pending.values()];
   pending = new Map();
+  // This batch holds everything that failed before, so it starts with a clean slate.
+  failed = false;
   const target = repo;
-  chain = chain.then(() =>
-    target.write(ops).then(
+  const started = epoch;
+  chain = chain.then(() => {
+    // The data was replaced while this waited its turn: these rows belong to the old set.
+    if (started !== epoch) return;
+    return target.write(ops).then(
       () => {
-        if (useData.getState().saveError) useData.setState({ saveError: null });
+        if (started !== epoch) return;
+        retryMs = RETRY_MS;
+        // An earlier batch that failed meanwhile is still waiting, so the warning stays.
+        if (!failed && useData.getState().saveError) useData.setState({ saveError: null });
       },
       (err: unknown) => {
         console.error('Saving failed', err);
+        if (started !== epoch) return;
         useData.setState({ saveError: err instanceof Error ? err.message : String(err) });
-        if (!retry) return;
-        // Retry once, unless a newer write for the same row is already queued.
-        for (const op of ops) if (!pending.has(opKey(op))) pending.set(opKey(op), op);
-        setTimeout(() => void flushWrites(false), RETRY_MS);
+        // Back in the queue, under any newer write for the same row.
+        const waiting = pending;
+        pending = new Map(ops.map((op) => [opKey(op), op]));
+        for (const [key, op] of waiting) pending.set(key, op);
+        failed = true;
+        timer ??= setTimeout(() => void flushWrites(), retryMs);
+        retryMs = Math.min(retryMs * 2, RETRY_MAX_MS);
       },
-    ),
-  );
+    );
+  });
   return chain;
 }
 
-function toOps(changes: Change[], side: 'before' | 'after', touch?: number): WriteOp[] {
+/** True while changes are waiting to be saved, including ones that failed and will be tried again. */
+export function hasUnsavedChanges(): boolean {
+  return pending.size > 0;
+}
+
+/** A put or delete for each changed row, as it now stands in `tables`. */
+function rowOps(tables: Tables, changes: Change[]): WriteOp[] {
   return changes.map((c) => {
-    const row = c[side];
-    if (!row) return { kind: 'delete', table: c.table, id: c.id };
-    const stamped = touch && 'updatedAt' in row ? { ...row, updatedAt: touch } : row;
-    return { kind: 'put', table: c.table, row: stamped };
+    const row = tables[c.table][c.id];
+    return row
+      ? { kind: 'put', table: c.table, row }
+      : { kind: 'delete', table: c.table, id: c.id };
   });
 }
 
@@ -152,7 +181,7 @@ export function commit<R>(label: string, fn: (tx: Tx) => R, options: CommitOptio
   const tables = applyChanges(state.tables, changes, 'after');
   // Queue the save before updating the store: a listener may commit in
   // response (reminder bookkeeping), and its newer write must win.
-  queue(toOps(changes, 'after'));
+  queue(rowOps(tables, changes));
   if (options.undoable === false) {
     const removed = new Set(changes.filter((c) => !c.after).map((c) => `${c.table}:${c.id}`));
     useData.setState(removed.size ? { tables, ...pruneHistory(state, removed) } : { tables });
@@ -195,10 +224,10 @@ export function undo(): string | null {
   const state = useData.getState();
   const entry = state.past[state.past.length - 1];
   if (!entry) return null;
-  const now = Date.now();
-  queue(toOps(entry.changes, 'before', now));
+  const tables = applyChanges(state.tables, entry.changes, 'before', Date.now());
+  queue(rowOps(tables, entry.changes));
   useData.setState({
-    tables: applyChanges(state.tables, entry.changes, 'before', now),
+    tables,
     past: state.past.slice(0, -1),
     future: [...state.future, entry],
   });
@@ -209,10 +238,10 @@ export function redo(): string | null {
   const state = useData.getState();
   const entry = state.future[state.future.length - 1];
   if (!entry) return null;
-  const now = Date.now();
-  queue(toOps(entry.changes, 'after', now));
+  const tables = applyChanges(state.tables, entry.changes, 'after', Date.now());
+  queue(rowOps(tables, entry.changes));
   useData.setState({
-    tables: applyChanges(state.tables, entry.changes, 'after', now),
+    tables,
     past: [...state.past, entry],
     future: state.future.slice(0, -1),
   });
@@ -243,11 +272,13 @@ export async function replaceData(data: LoadResult, keep: (keyof Settings)[] = [
   const current = useData.getState().settings;
   const settings: Partial<Settings> = { ...data.settings };
   for (const key of keep) (settings as Record<string, unknown>)[key] = current[key];
-  await repo.replaceAll({ tables: data.tables, settings });
+  const target = repo;
+  // In line behind any save still running, so none of them can land on top of it.
+  const replaced = chain.then(() => target.replaceAll({ tables: data.tables, settings }));
+  chain = replaced.catch(() => {});
+  await replaced;
   // Anything queued meanwhile (or waiting to retry) was for the old data.
-  pending = new Map();
-  if (timer) clearTimeout(timer);
-  timer = null;
+  forgetPending();
   useData.setState({
     tables: data.tables,
     settings: normalizeSettings(settings),
@@ -257,12 +288,20 @@ export async function replaceData(data: LoadResult, keep: (keyof Settings)[] = [
   });
 }
 
-/** Replaces all data in memory and storage, e.g. for tests. Clears undo history. */
-export function resetForTests(repository: Repository | null, tables = emptyTables()): void {
-  repo = repository;
+/** Drops every queued save, and any retry of one that failed. */
+function forgetPending(): void {
   pending = new Map();
   if (timer) clearTimeout(timer);
   timer = null;
+  failed = false;
+  retryMs = RETRY_MS;
+  epoch++;
+}
+
+/** Replaces all data in memory and storage, e.g. for tests. Clears undo history. */
+export function resetForTests(repository: Repository | null, tables = emptyTables()): void {
+  repo = repository;
+  forgetPending();
   chain = Promise.resolve();
   useData.setState({
     ready: true,

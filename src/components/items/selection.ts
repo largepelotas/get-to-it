@@ -17,6 +17,9 @@ import {
 } from '@/store/ui';
 import type { RowKeyMode } from './ItemRow';
 
+/** The priority keys: 1 to 3, and 4 for none. */
+const DIGITS = ['1', '2', '3', '4'];
+
 const ROW_SELECTOR = '[role="listitem"][data-item-id]';
 const rowIds = () =>
   Array.from(document.querySelectorAll<HTMLElement>(ROW_SELECTOR), (el) => el.dataset.itemId!);
@@ -106,8 +109,9 @@ export function handleSelectionKey(
   } else if (is('t')) {
     if (several) setSelectionDateOpen(true);
     else pickDueDate(ctx.id);
-  } else if (['1', '2', '3', '4'].some((n) => is(n))) {
-    setTasksPriority(ids, (Number(e.key) % 4) as Priority);
+  } else if (DIGITS.some((n) => is(n))) {
+    // Which shortcut matched, not `e.key`: on AZERTY the digit keys print other characters.
+    setTasksPriority(ids, (Number(DIGITS.find((n) => is(n))) % 4) as Priority);
   } else if (is('l')) {
     if (several) setSelectionLabelsOpen(true);
     else pickLabels(ctx.id);

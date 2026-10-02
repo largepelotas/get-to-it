@@ -6,6 +6,17 @@ export interface SqlExecutor {
   select(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
   /** Runs all statements in one transaction. */
   batch(statements: { sql: string; params: unknown[] }[]): Promise<void>;
+  /** Saves a copy of the whole database under this label, where the executor can. */
+  backup?(label: string): Promise<void>;
+}
+
+/** Thrown when the database was last written by a newer version of the app. */
+export class NewerDatabaseError extends Error {
+  constructor() {
+    super(
+      'Your data was saved by a newer version of Checklist. Install the latest version to open it.',
+    );
+  }
 }
 
 type ColumnType = 'text' | 'int' | 'bool' | 'json';
@@ -389,6 +400,15 @@ export class SqliteRepository implements Repository {
     this.ready ??= (async () => {
       const [row] = await this.db.select('PRAGMA user_version');
       const version = Number(row?.user_version ?? 0);
+      // Writing with an older idea of the tables would blank the columns it doesn't know.
+      if (version > MIGRATIONS.length) throw new NewerDatabaseError();
+      if (version > 0 && version < MIGRATIONS.length) {
+        // A copy of the file as it was, in case a migration goes wrong. Not having
+        // one is no reason to stop: each migration is all or nothing.
+        await this.db.backup?.(`before-update-v${version}`).catch((err: unknown) => {
+          console.error('Couldn’t copy the database before updating it', err);
+        });
+      }
       for (let v = version; v < MIGRATIONS.length; v++) {
         await this.db.batch([
           ...MIGRATIONS[v].map((sql) => ({ sql, params: [] })),

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 use tauri_plugin_opener::OpenerExt;
 
 #[derive(Debug, Deserialize)]
@@ -15,10 +15,8 @@ pub struct OutFile {
     pub contents: String,
 }
 
-fn backups_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
+pub fn backups_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    let dir = crate::data_dir(app)
         .map_err(|e| e.to_string())?
         .join("backups");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

@@ -1,6 +1,8 @@
 /**
  * Keyboard shortcuts written as `Mod+Shift+Z`. `Mod` is ⌘ on macOS and Ctrl
  * elsewhere. The key is compared case-insensitively against `event.key`.
+ * Digits and the punctuation keys in `PHYSICAL_KEYS` also match by where the
+ * key is on the keyboard, for layouts that can't type them plainly.
  */
 export type Shortcut = string;
 
@@ -21,22 +23,53 @@ function parse(shortcut: Shortcut): Parsed {
 
 interface KeyLike {
   key: string;
+  /** The physical key (`Digit1`, `Slash`), whatever the layout prints on it. */
+  code?: string;
   metaKey: boolean;
   ctrlKey: boolean;
   shiftKey: boolean;
   altKey: boolean;
 }
 
+/**
+ * Where the digits and the punctuation used in shortcuts sit on a US keyboard.
+ * Other layouts print something else there, or need Shift to reach the
+ * character: AZERTY has the digits on Shift, and a German keyboard has `/` on
+ * Shift+7 and no plain `\` at all.
+ */
+const PHYSICAL_KEYS: Record<string, string> = {
+  '/': 'Slash',
+  '\\': 'Backslash',
+  ',': 'Comma',
+  ...Object.fromEntries(Array.from('0123456789', (d) => [d, `Digit${d}`])),
+};
+
+/**
+ * A plain letter or digit: a key that already means something, so its position
+ * is not consulted. Accented letters don't count: AZERTY prints é, è, ç and à
+ * on its digit keys.
+ */
+const ALPHANUMERIC = /^[a-z0-9]$/i;
+
 export function matchesShortcut(event: KeyLike, shortcut: Shortcut, mac: boolean): boolean {
   const s = parse(shortcut);
   const wantMeta = mac && s.mod;
   const wantCtrl = s.ctrl || (!mac && s.mod);
+  if (event.metaKey !== wantMeta || event.ctrlKey !== wantCtrl || event.altKey !== s.alt) {
+    return false;
+  }
+  const code = PHYSICAL_KEYS[s.key];
+  if (event.key.toLowerCase() === s.key.toLowerCase()) {
+    // Where the layout needs Shift to type the character (1 on AZERTY, / on a German
+    // keyboard) the Shift is part of typing it. A US layout never gets here with Shift
+    // held: Shift+1 is "!" there.
+    return event.shiftKey === s.shift || (!!code && !s.shift);
+  }
+  // The key in the US position, for layouts that print something else on it. A key that
+  // types a letter or digit is left alone: on Dvorak the Slash position is Z, and ⌘Z
+  // must stay Undo.
   return (
-    event.metaKey === wantMeta &&
-    event.ctrlKey === wantCtrl &&
-    event.shiftKey === s.shift &&
-    event.altKey === s.alt &&
-    event.key.toLowerCase() === s.key.toLowerCase()
+    !!code && event.code === code && event.shiftKey === s.shift && !ALPHANUMERIC.test(event.key)
   );
 }
 

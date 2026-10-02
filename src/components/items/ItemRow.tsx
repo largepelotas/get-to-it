@@ -76,10 +76,15 @@ export interface ItemRowProps {
   onOpenDetails: () => void;
 }
 
+/** A title this long or shorter is never cut short; a longer one keeps about this much. */
+const TITLE_FLOOR = 9;
+
 /**
  * The task text, edited in place. Changes save as you type. The field is as
  * wide as its text (a hidden copy sizes it), so clicking the empty part of
- * the row selects the row instead of starting to type.
+ * the row selects the row instead of starting to type. In a tight row it
+ * shortens with an ellipsis, but only so far: after that the details on the
+ * right give way instead.
  */
 function ItemText({
   id,
@@ -99,7 +104,13 @@ function ItemText({
   const [draft, setDraft] = useState<string | null>(null);
   const value = draft ?? text;
   return (
-    <span className={clsx('grid min-w-0 text-sm', fill && 'flex-1')}>
+    <span
+      data-row-title
+      className={clsx(
+        'grid text-sm',
+        fill ? 'min-w-0 flex-1' : value.length > TITLE_FLOOR ? 'min-w-[9ch]' : 'shrink-0',
+      )}
+    >
       <span aria-hidden className="invisible col-start-1 row-start-1 truncate pr-1 whitespace-pre">
         {value || ' '}
       </span>
@@ -140,13 +151,17 @@ function DueLabel({
 }) {
   const content = (
     <>
-      {repeats && <Repeat aria-hidden className="size-3" />}
+      {repeats && <Repeat aria-hidden className="size-3 shrink-0" />}
       {label}
     </>
   );
   const tone = overdue ? 'text-danger' : 'hover:text-fg';
   if (!onPick) {
-    return <span className={clsx('flex items-center gap-1', tone)}>{content}</span>;
+    return (
+      <span className={clsx('flex shrink-0 items-center gap-1 whitespace-nowrap', tone)}>
+        {content}
+      </span>
+    );
   }
   return (
     <button
@@ -157,7 +172,10 @@ function DueLabel({
         e.stopPropagation();
         onPick();
       }}
-      className={clsx('-mx-1 flex items-center gap-1 rounded px-1 py-0.5 hover:bg-line', tone)}
+      className={clsx(
+        '-mx-1 flex shrink-0 items-center gap-1 rounded px-1 py-0.5 whitespace-nowrap hover:bg-line',
+        tone,
+      )}
     >
       {content}
     </button>
@@ -324,20 +342,26 @@ export function ItemRow({
         )}
         {(!card || hasMeta) && (
           <span
+            data-row-meta
             className={clsx(
-              'flex shrink-0 items-center gap-2 pl-1 text-xs text-fg-subtle',
+              'flex items-center gap-2 pl-1 text-xs text-fg-subtle',
               // Under the text: past the grip, the chevron slot (no origin) and the checkbox.
-              card && ['order-last basis-full flex-wrap', origin ? 'pl-11' : 'pl-16'],
+              card
+                ? ['order-last shrink-0 basis-full flex-wrap', origin ? 'pl-11' : 'pl-16']
+                : // When the row is too narrow for everything, this gives way once the text is
+                  // down to its shortest: the label chips first, then the list name, and the
+                  // rest (the date among it) is clipped only after those are gone.
+                  'min-w-0 overflow-hidden',
             )}
           >
             {childCount > 0 && (
-              <span aria-hidden className="tabular-nums">
+              <span aria-hidden className="shrink-0 tabular-nums">
                 {doneCount}/{childCount}
               </span>
             )}
-            {focusing && <Timer aria-hidden className="size-3.5 text-accent" />}
-            {hasReminder && <Bell aria-hidden className="size-3.5" />}
-            {hasNotes && <NotebookText aria-hidden className="size-3.5" />}
+            {focusing && <Timer aria-hidden className="size-3.5 shrink-0 text-accent" />}
+            {hasReminder && <Bell aria-hidden className="size-3.5 shrink-0" />}
+            {hasNotes && <NotebookText aria-hidden className="size-3.5 shrink-0" />}
             <LabelChips labels={labels} />
             {item.dueDate && (!timeOnly || item.dueTime || item.recurrence) && (
               <DueLabel
@@ -356,18 +380,18 @@ export function ItemRow({
               <span
                 aria-hidden
                 className={clsx(
-                  'flex items-center gap-1',
+                  'flex shrink-0 items-center gap-1 whitespace-nowrap',
                   !item.checked && item.deadline < todayKey() && 'text-danger',
                 )}
               >
-                <Hourglass className="size-3" />
+                <Hourglass className="size-3 shrink-0" />
                 {formatDateKey(item.deadline)}
               </span>
             )}
             {item.priority > 0 && (
               <Flag
                 aria-hidden
-                className="size-3.5"
+                className="size-3.5 shrink-0"
                 style={{ color: colorVar(PRIORITY_COLOR[item.priority]) }}
               />
             )}

@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRepository } from '@/data/memory';
 import {
   commit,
   flushWrites,
+  hasUnsavedChanges,
   initData,
   redo,
+  replaceData,
   resetForTests,
   undo,
   undoEntry,
@@ -12,7 +14,15 @@ import {
   useData,
 } from './data';
 import { createFolder, deleteFolder } from './actions/folders';
-import { createList, deleteList, moveList, renameList, restoreList } from './actions/lists';
+import {
+  createList,
+  deleteList,
+  moveList,
+  renameList,
+  restoreList,
+  setShowCompleted,
+} from './actions/lists';
+import { emptyTables } from '@/data/types';
 
 let repo: MemoryRepository;
 
@@ -77,6 +87,144 @@ describe('commit and history', () => {
     expect(undoEntry(entry)).toBe(false);
     expect(undoEntry(lastEntryId()!)).toBe(true);
     expect(lists()[id].deletedAt).toBeNull();
+  });
+});
+
+describe('undo next to changes outside history', () => {
+  it('puts back only what the undone step changed', async () => {
+    const id = createList({ type: 'todo', title: 'Inbox' });
+    renameList(id, 'Work');
+    // Not undoable, and made after the rename.
+    setShowCompleted(id, false);
+    expect(lists()[id].showCompleted).toBe(false);
+
+    undo();
+    expect(lists()[id].title).toBe('Inbox');
+    expect(lists()[id].showCompleted).toBe(false);
+    await flushWrites();
+    expect((await repo.load()).tables.lists[id]).toMatchObject({
+      title: 'Inbox',
+      showCompleted: false,
+    });
+
+    setShowCompleted(id, true);
+    redo();
+    expect(lists()[id]).toMatchObject({ title: 'Work', showCompleted: true });
+  });
+
+  it('still removes a row when its creation is undone, and brings it back whole', () => {
+    const id = createList({ type: 'todo', title: 'Inbox' });
+    setShowCompleted(id, false);
+    undo();
+    expect(lists()[id]).toBeUndefined();
+    redo();
+    expect(lists()[id].title).toBe('Inbox');
+  });
+});
+
+describe('saving that fails', () => {
+  /** Fails every write until `heal` is called. */
+  class FlakyRepository extends MemoryRepository {
+    failing = true;
+    attempts = 0;
+    override async write(ops: Parameters<MemoryRepository['write']>[0]): Promise<void> {
+      this.attempts++;
+      if (this.failing) throw new Error('disk full');
+      return super.write(ops);
+    }
+  }
+  let flaky: FlakyRepository;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    flaky = new FlakyRepository();
+    resetForTests(flaky);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the changes and keeps trying until they are saved', async () => {
+    const id = createList({ type: 'todo', title: 'Inbox' });
+    await flushWrites();
+    expect(useData.getState().saveError).toBe('disk full');
+    expect(hasUnsavedChanges()).toBe(true);
+
+    // Each retry waits longer, and none of them gives up.
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(flaky.attempts).toBe(4);
+    expect(hasUnsavedChanges()).toBe(true);
+
+    flaky.failing = false;
+    await vi.advanceTimersByTimeAsync(16000);
+    expect(hasUnsavedChanges()).toBe(false);
+    expect(useData.getState().saveError).toBeNull();
+    expect((await flaky.load()).tables.lists[id].title).toBe('Inbox');
+  });
+
+  it('saves a newer edit to the same row rather than the one that failed', async () => {
+    const id = createList({ type: 'todo', title: 'Inbox' });
+    await flushWrites();
+    renameList(id, 'Work');
+    flaky.failing = false;
+    await flushWrites();
+    expect((await flaky.load()).tables.lists[id].title).toBe('Work');
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it('keeps the warning while an earlier failed batch is still waiting', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const write = vi.spyOn(flaky, 'write');
+    // The first batch fails only once the second is already in line behind it.
+    write.mockImplementationOnce(async () => {
+      await held;
+      throw new Error('disk full');
+    });
+    flaky.failing = false;
+    const first = createList({ type: 'todo', title: 'First' });
+    void flushWrites();
+    const second = createList({ type: 'todo', title: 'Second' });
+    const done = flushWrites();
+    release();
+    await done;
+
+    const saved = (await flaky.load()).tables.lists;
+    expect(saved[second]).toBeDefined();
+    expect(saved[first]).toBeUndefined();
+    expect(useData.getState().saveError).toBe('disk full');
+    expect(hasUnsavedChanges()).toBe(true);
+
+    await flushWrites();
+    expect((await flaky.load()).tables.lists[first]).toBeDefined();
+    expect(useData.getState().saveError).toBeNull();
+  });
+
+  it('does not write old rows over data that replaced them', async () => {
+    flaky.failing = false;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const replaceAll = flaky.replaceAll.bind(flaky);
+    vi.spyOn(flaky, 'replaceAll').mockImplementation(async (data) => {
+      await held;
+      return replaceAll(data);
+    });
+    const replacing = replaceData({ tables: emptyTables(), settings: {} });
+    await Promise.resolve();
+    // A change made while the replacement is still being written.
+    const id = createList({ type: 'todo', title: 'Late' });
+    void flushWrites();
+    release();
+    await replacing;
+    await flushWrites();
+
+    expect((await flaky.load()).tables.lists[id]).toBeUndefined();
+    expect(lists()[id]).toBeUndefined();
+    expect(hasUnsavedChanges()).toBe(false);
   });
 });
 

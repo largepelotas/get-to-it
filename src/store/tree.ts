@@ -64,8 +64,12 @@ export function flatten(
 /** Every descendant id of `id`, from a children index. */
 export function descendantIds(index: Map<string | null, Item[]>, id: string): string[] {
   const out: string[] = [];
+  // Guards against a loop of parents, which would otherwise never end.
+  const seen = new Set([id]);
   const walk = (parent: string) => {
     for (const child of index.get(parent) ?? []) {
+      if (seen.has(child.id)) continue;
+      seen.add(child.id);
       out.push(child.id);
       walk(child.id);
     }

@@ -60,6 +60,12 @@ export interface Recurrence {
    * `completion`: the next date is counted from when it was finished (3 days after).
    */
   mode: 'schedule' | 'completion';
+  /**
+   * For monthly and yearly rules on a schedule: the day of the month the task is
+   * meant for (1 to 31). Noted the first time the task moves on, so a short month
+   * moves it early once, not for good. Left out, it's the due date's day.
+   */
+  day?: number;
 }
 
 /** How often a habit is meant to be done: every day, or N times in a week (1 to 7). */

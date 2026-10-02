@@ -15,6 +15,7 @@ export const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.us
 const tauriExecutor: SqlExecutor = {
   select: (sql, params = []) => invoke('db_select', { sql, params }),
   batch: (statements) => invoke('db_batch', { statements }),
+  backup: (label) => invoke('db_backup', { label }),
 };
 
 export function createRepository(): Repository {
@@ -138,6 +139,11 @@ export function onQuitRequested(handler: () => void): () => void {
 
 export async function quitApp(): Promise<void> {
   if (isTauri) await invoke('quit_app');
+}
+
+/** Answers a quit request with "not now": the app stays open and its window comes forward. */
+export async function cancelQuit(): Promise<void> {
+  if (isTauri) await invoke('cancel_quit');
 }
 
 /** The tray's tooltip and, where the platform shows one (macOS, Linux), a short title beside the icon. */

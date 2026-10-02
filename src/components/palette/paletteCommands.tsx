@@ -28,6 +28,7 @@ import {
   Play,
   Plus,
   Redo2,
+  RotateCcw,
   Settings as SettingsIcon,
   Square,
   Sun,
@@ -55,7 +56,14 @@ import {
   toggleSidebar,
   undoCommand,
 } from '@/commands';
-import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
+import {
+  backUpNow,
+  exportJson,
+  exportMarkdown,
+  importJson,
+  resetSampleData,
+  showBackups,
+} from '@/dataCommands';
 import type { Settings, Tables } from '@/data/types';
 import type { FocusTimer } from '@/lib/focus';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
@@ -361,6 +369,13 @@ export function paletteCommands({
       keywords: 'md files save',
       icon: FileDown,
       run: () => void exportMarkdown(),
+    },
+    import.meta.env.DEV && {
+      id: 'reset-sample-data',
+      label: 'Reset sample data',
+      keywords: 'dev demo seed',
+      icon: RotateCcw,
+      run: resetSampleData,
     },
     canBackUp && {
       id: 'back-up',

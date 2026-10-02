@@ -11,9 +11,19 @@ use rusqlite::types::{Value as SqlValue, ValueRef};
 use rusqlite::{params_from_iter, Connection};
 use serde::Deserialize;
 use serde_json::{Map, Number, Value};
+use tauri::{AppHandle, Runtime};
 
 pub struct Database {
     conn: Mutex<Connection>,
+}
+
+/// The app's database, or why it couldn't be opened.
+pub struct DbState(pub Result<Database, String>);
+
+impl DbState {
+    fn get(&self) -> Result<&Database, String> {
+        self.0.as_ref().map_err(Clone::clone)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +85,17 @@ impl Database {
         }
         tx.commit().map_err(|e| e.to_string())
     }
+
+    /// Writes a complete copy of the database to `target`, replacing any file there.
+    pub fn copy_to(&self, target: &Path) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        if target.exists() {
+            std::fs::remove_file(target).map_err(|e| e.to_string())?;
+        }
+        conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
 }
 
 fn to_sql(value: &Value) -> SqlValue {
@@ -102,16 +123,32 @@ fn from_sql(value: ValueRef<'_>) -> Value {
 
 #[tauri::command]
 pub fn db_select(
-    db: tauri::State<'_, Database>,
+    db: tauri::State<'_, DbState>,
     sql: String,
     params: Vec<Value>,
 ) -> Result<Vec<Map<String, Value>>, String> {
-    db.select(&sql, &params)
+    db.get()?.select(&sql, &params)
 }
 
 #[tauri::command]
-pub fn db_batch(db: tauri::State<'_, Database>, statements: Vec<Statement>) -> Result<(), String> {
-    db.batch(&statements)
+pub fn db_batch(db: tauri::State<'_, DbState>, statements: Vec<Statement>) -> Result<(), String> {
+    db.get()?.batch(&statements)
+}
+
+/// Copies the database into the backups folder as `checklist-<label>.db`, before
+/// a change to its structure. The label is letters, digits and dashes only.
+#[tauri::command]
+pub fn db_backup<R: Runtime>(
+    app: AppHandle<R>,
+    db: tauri::State<'_, DbState>,
+    label: String,
+) -> Result<(), String> {
+    if label.is_empty() || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err(format!("invalid backup label: {label}"));
+    }
+    let dir = crate::files::backups_dir(&app)?;
+    db.get()?
+        .copy_to(&dir.join(format!("checklist-{label}.db")))
 }
 
 #[cfg(test)]
@@ -146,6 +183,26 @@ mod tests {
         assert_eq!(rows[0]["b"], json!(42));
         assert_eq!(rows[0]["c"], json!(1.5));
         assert_eq!(rows[0]["d"], json!(1));
+    }
+
+    #[test]
+    fn copies_the_database_over_an_older_copy() {
+        let dir = std::env::temp_dir().join(format!("checklist-db-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("copy.db");
+        let db = Database::open_in_memory().unwrap();
+        db.batch(&[
+            stmt("CREATE TABLE t (a TEXT)", vec![]),
+            stmt("INSERT INTO t VALUES (?)", vec![json!("one")]),
+        ])
+        .unwrap();
+        db.copy_to(&target).unwrap();
+        db.batch(&[stmt("INSERT INTO t VALUES (?)", vec![json!("two")])])
+            .unwrap();
+        db.copy_to(&target).unwrap();
+        let copy = Database::open(&target).unwrap();
+        assert_eq!(copy.select("SELECT * FROM t", &[]).unwrap().len(), 2);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

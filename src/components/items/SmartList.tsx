@@ -1,7 +1,7 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import clsx from 'clsx';
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { toggleItem, trashItems } from '@/commands';
+import { revealItem, toggleItem, trashItems } from '@/commands';
 import { SHORTCUTS } from '@/lib/keymap';
 import { matchesShortcut } from '@/lib/shortcuts';
 import { useItemsWithReminders } from '@/hooks/useReminders';
@@ -13,7 +13,6 @@ import {
   dropMissingSelection,
   focusItem,
   openDetails,
-  openList,
   pickDueDate,
   selectItem,
   selectRange,
@@ -116,6 +115,25 @@ export function SmartList({
   const selectionShown = visible.some((r) => r.item.id === selectedId);
   const visibleKey = visible.map((r) => r.item.id).join('|');
 
+  // A task checked from the keyboard, and the row to move to if that takes it out of the view.
+  const checkedByKey = useRef<{ id: string; next?: string } | null>(null);
+  // Runs before the selection is tidied below, so the neighbour takes over the selection.
+  useLayoutEffect(() => {
+    const pending = checkedByKey.current;
+    checkedByKey.current = null;
+    if (!pending) return;
+    const rowOf = (id?: string) =>
+      id ? containerRef.current?.querySelector<HTMLElement>(`[data-item-id="${id}"]`) : null;
+    // A task that stays may still have moved to another section (a repeating one, to its
+    // next day), which draws it afresh without the focus.
+    const stayed = rowOf(pending.id);
+    if (stayed?.contains(document.activeElement)) return;
+    const target = stayed ?? rowOf(pending.next);
+    if (!target) return;
+    selectItem(target.dataset.itemId!);
+    target.focus();
+  });
+
   // Selected tasks that leave the view (done, rescheduled, deleted) drop out of the selection.
   useLayoutEffect(() => {
     dropMissingSelection(visibleKey ? visibleKey.split('|') : []);
@@ -151,11 +169,17 @@ export function SmartList({
   /** The row to move to when `index` leaves the view. */
   const neighbour = (index: number) => visible[index + 1] ?? visible[index - 1];
 
-  const toggle = (index: number) => {
+  /**
+   * Checks or unchecks a task. From the keyboard, focus follows to the row's
+   * neighbour if the task leaves the view, so the keys keep working. A task
+   * that stays (a repeating one moved to a later day still listed here) keeps
+   * the focus, and a click on the checkbox never moves it.
+   */
+  const toggle = (index: number, byKey: boolean) => {
     const { item } = visible[index];
-    const next = neighbour(index);
+    const next = neighbour(index) as DueRow | undefined;
+    checkedByKey.current = byKey ? { id: item.id, next: next?.item.id } : null;
     toggleItem(item.id, !item.checked, { announce: true });
-    if (next) focusRow(next.item.id);
   };
 
   const clickRow = (id: string, kind: RowClickKind) => {
@@ -179,7 +203,7 @@ export function SmartList({
       ids: visible.map((r) => r.item.id),
       readOnly: false,
       focusRow: (target) => setFocus({ target, mode: 'row' }),
-      toggleOne: () => toggle(index),
+      toggleOne: () => toggle(index, true),
     });
     if (handled) return;
 
@@ -209,7 +233,7 @@ export function SmartList({
       focusRow(id, mode === 'row' ? 'text' : 'row');
     } else if (is('Mod+Enter') || (mode === 'row' && is(' '))) {
       e.preventDefault();
-      toggle(index);
+      toggle(index, true);
     } else if (mode === 'row' && (is('Backspace') || is('Delete'))) {
       e.preventDefault();
       const next = neighbour(index);
@@ -291,14 +315,12 @@ export function SmartList({
                     hasReminder={reminded.has(id)}
                     focusing={focusedId === id}
                     tabbable={id === selectedId || (i === 0 && !selectionShown)}
-                    onToggle={() => toggle(i)}
+                    onToggle={() => toggle(i, false)}
                     menu={() =>
                       itemMenuEntries(row.item, {
                         openDetails: () => openDetails(id),
-                        goToList: () => {
-                          openList(row.list.id);
-                          selectItem(id);
-                        },
+                        // Opens the list at this task, without opening its details.
+                        goToList: () => revealItem(id, { details: false }),
                         remove: () => trashItems([id]),
                       })
                     }

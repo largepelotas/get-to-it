@@ -3,15 +3,17 @@ import { toast } from 'sonner';
 import { homeView } from './commands';
 import { formatTimestamp } from './lib/dates';
 import {
+  cancelQuit,
   canBackUp,
   openBackupsFolder,
   openTextFile,
+  quitApp,
   saveFolder,
   saveTextFile,
   writeBackup,
 } from './platform';
 import { backUp } from './store/backup';
-import { replaceData, useData } from './store/data';
+import { flushWrites, hasUnsavedChanges, replaceData, useData } from './store/data';
 import { markdownFiles } from './store/markdown';
 import { seedIfNeeded } from './store/seed';
 import {
@@ -99,6 +101,12 @@ async function applyImport(data: ReturnType<typeof parseSnapshot>): Promise<void
   }
   // Makes sure there's a default list for quick-add.
   seedIfNeeded();
+  showImported();
+  toast(`Imported ${describeContents(data.tables)}`);
+}
+
+/** Points the screen at the new data after everything was replaced. */
+function showImported(): void {
   useUI.setState({
     view: homeView(),
     selectedItemId: null,
@@ -110,7 +118,44 @@ async function applyImport(data: ReturnType<typeof parseSnapshot>): Promise<void
   });
   // Undo buttons on earlier toasts point at history that's gone.
   toast.dismiss();
-  toast(`Imported ${describeContents(data.tables)}`);
+}
+
+/** Development only: replaces everything with the sample data, dated from today. */
+export function resetSampleData(): void {
+  confirmAction({
+    title: 'Reset to the sample data?',
+    message: 'Everything in Checklist now will be replaced with a fresh set of sample data.',
+    confirmLabel: 'Reset',
+    danger: true,
+    onConfirm: () =>
+      void import('./store/sampleData')
+        .then((m) => m.resetSampleData())
+        .then(() => {
+          showImported();
+          toast('Sample data reset');
+        })
+        .catch((err: unknown) => failed('Reset failed', err)),
+  });
+}
+
+/**
+ * Quits once everything is saved. If the last changes can't be saved, the app
+ * stays open and asks, since quitting would lose them.
+ */
+export async function quitWhenSaved(): Promise<void> {
+  await flushWrites();
+  // One more go straight away, in case it was a passing fault.
+  if (hasUnsavedChanges()) await flushWrites();
+  if (!hasUnsavedChanges()) return quitApp();
+  await cancelQuit();
+  const reason = useData.getState().saveError;
+  confirmAction({
+    title: 'Quit without saving?',
+    message: `Your latest changes couldn’t be saved${reason ? ` (${reason})` : ''}. Checklist keeps trying while it’s open. If you quit now, they’ll be lost.`,
+    confirmLabel: 'Quit anyway',
+    danger: true,
+    onConfirm: () => void quitApp(),
+  });
 }
 
 export async function backUpNow(): Promise<void> {

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
-import { MIGRATIONS, SqliteRepository, type SqlExecutor } from './sqlite';
+import { describe, expect, it, vi } from 'vitest';
+import { MIGRATIONS, NewerDatabaseError, SqliteRepository, type SqlExecutor } from './sqlite';
 import { emptyTables, type CheckIn, type FocusSession, type Item, type List } from './types';
 
 // node:sqlite mirrors the Rust executor: the same SQL, run in a transaction.
@@ -222,6 +222,54 @@ describe('SqliteRepository', () => {
     expect(data.settings).toEqual({ weekStartsOn: 0 });
     const tombstones = await exec.select('SELECT entity, id FROM tombstones');
     expect(tombstones).toEqual([{ entity: 'items', id: 'I1' }]);
+  });
+});
+
+describe('opening a database', () => {
+  it('refuses one saved by a newer version, and leaves it alone', async () => {
+    const db = nodeExecutor();
+    await new SqliteRepository(db).load();
+    db.raw.exec(`PRAGMA user_version = ${MIGRATIONS.length + 1}`);
+    const repo = new SqliteRepository(db);
+    await expect(repo.load()).rejects.toBeInstanceOf(NewerDatabaseError);
+    await expect(repo.write([{ kind: 'put', table: 'lists', row: list }])).rejects.toBeInstanceOf(
+      NewerDatabaseError,
+    );
+    expect(db.raw.prepare('SELECT * FROM lists').all()).toHaveLength(0);
+  });
+
+  it('copies an older database before updating it, and only then', async () => {
+    const labels: string[] = [];
+    const db = { ...nodeExecutor(), backup: async (label: string) => void labels.push(label) };
+    // New: nothing to lose.
+    await new SqliteRepository(db).load();
+    expect(labels).toEqual([]);
+    // Up to date: nothing to do.
+    await new SqliteRepository(db).load();
+    expect(labels).toEqual([]);
+
+    const old = { ...nodeExecutor(), backup: db.backup };
+    for (const sql of MIGRATIONS[0]) old.raw.exec(sql);
+    old.raw.exec('PRAGMA user_version = 1');
+    await new SqliteRepository(old).load();
+    expect(labels).toEqual(['before-update-v1']);
+  });
+
+  it('updates anyway when the copy can’t be made', async () => {
+    const old = {
+      ...nodeExecutor(),
+      backup: async () => {
+        throw new Error('no room');
+      },
+    };
+    for (const sql of MIGRATIONS[0]) old.raw.exec(sql);
+    old.raw.exec('PRAGMA user_version = 1');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await new SqliteRepository(old).load();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+    const [row] = await old.select('PRAGMA user_version');
+    expect(row.user_version).toBe(MIGRATIONS.length);
   });
 });
 

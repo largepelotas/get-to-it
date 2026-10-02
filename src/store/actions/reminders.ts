@@ -1,6 +1,12 @@
 import type { Reminder } from '@/data/types';
 import { newId } from '@/lib/id';
-import { fireTime, snoozeUntil, type ReminderSpec, type SnoozeChoice } from '@/lib/reminders';
+import {
+  fireMark,
+  fireTime,
+  snoozeUntil,
+  type ReminderSpec,
+  type SnoozeChoice,
+} from '@/lib/reminders';
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
 
@@ -79,6 +85,12 @@ function currentFireTime(tx: Tx, reminder: Reminder): number | null {
   return item ? fireTime(reminder, item, allDayTime()) : null;
 }
 
+/** What to store for the fire time `at` (see `fireMark`), or null if the task is gone. */
+function markFor(tx: Tx, reminder: Reminder, at: number): number | null {
+  const item = tx.get('items', reminder.itemId);
+  return item ? fireMark(reminder, item, at) : null;
+}
+
 /** Records reminders as delivered for the given fire times (ignored if the time has since moved). */
 export function markFired(fired: { id: string; at: number }[]): void {
   commit(
@@ -86,8 +98,9 @@ export function markFired(fired: { id: string; at: number }[]): void {
     (tx) => {
       for (const { id, at } of fired) {
         const r = tx.get('reminders', id);
-        if (r && r.firedFor !== at && currentFireTime(tx, r) === at) {
-          tx.update('reminders', id, { firedFor: at });
+        const mark = r && currentFireTime(tx, r) === at ? markFor(tx, r, at) : null;
+        if (r && mark !== null && r.firedFor !== mark) {
+          tx.update('reminders', id, { firedFor: mark });
         }
       }
     },
@@ -102,7 +115,8 @@ export function markSkipped(skipped: { id: string; at: number }[]): void {
     (tx) => {
       for (const { id, at } of skipped) {
         const r = tx.get('reminders', id);
-        if (r) tx.update('reminders', id, { firedFor: at, dismissedFor: at });
+        const mark = r ? (markFor(tx, r, at) ?? at) : at;
+        if (r) tx.update('reminders', id, { firedFor: mark, dismissedFor: mark });
       }
     },
     { undoable: false },
@@ -116,8 +130,9 @@ export function dismissReminders(ids: string[]): void {
       for (const id of ids) {
         const r = tx.get('reminders', id);
         const at = r && currentFireTime(tx, r);
-        if (r && at !== null && at !== undefined && r.dismissedFor !== at) {
-          tx.update('reminders', id, { dismissedFor: at });
+        const mark = r && at !== null && at !== undefined ? markFor(tx, r, at) : null;
+        if (r && mark !== null && r.dismissedFor !== mark) {
+          tx.update('reminders', id, { dismissedFor: mark });
         }
       }
     },
