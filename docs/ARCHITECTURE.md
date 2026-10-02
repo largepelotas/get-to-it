@@ -1,24 +1,27 @@
-# Progress and handoff notes
+# Architecture and working notes
 
-Read this with [PLAN.md](PLAN.md) before starting the next milestone. Work
-happens one milestone per chat; update this file at the end of each one.
+How Checklist is built, the decisions behind it, and what's known to be
+missing. Keep this file describing the app as it is: when something changes,
+change the paragraph that covers it instead of adding a note about the change.
+What to build next is in [todoist-gap.md](todoist-gap.md).
 
 ## Status
 
-| #   | Milestone     | State    |
-| --- | ------------- | -------- |
-| M0  | Project setup | **Done** |
-| M1  | App frame     | **Done** |
-| M2  | To-do lists   | **Done** |
-| M3  | Due dates     | **Done** |
-| M4  | Reminders     | **Done** |
-| M5  | Grocery lists | **Done** |
-| M6  | Notes         | **Done** |
-| M7  | Search, etc.  | **Done** |
-| M8  | Polish        | **Done** |
+Checklist is a desktop app for macOS and Windows (Tauri 2, React, TypeScript)
+with four kinds of list: to-do, grocery, habits and rich-text notes. It's for
+one person: data stays on the computer in SQLite, builds are unsigned, and
+there's no sync and no auto-update.
 
-v1 is feature-complete. What's left before calling it 1.0 is checking the
-native paths on real macOS and Windows machines (see the end of this file).
+Built and working: everything in the "Have" rows of
+[todoist-gap.md](todoist-gap.md) (quick add, subtasks, sections, labels,
+filters, repeats, reminders, deadlines and time ranges, the focus timer,
+Today/Tomorrow/Next 7 days/Upcoming, the calendar, boards, the Eisenhower
+matrix, Completed and Statistics), plus grocery lists, habits, notes, the
+command palette, undo, export, import and daily backups. The desktop build
+has been checked by hand on macOS and Windows.
+
+The version is still 0.1.0 and nothing has been tagged. What stands between
+this and a 1.0 is under [Known gaps](#known-gaps).
 
 ## How to run
 
@@ -50,11 +53,16 @@ there (`"version": "../package.json"`). Bump it before tagging.
 
 ### Desktop shell (`src-tauri/`)
 
-- `db.rs`: SQLite via `rusqlite` (bundled). Two commands: `db_select(sql, params)`
-  and `db_batch(statements)`, which runs a batch in one transaction. The
-  database is `checklist.db` in the app data folder. This replaced
-  `tauri-plugin-sql`, whose connection pool can't do multi-statement
-  transactions. The schema lives in TypeScript, not Rust.
+- `db.rs`: SQLite via `rusqlite` (bundled). `db_select(sql, params)` and
+  `db_batch(statements)`, which runs a batch in one transaction; the schema
+  lives in TypeScript, not Rust. (`tauri-plugin-sql` was dropped because its
+  connection pool can't do multi-statement transactions.) `db_backup(label)`
+  copies the whole database to `backups/checklist-<label>.db` with
+  `VACUUM INTO`. The database is `checklist.db` in the data folder
+  (`data_dir` in `lib.rs`): the app data folder, or its `dev` subfolder in
+  a debug build, so `npm run app:dev` never touches an installed copy's
+  data. If the file can't be opened the app still starts: the commands
+  return the reason (`DbState`), and the frontend shows it.
 - `reminders.rs`: `set_reminder_schedule([{id, at, title, body}])`. A thread
   checks every second, shows a native notification and emits
   `reminder://fired` with `{id, at}`. The frontend owns all reminder logic
@@ -72,8 +80,10 @@ there (`"version": "../package.json"`). Bump it before tagging.
   - Closing the window hides it to the tray while `set_close_to_tray(true)`
     (the default). Otherwise closing quits.
   - Quitting (tray Quit, Cmd+Q) emits `app://quit-requested`. The frontend
-    (`useAppLifecycle`) flushes saves and calls `quit_app`. The app exits
-    anyway after 3 s.
+    (`quitWhenSaved` in `dataCommands.ts`) saves and calls `quit_app`. If
+    the last changes can't be saved it calls `cancel_quit` instead, which
+    brings the window forward, and asks whether to quit without them. The
+    app exits anyway 10 s after a request the frontend hasn't answered.
   - Launch at login passes `--hidden`, so the app starts in the tray.
   - Plugins: single-instance, autostart, window-state (not visibility),
     notification, dialog, opener, clipboard-manager.
@@ -91,7 +101,7 @@ there (`"version": "../package.json"`). Bump it before tagging.
 - `data/types.ts`: every entity type, `Settings` with defaults, and
   `Snapshot` (the export format).
 - `data/repository.ts`: the `Repository` interface (`load`, `write(ops)`,
-  and since M7 `replaceAll(data)` for imports). Adapters:
+  and `replaceAll(data)` for imports). Adapters:
   - `sqlite.ts`: column mapping plus migrations tracked with
     `PRAGMA user_version`. Hard deletes write a `tombstones` row.
     `replaceAll` runs in one transaction and tombstones every row that
@@ -99,14 +109,14 @@ there (`"version": "../package.json"`). Bump it before tagging.
   - `localStorage.ts`: browser preview.
   - `memory.ts`: tests.
 - `platform/index.ts`: `isTauri`, `isMac`, `createRepository()`, `appReady()`,
-  `setWindowTheme`, and since M4 `setReminderSchedule`, `onReminderFired`,
+  `setWindowTheme`, `setReminderSchedule`, `onReminderFired`,
   `requestNotificationPermission`, `notify`, `setCloseToTray`,
   `getLaunchAtLogin` (null in the browser), `setLaunchAtLogin`,
-  `onQuitRequested`, `quitApp` and `setTrayStatus`, and since M6
+  `onQuitRequested`, `quitApp` and `setTrayStatus`, and
   `openUrl` (only `isSafeUrl` links: the opener plugin in the app, a new
   tab in the browser). Native events go
   through `listenNative`, which returns an unsubscribe function right away.
-  Since M7: `copyText` (clipboard plugin, else `navigator.clipboard`),
+  `copyText` (clipboard plugin, else `navigator.clipboard`),
   `saveTextFile(name, contents, filter)` (save dialog, then
   `write_text_file`; the browser downloads), `openTextFile(filter)` (open
   dialog, then `read_text_file`; the browser uses a hidden file input),
@@ -118,12 +128,12 @@ there (`"version": "../package.json"`). Bump it before tagging.
   - `browserScheduler.ts`: the browser preview's copy of the native
     scheduler (1 s tick, the Notification API, the same resend rule).
 - `store/data.ts`: Zustand store `useData` holding `{ tables, settings, past, future, saveError }`.
-  Since M7, `replaceData(data, keep)` swaps in an imported data set: it
+  `replaceData(data, keep)` swaps in an imported data set: it
   flushes pending saves, calls `replaceAll`, drops anything queued
   meanwhile, keeps the `keep` settings (`lastBackupAt`) and clears undo.
   - **All data changes go through `commit(label, tx => ..., { coalesce?, undoable? })`.**
     It applies changes, queues saves (150 ms debounce, writes to the same row
-    collapse, one retry) and records undo.
+    collapse, retrying a failed save until it goes through) and records undo.
   - `undo()`, `redo()`, `undoEntry(id)` (for toast Undo buttons),
     `lastEntryId()`, `setSetting()`, `flushWrites()`.
   - Undo and redo re-stamp `updatedAt`.
@@ -240,6 +250,12 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
 - `store/seed.ts`: `seedIfNeeded` creates Inbox, Groceries, a Welcome note
   and a Work folder on first launch (not undoable), and always makes sure
   `defaultListId` is set.
+- `store/sampleData.ts`: development only. `seedSampleData` fills a new data
+  set with sample lists, tasks, habits, notes and a year of history, dated
+  from today, in place of the starter lists (`main.tsx` loads it only when
+  `import.meta.env.DEV`). `resetSampleData` is the palette's **Reset sample
+  data**. A debug build keeps its database and backups in `<app data>/dev`
+  (`data_dir` in `lib.rs`).
 - `commands.ts`: user-facing commands that wrap store actions with
   navigation and toasts: trash/archive with an Undo toast (`undoEntry`),
   restore, duplicate, new folder (then inline rename), delete forever and
@@ -252,16 +268,16 @@ onFired, onMissed })`, started by `useReminderScheduler` in `App`. On
   `snooze` (toast with the new time), `dismiss`, `completeFromReminder`
   (dismisses, then `toggleItem` with `announce`) and `announceMissed`.
   `homeView()` is where to go when the open list disappears (the default
-  list, else Today). Since M7: `copyAsMarkdown(listId)` (toast, or an
+  list, else Today). `copyAsMarkdown(listId)` (toast, or an
   error toast if the clipboard refuses) and `revealItem(id)` (opens the
   item's list, expands collapsed parents, shows the Completed or cart
   section if the item is there, selects it, opens details for to-dos and
   sets `useUI.reveal` so the list focuses the row).
-- `dataCommands.ts` (M7): `exportJson`, `exportMarkdown`, `importJson`
+- `dataCommands.ts`: `exportJson`, `exportMarkdown`, `importJson`
   (open, `parseSnapshot`, confirm with what the file holds, back up first in
   the desktop app, `replaceData`, `seedIfNeeded` for a default list, go
   home), `backUpNow` and `showBackups`. Used by Settings and the palette.
-- `store/search.ts` (M7): `search(tables, query)` returns `{ lists, items,
+- `store/search.ts`: `search(tables, query)` returns `{ lists, items,
 notes }`, each sorted by score and capped. Case and accents are ignored
   (`fold` keeps a map back to the original, so highlights land on the
   right characters), and every word of the query must match somewhere:
@@ -273,21 +289,21 @@ notes }`, each sorted by score and capped. Case and accents are ignored
   line around the first match. Folded text and parsed task notes are
   cached per row object (rows are never mutated), which keeps a keystroke
   around 25 ms at 20,000 items. `scoreText` scores any string the same way.
-- `store/markdown.ts` (M7): `listToMarkdown` (to-do lists as `- [ ]`
+- `store/markdown.ts`: `listToMarkdown` (to-do lists as `- [ ]`
   task lists with subtasks indented, task notes under their task, due
   date, repeat and priority in brackets and a Completed section; grocery
   lists by category with quantities and an In cart section; notes via
   `docToMarkdown`), `safeFileName` and `markdownFiles` (one file per list,
   in a subfolder per folder, archived lists under `Archive/`, clashes
   numbered, Trash left out).
-- `store/snapshot.ts` (M7): `makeSnapshot` (every row, soft-deleted ones
+- `store/snapshot.ts`: `makeSnapshot` (every row, soft-deleted ones
   included, and the settings except `lastBackupAt`), `snapshotToJson`,
   `parseSnapshot` (checks every field of every row against a table of
   checks and throws `ImportError` with a message such as "In item 3,
   dueDate should be a date (YYYY-MM-DD)."; missing optional fields get
   defaults; unknown or mistyped settings are dropped) and
   `describeContents` ("3 lists and 12 items", Trash left out).
-- `store/backup.ts` (M7): `backupName` (`checklist-2026-09-30-221500.json`,
+- `store/backup.ts`: `backupName` (`checklist-2026-09-30-221500.json`,
   which sorts by age as `prune_backups` needs), `backupDue` (none yet
   today, or the clock went backwards), `backUp(write, now, note?)` (a noted
   backup such as `before-import` doesn't count as the daily one) and
@@ -334,9 +350,9 @@ history)`, which only returns categories that still exist.
   render), `useReminderScheduler` and `useReminderEntries` (`{ all, inbox
 }`), `useAppLifecycle` (close to tray follows the setting, the quit
   listener, and the tray tooltip: "Checklist · 3 due today, 1 reminder"),
-  `useAppShortcuts` and `useBackups` (M7: the daily backup, checked 15 s
+  `useAppShortcuts` and `useBackups` (the daily backup, checked 15 s
   after launch and then hourly, desktop only; one error toast if it fails).
-- `lib/keymap.ts` (M7): `SHORTCUTS`, every app-wide shortcut by name, and
+- `lib/keymap.ts`: `SHORTCUTS`, every app-wide shortcut by name, and
   `SHORTCUT_HELP`, what the Keyboard shortcuts dialog lists. Menus show
   shortcuts from here too. `useAppShortcuts` handles them: the palette
   (⌘K or ⌘F) works everywhere, even in text fields, and closes the palette
@@ -383,7 +399,7 @@ history)`, which only returns categories that still exist.
   `text-accent-fg`, `bg-accent-soft`, `text-danger`, `text-danger-fg`
   (text on `bg-danger`), `bg-danger-soft`, `bg-overlay`, `shadow-popover`.
   Use these, not raw colors.
-- Since M8 every text token meets WCAG AA (4.5:1) on every surface it's
+- Every text token meets WCAG AA (4.5:1) on every surface it's
   used on, selected and hovered rows included: `fg-subtle` and `fg-muted`
   are darker in light mode and lighter in dark mode than before, the light
   accent is darker, the dark accent lighter, and text on the dark theme's
@@ -416,7 +432,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
 - `components/menus.tsx` builds the list and folder menus (different
   entries for archived and trashed lists; grocery lists also get Uncheck
   all and Clear checked, disabled while the cart is empty).
-- `ContextMenu` also opens from the keyboard (M8): Shift+F10 or the Menu
+- `ContextMenu` also opens from the keyboard: Shift+F10 or the Menu
   key on the focused element dispatches a `contextmenu` event at its
   bottom-left corner. Every right-click menu (task and grocery rows,
   sidebar lists and folders) gets this for free.
@@ -553,7 +569,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   The dialog body scrolls.
 - `MainPane` switches on the view and goes to `homeView()` if the open list
   stops existing.
-- `components/palette/` (M7): `CommandPalette`, a Radix dialog around
+- `components/palette/`: `CommandPalette`, a Radix dialog around
   cmdk with `shouldFilter={false}` (search and matching are ours) and
   `vimBindings={false}` (cmdk otherwise swallows Ctrl+K/N/J/P). With no
   query it shows the lists in sidebar order, then every command. With a
@@ -574,13 +590,13 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   doesn't match) or keywords.
 - `TodoList` and `GroceryList` focus the row in `useUI.reveal` once it's
   rendered, then clear it.
-- `dialogs/ShortcutsDialog.tsx` (M7) renders `SHORTCUT_HELP`. Settings
+- `dialogs/ShortcutsDialog.tsx` renders `SHORTCUT_HELP`. Settings
   has a Data section: Export…, Import…, Export as Markdown…, the daily
   backup toggle with the last backup time, Back up now and Show backups
   (the last three only in the desktop app). The sidebar's settings menu
   has Keyboard shortcuts, and list menus have Copy as Markdown.
 
-- Everyday fixes (after M8): the task menu has Move to (any live to-do
+- Everyday fixes: the task menu has Move to (any live to-do
   list; Undo toast), Duplicate and Won't do (a closed task sits in Completed
   with a cross instead of a tick; `Item.wontDo`, SQLite migration 2), and the
   Due date submenu has Skip this time for repeating tasks (also a button in
@@ -590,7 +606,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   "Show sidebar" button (on macOS in its own drag strip, clear of the
   traffic lights).
 
-- Quick add, finished (after M8): `parseQuickAdd` also reads `#List` (longest
+- Quick add, finished: `parseQuickAdd` also reads `#List` (longest
   matching live to-do list title wins, any case; no match leaves the text
   alone) and `!` reminders (`!30min`, `!2 hours before`, `!due`, or a time
   like `!fri 9am`; a bare `!`, `!!`, `!!!` is still priority). A relative
@@ -604,7 +620,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   palette has "Add a task to…". The toast ("Added to …", with Undo) is in
   `commands.ts` (`quickAddTask`, `quickAddLines`).
 
-- Select several tasks (after M8): in to-do lists, Today and Upcoming,
+- Select several tasks: in to-do lists, Today and Upcoming,
   Ctrl/Cmd+click toggles a task, Shift+click and Shift+↑/↓ select a range,
   Mod+A selects every shown row, and Escape goes back to the focused row.
   `useUI.multiSelectedIds` holds the group while it has two or more tasks
@@ -626,7 +642,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   "Move to today" is now "Reschedule" (today, tomorrow, next week or a
   picked date, one undo step; `DateChoices` is shared with the bar).
 
-- Smarter reminders and views (after M8): the `View` union has `tomorrow`
+- Smarter reminders and views: the `View` union has `tomorrow`
   and `next7`. `store/smart.ts` gained `tomorrowModel`, `next7Model`
   (an overdue list plus seven `DayGroup`s, empty days kept) and their
   counts. `SmartSection.emptyText` lets `SmartList` show "Nothing due"
@@ -660,7 +676,7 @@ INTEGER NOT NULL DEFAULT 0`; missing in old localStorage data or exports
   the app was closed. The scheduler subscription also watches
   `dailyReviewTime`.
 
-- Sections (after M8): headings inside a to-do list. Data: the `sections`
+- Sections: headings inside a to-do list. Data: the `sections`
   table (`Section`: `listId`, `title`, `sortKey`, `collapsed`), `Item.sectionId`
   (top-level tasks only; a subtask follows its top-level ancestor), SQLite
   migration 4; old data and exports load with none. Actions are in
@@ -685,7 +701,7 @@ INTEGER NOT NULL DEFAULT 0`; missing in old localStorage data or exports
   `/section` is parsed with `#List` (see Quick add); `QuickAdd` passes the
   sections and its list so the chip shows `/Title`.
 
-- Labels (after M8): tags that cut across lists. Data: the `labels` table
+- Labels: tags that cut across lists. Data: the `labels` table
   (`Label`: `name`, `color`, `sortKey`), `Item.labelIds` (a `json` column,
   `label_ids`; ids naming no label are ignored), SQLite migration 5; old data
   and exports load with none, and the snapshot version is unchanged. Names are
@@ -708,8 +724,7 @@ INTEGER NOT NULL DEFAULT 0`; missing in old localStorage data or exports
   menu's "New label…") and in the selection bar (`selectionLabelsOpen`). The
   task menu has a "Labels" submenu with ticks. Grocery lists and notes have no
   labels.
-- Filters, sorting and grouping, and the Eisenhower matrix (after M8; step 7
-  of `docs/todoist-gap.md`). Data: the `filters` table (`Filter`: `name`,
+- Filters, sorting and grouping, and the Eisenhower matrix. Data: the `filters` table (`Filter`: `name`,
   `query`, `color`, `sortKey`), SQLite migration 6; old data and exports load
   with none, and the snapshot version is unchanged. Two settings came with it:
   `viewOptions` (sort and group per view, keyed `today`, `list:<id>`,
@@ -752,7 +767,7 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   (`grid` prop); its two searches are edited in Settings
   (`MatrixSettingsFields.tsx`) with errors shown inline, and the view explains
   which search is broken.
-- Deadlines and time ranges (after M8; step 8 of `docs/todoist-gap.md`).
+- Deadlines and time ranges.
   Data: two fields on `Item`, `deadline` (a date, independent of the due
   date: when it must be finished, where "due" is when you plan to do it) and
   `endTime` (HH:mm, only with a `dueTime` and strictly after it, on the same
@@ -791,7 +806,7 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   timed tasks (`scheduledMinutes` in `store/smart.ts`). Not yet: Today and
   Upcoming don't list a task on its deadline day, filters have no deadline
   term, and the selection bar sets due dates only.
-- Focus timer (after M8; step 9 of `docs/todoist-gap.md`). Data: a
+- Focus timer. Data: a
   `focusSessions` table (id, item, kind `pomodoro` or `stopwatch`, start, end,
   seconds), SQLite migration 8; two settings, `focusMinutes` (25) and
   `breakMinutes` (5); the snapshot version is unchanged and old data loads
@@ -821,8 +836,7 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   Linux; `set_tray_status`) and in the tooltip, and quitting logs the running
   timer. Not done: no statistics yet, the timer isn't kept across restarts,
   and sessions can't be edited or deleted.
-- Better Upcoming and a calendar (after M8; step 10 of
-  `docs/todoist-gap.md`). **Upcoming** now starts at today, like Todoist:
+- Better Upcoming and a calendar. **Upcoming** now starts at today, like Todoist:
   an Overdue section (with Reschedule), then every remaining day of the
   week shown even when empty, then later days that have tasks. A week
   strip above the quick-add field (seven buttons with the day's task
@@ -867,7 +881,7 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   block to change its end, no agenda layout, dragging has no keyboard
   path (the due picker covers it), the calendar shows open tasks only,
   and Today/Upcoming still don't list a task on its deadline day.
-- Boards (after M8; step 11 of `docs/todoist-gap.md`). Every view that
+- Boards. Every view that
   can be sorted and grouped (a to-do list, Today, Tomorrow, Next 7 days,
   Upcoming, a label, a filter) can be shown as a board: a column per
   group, with the tasks as cards that drag between columns. The choice is
@@ -914,7 +928,7 @@ drop, from)` in `commands.ts`: a section column → `moveTasksToSection`
   columns, no keyboard path for moving a card (T, 1–4, L and the task
   menu cover it), and in Upcoming's board layout the week strip is not a
   drop target (the board's DndContext is nested inside Upcoming's).
-- History and statistics (after M8; step 12 of `docs/todoist-gap.md`).
+- History and statistics.
   Two new built-in views, Completed and Statistics (`'completed'` and
   `'stats'` in `BUILT_IN_VIEWS` and the `View` union, the sidebar after
   the Eisenhower matrix, "Go to Completed" and "Go to Statistics" in the
@@ -983,7 +997,7 @@ day, createdAt }`, at most one per habit per day, removed with the habit
   statistics screen, a starter habit list and a
   description line on the New list card.
 
-### Accessibility and loading (M8)
+### Accessibility and loading
 
 - **Row descriptions.** `describeRow` (`components/items/describeRow.ts`)
   puts what a task row shows into words ("Due Tomorrow 15:00. Repeats every
@@ -1051,7 +1065,7 @@ day, createdAt }`, at most one per habit per day, removed with the habit
   `copyText` wrote with `navigator.clipboard.readText()`.
 - UI text uses British spelling ("colour", "Grey"), matching the history
   labels.
-- End-to-end tests (M8) live in `e2e/`, run against `vite build` + `vite
+- End-to-end tests live in `e2e/`, run against `vite build` + `vite
 preview` (the browser preview, data in localStorage), and use only
   roles and accessible names, like the component tests. Each test gets a
   fresh browser context, so it starts from the seeded starter lists.
@@ -1069,11 +1083,14 @@ preview` (the browser preview, data in localStorage), and use only
   `beforeAll` in tests that open the palette, Settings or the shortcuts
   dialog.
 
-## Deviations from the plan
+## Decisions worth knowing
+
+Choices that aren't obvious from the code, or that differ from what Todoist
+or TickTick do.
 
 - `rusqlite` behind two custom commands, instead of `tauri-plugin-sql`
   (reason above).
-- Search will be in memory over the loaded data rather than SQLite FTS. The
+- Search is in memory over the loaded data rather than SQLite FTS. The
   data is all loaded anyway, and it works the same in the browser preview.
 - Repeat rules are stored as JSON (`Recurrence` in `types.ts`), not RRULE
   strings.
@@ -1086,10 +1103,8 @@ preview` (the browser preview, data in localStorage), and use only
   and the siblings below it stay where they were.
 - Today counts a task as overdue only from the day after it's due; a task
   due earlier today with a passed time stays under Today, shown in red.
-  Upcoming shows only days with tasks, not empty days.
 - Clearing a due date also removes the repeat, since a repeat counts from
   the due date.
-- Today has a "Move to today" button for overdue tasks (not in the plan).
 - The reminder inbox is a Reminders view in the sidebar, which also lists
   the reminders still to come.
 - All-day tasks get their own presets (on the day, 1 or 2 days, 1 week
@@ -1106,7 +1121,7 @@ preview` (the browser preview, data in localStorage), and use only
 - Grocery items have no details panel; the quantity and category are
   edited on the row.
 - Dragging a grocery item into another category's items changes its
-  category (the plan only asked for reordering within a category).
+  category.
 - Uncheck all and Clear checked sit on the "In cart" header and in the
   list's "…" menu, and only when something is in the cart.
 - Quantities are always read from grocery quick-add; the "Read dates in
@@ -1118,9 +1133,8 @@ preview` (the browser preview, data in localStorage), and use only
 - Task notes get the same editor with a smaller toolbar (every Markdown
   shortcut still works there).
 - Links have no keyboard shortcut: ⌘K is kept for the command palette
-  (M7). Use the toolbar, paste a link over selected text, or type the
+  . Use the toolbar, paste a link over selected text, or type the
   address.
-- The Welcome note mentions the note shortcuts, and since M7 ⌘K and ⌘/.
 - Import replaces everything; there's no merge. The desktop app saves a
   `before-import` backup first, and the confirmation says what the file
   holds.
@@ -1139,137 +1153,101 @@ preview` (the browser preview, data in localStorage), and use only
   opens any row's menu.
 - Dark mode text on the accent and danger fills is dark, not white, for
   contrast.
+- Undo puts back only the fields its step changed (`revertedRow` in
+  `store/history.ts`), so bookkeeping written since then outside undo
+  history (a reminder marked delivered, a section collapsed) survives it.
+- A save that fails is never dropped: it goes back in the queue and is tried
+  again (2 s, then doubling to 30 s) for as long as the app runs. A toast and
+  the sidebar icon say so, and quitting asks first.
+- A database last written by a newer version of the app is refused
+  (`NewerDatabaseError`) instead of being opened and partly blanked. Before
+  an older database is migrated, a copy goes into the backups folder.
+- Import mends what it can and drops what it can't place: a subtask whose
+  parent is missing, in another list or part of a loop becomes top-level; a
+  row whose list or task isn't in the file is dropped (`repairReferences` in
+  `store/snapshot.ts`).
+- A monthly or yearly repeat remembers the day of the month it's meant for
+  (`Recurrence.day`, noted the first time the task moves on), so the 31st
+  lands on 28 February and goes back to the 31st in March. Picking a due
+  date by hand clears it.
+- A reminder's delivered and dismissed marks are stored as the due date and
+  time read as UTC, less the offset (`fireMark` in `lib/reminders.ts`), so a
+  change of time zone or of the all-day reminder time doesn't bring back
+  reminders already dealt with. A custom reminder or a snooze is marked by
+  its own moment.
+- Shortcuts on digits and on `/`, `\` and `,` also match the key's position
+  (`event.code`), for layouts where the character needs Shift or isn't there.
+- Opening a completed task from search in a sorted or grouped list puts that
+  list back in its own order, since an arranged list shows open tasks only.
 
 ## Known gaps
 
-From M8:
+Data and safety:
 
-- Accessibility was checked with axe in Chromium and by keyboard in the e2e
-  tests, not with a real screen reader. VoiceOver on macOS and NVDA on
-  Windows are worth a pass, especially the row descriptions and the drag
-  handles.
-- Sidebar rows' names include their count ("Inbox 2"), read as is.
-- The e2e tests cover the browser preview only. The desktop build was run
-  on Linux under Xvfb (it starts, creates and seeds `checklist.db`, writes
-  the daily backup), which exercises the Rust side and SQLite, but not on
-  macOS or Windows. Driving the desktop app itself in tests would need
-  `tauri-driver` (WebDriver; Linux and Windows only).
-- macOS builds are ad-hoc signed (`signingIdentity: "-"`) so Apple silicon
-  accepts the universal binary, but they're not notarised: the first launch
-  still needs **Open Anyway** (see the README).
+- The file commands (`write_text_file`, `read_text_file`, `write_files`) take
+  any path from the webview. The content security policy is tight and
+  nothing remote is loaded, so the risk is low, but the dialogs should move
+  into Rust so the webview never names a path.
+- Undo history doesn't know about settings, so removing a grocery category
+  can't be undone.
+- The `tombstones` table is written and never read, grows without limit, and
+  isn't cleared when a removal is undone. It was meant for sync; drop it or
+  design sync properly.
+- The WAL isn't checkpointed on exit, so copying `checklist.db` alone can
+  miss recent changes. Backups and exports are written in place, not to a
+  temporary file first.
+- Logging out or shutting down doesn't go through the quit request, so a
+  save still queued at that moment (at most 150 ms old) can be lost.
+- No "restore from backup" command: use Import with a file from Show
+  backups. Backups made before an import count toward the 14 kept.
+- The export format is still `version: 1` after several additions, so an
+  older build can't tell that a file is newer than it understands.
 
-From M7:
+Speed, with a lot of data (fine at a few hundred tasks):
 
-- The palette searches from the first letter, and a one-letter query on a
-  very large data set (20,000 items) takes about 70 ms per keystroke in
-  tests. Fine for normal use; a minimum length or an index would help if
-  it ever isn't.
-- Search is word-based substring matching, not fuzzy: typos don't match.
-- No "restore from backup" command; use Import with a file from Show
-  backups.
-- Pre-import backups count toward the 14 kept, so many imports in one day
-  can push out older daily backups.
-- The export, import and backups were checked in the browser preview
-  (export and re-import round trip in Chromium) and in unit tests, but
-  the native dialogs and the backups folder only in code, since this
-  environment can't run the desktop app. Check them in `npm run app:dev`.
-- Shortcuts are fixed; they can't be changed in Settings.
-- ⌘D and ⌘N may clash with a browser's bookmark and new-window shortcuts in
-  the browser preview (not in the desktop app).
-- ~~The main chunk is now 700 kB (cmdk and the palette).~~ Split in M8.
+- Nothing is virtualised or memoised. Every keystroke in a task's title
+  recomputes the sidebar counts, each filter's count and the reminder list,
+  and redraws every row. A running focus timer redraws the app each second.
+- Actions that touch many tasks copy whole tables per task (`Tx.all`).
+- The palette searches from the first letter: about 70 ms a keystroke at
+  20,000 items.
 
-From M6:
+Features and behaviour:
 
-- The editor's own undo history doesn't know about outside changes (the
-  app's undo while the editor isn't focused). Pressing ⌘Z in the editor
-  afterwards undoes its own earlier steps mapped over that change, which
-  can be surprising.
-- No images, tables, text colour or highlight (images are out of scope for
-  v1). Underline has no Markdown form, so Markdown export drops it.
-- Links show no hover preview; the toolbar's link popover has Open and
-  Remove. Opening links in the desktop app was checked in code only (the
-  opener plugin's default scope allows http, https and mailto). Check it
-  in `npm run app:dev`.
-- Every keystroke writes the whole note (JSON and plain text) through the
-  150 ms save debounce. Fine for notes of normal size; revisit if large
-  notes feel slow.
-- Enter in a note's title doesn't move focus into the note.
+- The calendar is drag-only: no adding a task on a day, completing one or
+  moving one from the keyboard; month cells have no "+N more".
+- The default list (where quick add files tasks from Today) has no setting;
+  it's whatever was seeded.
+- Grocery and habit lists have no multi-select or one-key actions.
+- A title being edited when a shortcut switches the view may not be saved
+  (it commits on blur). Not confirmed.
+- The Completed view pages back 30 days at a time, so it can open empty.
+- Upcoming as a board: cards can't be dropped on the week strip.
+- Letter shortcuts on non-Latin layouts (⌘Z on a Russian keyboard) don't
+  match.
+- Search is word-based substring matching, not fuzzy. Shortcuts are fixed.
+- Notes: no images, tables, text colour or highlight. Underline has no
+  Markdown form, so Markdown export drops it. The editor's own undo doesn't
+  know about changes made from outside it.
+- Grocery: a drag from above can't make an item first in the next category
+  (use Alt+↑); empty categories can't be dropped into; adding a name that's
+  already there adds a second item; the keyword table is English only.
+- Today and Upcoming order tasks from different lists by list `sortKey`,
+  which only matches the sidebar within one folder.
+- Desktop notifications can't be clicked to open the task and have no
+  buttons (the plugin doesn't support actions on desktop). After the
+  computer sleeps through several reminders, they all fire on wake.
 
-From M5:
+Shipping:
 
-- A drag from above can't make an item the first of the next category
-  (dropping on that first item puts it after it, as dnd-kit's sortable
-  does). Use Alt+↑ afterwards. Categories with no open items aren't
-  shown, so they can't be dropped into; use the Category menu.
-- Adding a name that's already on the list adds a second item rather than
-  merging or unchecking the first.
-- The keyword table is English only. Quick-add learns from what the user
-  files items under, which covers other languages over time.
-- Settings aren't in undo history, so removing a category can't be undone.
-  Its items move to Other and stay filed under the old id, so Restore
-  defaults puts them back for the default categories.
-- The main chunk is now 656 kB.
-- Fixed in passing: task text fields were never narrower than the
-  browser's default input width (about 170 px), so clicking just right of a
-  short task started editing instead of selecting the row. They now size
-  to their text (`size={1}`).
-
-From M2:
-
-- ~~Tab inside a list indents, so keyboard users can't Tab out of it.~~ M8
-  added F6/Shift+F6 to move between the sidebar, the list and the details.
-- Row-mode Space/Delete only work while the row has focus; after clicking
-  a toolbar button, click the row again.
-- The production bundle went over Vite's 500 kB warning in M2 (476 kB
-  before), mostly chrono-node, which quick-add now pulls in. After M3 the
-  main chunk is 614 kB, with the due-date picker split out (54 kB). After
-  M6 it's 657 kB; TipTap loads separately (404 kB) the first time a note
-  or task notes are shown. ~~Consider more code-splitting.~~ Done in M8
-  (452 kB).
-
-From M4:
-
-- Desktop notifications can't be clicked to open the task, and have no
-  Snooze or Complete buttons: the notification plugin doesn't support
-  actions on desktop. Both live in the Reminders view.
-- ~~Task rows don't show that a task has a reminder.~~ Done in M8: a bell.
-- After the computer sleeps through several reminders, they all fire on
-  wake.
-- The native side (notifications, tray tooltip, close to tray, launch at
-  login, the quit handshake) was checked in code and `cargo test`/`clippy`
-  only, since this environment can't run the desktop app. Check it in
-  `npm run app:dev`, including the macOS notification permission prompt.
-
-From M3:
-
-- ~~There's no "skip this occurrence" for repeating tasks; set the next date
-  in the picker instead.~~ Done: "Skip this time" in the Due date menu and
-  the details panel.
-- ~~The due date on a row isn't clickable; change it from the row menu or
-  the details panel.~~ Done: it opens the due-date picker.
-- Today/Upcoming order tasks from different lists by list `sortKey`, which
-  only matches the sidebar within one folder.
-- ~~No keyboard shortcut opens the due-date picker yet.~~ Done in M7: ⌘D/Ctrl+D.
-
-From M1:
-
-- ~~Folders have no "…" button.~~ Done in M8, and Shift+F10 opens any
-  right-click menu.
-- The native window theme and macOS drag strip were checked in code only;
-  the browser preview can't show them. Check them in `npm run app:dev`.
-
-## Next: checking v1 on macOS and Windows
-
-Everything in the plan is built. Before tagging 1.0 (bump the version in
-`package.json`, push a `v1.0.0` tag, then publish the draft release):
-
-- Install the build artifacts on a Mac (Apple silicon and Intel) and a
-  Windows PC, and go through the native paths flagged "checked in code
-  only" above: notifications (and the macOS permission prompt), the tray
-  and its tooltip, close to tray, launch at login, the quit handshake,
-  links opening in the browser, the save/open dialogs, Show backups, the
-  window theme and the macOS drag strip.
-- A screen reader pass (VoiceOver, NVDA).
-
-After v1, the plan's "Not in v1" list is the backlog: sync, a quick-capture
-hotkey, templates, tags, and web or mobile builds.
+- Builds are unsigned (macOS ad-hoc signed, not notarised) and there's no
+  updater, so every release is a manual reinstall.
+- The end-to-end tests run the browser preview in Chromium only; nothing
+  drives the desktop app, and the SQLite repository is tested against
+  `node:sqlite`, not the Rust executor. Rust lint and tests run on Linux
+  only.
+- `build.yml` builds installers on every push and pull request.
+- Accessibility was checked with axe and by keyboard, not with VoiceOver or
+  NVDA.
+- `sync`, a system-wide quick-capture hotkey, templates and web or mobile
+  builds are not planned for now.
