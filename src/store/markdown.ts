@@ -1,5 +1,15 @@
-import type { GroceryCategory, Item, Label, List, Section, Tables } from '@/data/types';
+import type {
+  FocusSession,
+  GroceryCategory,
+  Item,
+  Label,
+  List,
+  Section,
+  Tables,
+} from '@/data/types';
 import { bySortKey } from '@/lib/order';
+import { focusSeconds } from './focus';
+import { formatFocusTotal } from '@/lib/focus';
 import { describeRecurrence } from '@/lib/recurrence';
 import { docToMarkdown, escapeMarkdown, parseDoc } from '@/lib/richText';
 import { groceryModel } from './grocery';
@@ -12,12 +22,13 @@ import { buildTree, type TreeNode } from './tree';
  * by category, and notes use the editor's own Markdown.
  */
 
-type Source = Pick<Tables, 'items' | 'notes'> & Partial<Pick<Tables, 'sections' | 'labels'>>;
+type Source = Pick<Tables, 'items' | 'notes'> &
+  Partial<Pick<Tables, 'sections' | 'labels' | 'focusSessions'>>;
 
 const PRIORITY = ['', 'P1', 'P2', 'P3'];
 
-/** Due date, deadline, repeat and priority, as "(due 2026-10-03 15:00–16:00, deadline 2026-10-10, Every week, P1)". */
-function taskMeta(item: Item): string {
+/** Due date, deadline, repeat, priority and logged focus time, as "(due 2026-10-03 15:00–16:00, deadline 2026-10-10, Every week, P1)". */
+function taskMeta(item: Item, sessions: Record<string, FocusSession>): string {
   const parts: string[] = [];
   if (item.dueDate) {
     const range = item.dueTime ? ` ${item.dueTime}${item.endTime ? `–${item.endTime}` : ''}` : '';
@@ -26,6 +37,8 @@ function taskMeta(item: Item): string {
   if (item.deadline) parts.push(`deadline ${item.deadline}`);
   if (item.recurrence) parts.push(describeRecurrence(item.recurrence, item.dueDate));
   if (item.priority) parts.push(PRIORITY[item.priority]);
+  const focused = focusSeconds(sessions, item.id);
+  if (focused) parts.push(`focused ${formatFocusTotal(focused)}`);
   return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
@@ -49,13 +62,18 @@ function taskText(item: Item): string {
   return item.checked && item.wontDo ? `~~${text}~~` : text;
 }
 
-function taskLines(node: TreeNode, depth: number, labels: Record<string, Label>): string[] {
+function taskLines(
+  node: TreeNode,
+  depth: number,
+  labels: Record<string, Label>,
+  sessions: Record<string, FocusSession>,
+): string[] {
   const pad = '  '.repeat(depth);
   const { item } = node;
   return [
-    `${pad}- [${item.checked ? 'x' : ' '}] ${taskText(item)}${labelSuffix(item, labels)}${taskMeta(item)}`,
+    `${pad}- [${item.checked ? 'x' : ' '}] ${taskText(item)}${labelSuffix(item, labels)}${taskMeta(item, sessions)}`,
     ...notesBlock(item, `${pad}  `),
-    ...node.children.flatMap((child) => taskLines(child, depth + 1, labels)),
+    ...node.children.flatMap((child) => taskLines(child, depth + 1, labels, sessions)),
   ];
 }
 
@@ -64,6 +82,7 @@ function todoMarkdown(
   listId: string,
   sectionRows: Record<string, Section> = {},
   labels: Record<string, Label> = {},
+  sessions: Record<string, FocusSession> = {},
 ): string {
   const live = Object.values(items).filter((i) => i.listId === listId && !i.deletedAt);
   const tree = buildTree(live);
@@ -75,15 +94,18 @@ function todoMarkdown(
   const known = new Set(ordered.map((s) => s.id));
   const loose = open.filter((n) => !n.item.sectionId || !known.has(n.item.sectionId));
   const sections: string[] = [];
-  if (loose.length) sections.push(loose.flatMap((n) => taskLines(n, 0, labels)).join('\n'));
+  if (loose.length)
+    sections.push(loose.flatMap((n) => taskLines(n, 0, labels, sessions)).join('\n'));
   // Each section is a heading one level below the list's title, with its open tasks under it.
   for (const section of ordered) {
     const nodes = open.filter((n) => n.item.sectionId === section.id);
-    const lines = nodes.flatMap((n) => taskLines(n, 0, labels)).join('\n');
+    const lines = nodes.flatMap((n) => taskLines(n, 0, labels, sessions)).join('\n');
     sections.push(`## ${escapeMarkdown(section.title)}${lines ? `\n\n${lines}` : ''}`);
   }
   if (done.length) {
-    sections.push(`## Completed\n\n${done.flatMap((n) => taskLines(n, 0, labels)).join('\n')}`);
+    sections.push(
+      `## Completed\n\n${done.flatMap((n) => taskLines(n, 0, labels, sessions)).join('\n')}`,
+    );
   }
   return sections.join('\n\n');
 }
@@ -117,7 +139,13 @@ export function listBodyMarkdown(
 ): string {
   switch (list.type) {
     case 'todo':
-      return todoMarkdown(source.items, list.id, source.sections, source.labels);
+      return todoMarkdown(
+        source.items,
+        list.id,
+        source.sections,
+        source.labels,
+        source.focusSessions,
+      );
     case 'grocery':
       return groceryMarkdown(source.items, list.id, categories);
     case 'note':
@@ -163,7 +191,7 @@ export interface MarkdownFile {
  */
 export function markdownFiles(
   tables: Pick<Tables, 'folders' | 'lists' | 'items' | 'notes'> &
-    Partial<Pick<Tables, 'sections' | 'labels'>>,
+    Partial<Pick<Tables, 'sections' | 'labels' | 'focusSessions'>>,
   categories: GroceryCategory[],
 ): MarkdownFile[] {
   const used = new Set<string>();

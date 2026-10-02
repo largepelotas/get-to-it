@@ -79,3 +79,26 @@ describe('emptyTrash', () => {
     expect(useData.getState().past.map((e) => e.label)).toEqual(['New to-do list', 'Add item']);
   });
 });
+
+describe('emptyTrash and focus sessions', () => {
+  // Bug prevented: focus sessions of purged tasks staying behind as orphan rows forever.
+  it('removes the sessions of purged tasks and keeps those of live ones', () => {
+    const live = createList({ type: 'todo', title: 'Live' });
+    addItem(live, 'kept');
+    addItem(live, 'gone', 123);
+    commit('Log focus', (tx) => {
+      for (const itemId of ['kept', 'gone']) {
+        tx.put('focusSessions', {
+          id: `f-${itemId}`,
+          itemId,
+          kind: 'pomodoro',
+          startedAt: 1,
+          endedAt: 2,
+          seconds: 60,
+        });
+      }
+    });
+    emptyTrash();
+    expect(Object.keys(tables().focusSessions)).toEqual(['f-kept']);
+  });
+});

@@ -3,7 +3,9 @@ import {
   Bell,
   CalendarDays,
   CalendarRange,
+  Check,
   ClipboardCopy,
+  Coffee,
   Download,
   FileDown,
   FolderOpen,
@@ -17,9 +19,12 @@ import {
   Palette,
   PanelLeftClose,
   PanelLeftOpen,
+  Pause,
+  Play,
   Plus,
   Redo2,
   Settings as SettingsIcon,
+  Square,
   Sun,
   Sunrise,
   Tag,
@@ -34,13 +39,19 @@ import {
   copyAsMarkdown,
   newFilter,
   newFolder,
+  completeFocusedTask,
   newLabel,
+  pauseFocus,
   redoCommand,
+  resumeFocus,
+  startBreak,
+  stopFocus,
   toggleSidebar,
   undoCommand,
 } from '@/commands';
 import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
 import type { Settings, Tables } from '@/data/types';
+import type { FocusTimer } from '@/lib/focus';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { SHORTCUTS } from '@/lib/keymap';
 import { PALETTES } from '@/lib/theme';
@@ -77,6 +88,7 @@ export interface PaletteContext {
   sidebarHidden: boolean;
   undoLabel: string | null;
   redoLabel: string | null;
+  timer: FocusTimer | null;
 }
 
 const THEMES: { value: Settings['theme']; label: string; icon: LucideIcon }[] = [
@@ -94,6 +106,7 @@ export function paletteCommands({
   sidebarHidden,
   undoLabel,
   redoLabel,
+  timer,
 }: PaletteContext): PaletteCommand[] {
   const list = view.kind === 'list' ? tables.lists[view.listId] : undefined;
   const editable = list && !list.deletedAt && !list.archivedAt;
@@ -225,6 +238,48 @@ export function paletteCommands({
       icon: sidebarHidden ? PanelLeftOpen : PanelLeftClose,
       shortcut: SHORTCUTS.toggleSidebar,
       run: toggleSidebar,
+    },
+    !!timer &&
+      timer.pausedAt === null && {
+        id: 'focus-pause',
+        label: 'Pause focus timer',
+        keywords: 'pomodoro stopwatch',
+        icon: Pause,
+        keepsFocus: true,
+        run: pauseFocus,
+      },
+    !!timer &&
+      timer.pausedAt !== null && {
+        id: 'focus-resume',
+        label: 'Resume focus timer',
+        keywords: 'pomodoro stopwatch continue',
+        icon: Play,
+        keepsFocus: true,
+        run: resumeFocus,
+      },
+    !!timer && {
+      id: 'focus-stop',
+      label: 'Stop focus timer',
+      keywords: 'pomodoro stopwatch end',
+      icon: Square,
+      keepsFocus: true,
+      run: stopFocus,
+    },
+    !!timer &&
+      timer.kind !== 'break' && {
+        id: 'focus-complete',
+        label: 'Complete the focused task',
+        keywords: 'done finish pomodoro',
+        icon: Check,
+        run: completeFocusedTask,
+      },
+    !timer && {
+      id: 'focus-break',
+      label: 'Start a break',
+      keywords: 'focus pomodoro rest',
+      icon: Coffee,
+      keepsFocus: true,
+      run: startBreak,
     },
     ...THEMES.filter((t) => t.value !== theme).map((t): PaletteCommand => ({
       id: `theme-${t.value}`,

@@ -48,6 +48,7 @@ import {
   setSectionCollapsed,
 } from '@/store/actions/sections';
 import { useData } from '@/store/data';
+import { stopTimerUnder, useFocus } from '@/store/focus';
 import { endOfSubtree, todoModel } from '@/store/todo';
 import { MAX_DEPTH, type FlatRow } from '@/store/tree';
 import {
@@ -176,6 +177,7 @@ export function TodoList({ list }: { list: List }) {
   const reveal = useUI((s) => s.reveal);
   const renamingSectionId = useUI((s) => s.renamingSectionId);
   const reminded = useItemsWithReminders();
+  const focusedId = useFocus((s) => s.timer?.itemId ?? null);
   const readOnly = !!(list.deletedAt || list.archivedAt);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -489,6 +491,7 @@ export function TodoList({ list }: { list: List }) {
         // Tasks with subtasks need Delete, which offers Undo.
         e.preventDefault();
         const neighbour = visible[index - 1] ?? visible[endOfSubtree(visible, index)];
+        stopTimerUnder([id], useData.getState().tables.items);
         deleteItems([id]);
         if (neighbour) focusRow(neighbour.item.id, 'text', true);
         else focusQuickAdd();
@@ -667,6 +670,7 @@ export function TodoList({ list }: { list: List }) {
       selected={row.item.id === selectedId}
       multiSelected={multiIds.includes(row.item.id)}
       hasReminder={reminded.has(row.item.id)}
+      focusing={focusedId === row.item.id}
       tabbable={row.item.id === selectedId || (index === 0 && !selectionShown)}
       menu={menuFor(index)}
       onSelect={(editing) => focusItem(row.item.id, editing)}

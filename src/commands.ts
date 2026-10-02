@@ -8,8 +8,9 @@ import {
   restoreList,
   setShowCompleted,
 } from './store/actions/lists';
-import type { Priority, ViewOptions } from './data/types';
+import type { FocusKind, Priority, ViewOptions } from './data/types';
 import { formatDateKey, formatDue, formatTimestamp } from './lib/dates';
+import { formatFocusTotal } from './lib/focus';
 import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
 import { copyText, notify, requestNotificationPermission } from './platform';
 import { clearChecked, uncheckAll } from './store/actions/grocery';
@@ -40,6 +41,16 @@ import { createFilter, deleteFilter, renameFilter, updateFilter } from './store/
 import { createLabel, deleteLabel, renameLabel } from './store/actions/labels';
 import { createSection, deleteSection, UNTITLED_SECTION } from './store/actions/sections';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
+import {
+  pauseTimer,
+  resumeTimer,
+  startTimer,
+  stopTimer,
+  stopTimerForItems,
+  stopTimerUnder,
+  useFocus,
+  type FocusResult,
+} from './store/focus';
 import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
 import { normalizeLabelName, sameLabelName } from './store/labels';
 import { DEFAULT_VIEW_OPTIONS, sameViewOptions, viewKey } from './store/viewOptions';
@@ -348,6 +359,7 @@ export function trashItems(ids: string[]): void {
   // A subtask selected with its parent goes with the parent, so it isn't counted twice.
   const live = withoutDescendants((id) => items[id], liveIds(ids));
   if (!live.length) return;
+  stopTimerUnder(live, items);
   deleteItems(live);
   toastWithUndo(
     live.length === 1 ? `Deleted ${quote(items[live[0]].text)}` : `Deleted ${live.length} tasks`,
@@ -412,6 +424,7 @@ export function toggleItems(ids: string[]): void {
   }
   const allDone = live.every((id) => items[id].checked);
   const target = !allDone;
+  if (target) stopTimerForItems(live);
   // Only tasks that change count (and a subtask selected with its parent goes with the parent).
   const changing = (target ? withoutDescendants((id) => items[id], live) : live).filter(
     (id) => items[id].checked !== target,
@@ -525,6 +538,7 @@ export function skipTask(id: string): void {
 
 /** Closes a task without doing it. */
 export function closeAsWontDo(id: string): void {
+  stopTimerForItems([id]);
   setWontDo(id);
 }
 
@@ -556,6 +570,7 @@ function dueOn(date: string): string {
 export function toggleItem(id: string, checked: boolean, { announce = false } = {}): void {
   const item = useData.getState().tables.items[id];
   if (!item) return;
+  if (checked) stopTimerForItems([id]);
   const next = setChecked(id, checked);
   if (next) toastWithUndo(`${quote(item.text)} is next due ${dueOn(next)}`);
   else if (checked && announce) toastWithUndo(`Completed ${quote(item.text)}`);
@@ -636,4 +651,82 @@ export function announceMissed(entries: ReminderEntry[]): void {
     action: { label: 'Show', onClick: () => navigate({ kind: 'reminders' }) },
   });
   void notify(title, body);
+}
+
+/** The task a Pomodoro or stopwatch was last started on, for "Start Pomodoro" after a break. */
+let lastFocusedItemId: string | null = null;
+
+/** Starts a Pomodoro or a stopwatch on a task, stopping (and logging) any timer already running. */
+export function startFocus(itemId: string, kind: FocusKind): void {
+  const { settings, tables } = useData.getState();
+  const minutes = kind === 'pomodoro' ? settings.focusMinutes : null;
+  if (!startTimer(kind, itemId, minutes)) return;
+  lastFocusedItemId = itemId;
+  const name = quote(tables.items[itemId]?.text ?? '');
+  toast(
+    minutes === null ? `Stopwatch running on ${name}` : `Focusing on ${name} · ${minutes} min`,
+    {
+      duration: 2500,
+    },
+  );
+}
+
+/** Starts a break. */
+export function startBreak(): void {
+  const { breakMinutes } = useData.getState().settings;
+  startTimer('break', null, breakMinutes);
+  toast(`Break · ${breakMinutes} min`, { duration: 2500 });
+}
+
+export function pauseFocus(): void {
+  pauseTimer();
+}
+
+export function resumeFocus(): void {
+  resumeTimer();
+}
+
+/** Stops the timer, logging the time if it was a minute or more, and says what happened. */
+export function stopFocus(): void {
+  const { timer } = useFocus.getState();
+  const text = timer?.itemId ? useData.getState().tables.items[timer.itemId]?.text : undefined;
+  const result = stopTimer();
+  if (!result) return;
+  if (result.timer.kind === 'break') toast('Break ended', { duration: 2500 });
+  else if (result.session) {
+    toast(`Logged ${formatFocusTotal(result.session.seconds)} on ${quote(text ?? '')}`, {
+      duration: 2500,
+    });
+  } else toast('Stopped · under a minute, not logged', { duration: 2500 });
+}
+
+/** Completes the focused task; completing it logs and stops the timer. A break has no task. */
+export function completeFocusedTask(): void {
+  const id = useFocus.getState().timer?.itemId;
+  if (id) toggleItem(id, true);
+}
+
+/** A countdown ended: says so, with the next step as a button. */
+export function announceFocusEnd({ timer, session }: FocusResult): void {
+  if (timer.kind === 'break') {
+    const task = lastFocusedItemId ? useData.getState().tables.items[lastFocusedItemId] : undefined;
+    const again = task && !task.deletedAt && !task.checked ? task.id : null;
+    toast('Break over', {
+      duration: 8000,
+      action: again
+        ? { label: 'Start Pomodoro', onClick: () => startFocus(again, 'pomodoro') }
+        : undefined,
+    });
+    return;
+  }
+  const item = timer.itemId ? useData.getState().tables.items[timer.itemId] : undefined;
+  const tail = session
+    ? `${formatFocusTotal(session.seconds)} logged on ${quote(item?.text ?? '')}`
+    : item
+      ? 'under a minute, not logged'
+      : 'task is gone';
+  toast(`Pomodoro done · ${tail}`, {
+    duration: 8000,
+    action: { label: 'Start break', onClick: startBreak },
+  });
 }

@@ -3,6 +3,7 @@ import { Button, Dialog, Input, Select } from '@/components/ui';
 import { BUILT_IN_VIEWS, type BuiltInView, type Settings } from '@/data/types';
 import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
 import { formatTimestamp, isTimeString } from '@/lib/dates';
+import { cleanMinutes, MAX_BREAK_MINUTES, MAX_FOCUS_MINUTES } from '@/lib/focus';
 import { PALETTES } from '@/lib/theme';
 import { canBackUp, getLaunchAtLogin, isTauri, setLaunchAtLogin } from '@/platform';
 import { BACKUPS_KEPT } from '@/store/backup';
@@ -94,6 +95,36 @@ function AllDayTimeField() {
         if (isTimeString(e.target.value)) setSetting('allDayReminderTime', e.target.value);
       }}
       onBlur={() => setDraft(stored)}
+    />
+  );
+}
+
+/** A length in whole minutes; saved once the typed value is valid, and reset to the stored one on blur. */
+function MinutesField({
+  id,
+  setting,
+  max,
+}: {
+  id: string;
+  setting: 'focusMinutes' | 'breakMinutes';
+  max: number;
+}) {
+  const stored = useData((s) => s.settings[setting]);
+  const [draft, setDraft] = useState(String(stored));
+  return (
+    <Input
+      id={id}
+      type="number"
+      min={1}
+      max={max}
+      step={1}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const minutes = cleanMinutes(e.target.valueAsNumber, 0, max);
+        if (minutes) setSetting(setting, minutes);
+      }}
+      onBlur={() => setDraft(String(stored))}
     />
   );
 }
@@ -338,6 +369,23 @@ export function SettingsDialog() {
             onChange={set('closeToTray')}
           />
           <LaunchAtLogin />
+        </Section>
+
+        <Section title="Focus timer">
+          <Row label="Pomodoro length (minutes)" htmlFor="settings-focus-minutes">
+            <MinutesField
+              id="settings-focus-minutes"
+              setting="focusMinutes"
+              max={MAX_FOCUS_MINUTES}
+            />
+          </Row>
+          <Row label="Break length (minutes)" htmlFor="settings-break-minutes">
+            <MinutesField
+              id="settings-break-minutes"
+              setting="breakMinutes"
+              max={MAX_BREAK_MINUTES}
+            />
+          </Row>
         </Section>
 
         <Section title="Grocery categories">

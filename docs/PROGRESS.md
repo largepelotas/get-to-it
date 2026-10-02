@@ -65,7 +65,7 @@ there (`"version": "../package.json"`). Bump it before tagging.
 - `files.rs`: `write_text_file`, `read_text_file`, `write_files(dir, files)`
   (relative paths only), `write_backup(name, contents, keep)` (into
   `<app data>/backups`, keeps the newest `keep`), `open_backups_folder`.
-- `tray.rs`: tray icon with Show/Quit; `set_tray_tooltip(text)`.
+- `tray.rs`: tray icon with Show/Quit; `set_tray_status(tooltip, title)`.
 - `lib.rs`: app lifecycle.
   - The window starts **hidden** and is shown when the frontend calls
     `app_ready` (already done in `src/main.tsx`), with a 4 s fallback.
@@ -102,7 +102,7 @@ there (`"version": "../package.json"`). Bump it before tagging.
   `setWindowTheme`, and since M4 `setReminderSchedule`, `onReminderFired`,
   `requestNotificationPermission`, `notify`, `setCloseToTray`,
   `getLaunchAtLogin` (null in the browser), `setLaunchAtLogin`,
-  `onQuitRequested`, `quitApp` and `setTrayTooltip`, and since M6
+  `onQuitRequested`, `quitApp` and `setTrayStatus`, and since M6
   `openUrl` (only `isSafeUrl` links: the opener plugin in the app, a new
   tab in the browser). Native events go
   through `listenNative`, which returns an unsubscribe function right away.
@@ -791,6 +791,36 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   timed tasks (`scheduledMinutes` in `store/smart.ts`). Not yet: Today and
   Upcoming don't list a task on its deadline day, filters have no deadline
   term, and the selection bar sets due dates only.
+- Focus timer (after M8; step 9 of `docs/todoist-gap.md`). Data: a
+  `focusSessions` table (id, item, kind `pomodoro` or `stopwatch`, start, end,
+  seconds), SQLite migration 8; two settings, `focusMinutes` (25) and
+  `breakMinutes` (5); the snapshot version is unchanged and old data loads
+  with no sessions. The running timer is not stored: `store/focus.ts` holds
+  it in `useFocus` (kind, task, start, minutes, pause bookkeeping) and only
+  finished sessions are written, as non-undoable bookkeeping. One timer at a
+  time: starting another stops and logs the first. A Pomodoro or stopwatch
+  needs a live, unchecked task; stopping under a minute logs nothing; a
+  finished countdown logs its planned length; a break logs nothing.
+  Completing, closing as won't do or deleting a task stops its timer
+  (`stopTimerForItems`, and `stopTimerUnder` so a subtask of a trashed parent
+  stops too). Helpers in `lib/focus.ts` (`elapsedMs`, `remainingMs`,
+  `clockSeconds`, `formatClock`, `trayStatus`). The countdown's end goes
+  through the reminder scheduler as a `focus-end` notification, and
+  `useFocusTimer` (mounted in `App`) also ends it on the clock's tick; both
+  call `finishTimer`, so only the first announces it (`announceFocusEnd`: a
+  toast with "Start break", or "Start Pomodoro" after a break).
+  `useFocusClock` ticks on the second only while a timer runs. UI: a focus
+  bar across the top of the main pane in every view (`focus/FocusBar.tsx`:
+  task, clock, Pause/Resume, Stop, Done); a Focus section in the details
+  panel (`FocusField`: start buttons, the clock, the total and the last
+  sessions); a timer icon on the focused task's row ("Focus timer running" in
+  its description); a Focus submenu in the task menu; `F` and `Shift+F` on a
+  focused row; palette entries to pause, resume, stop, complete the task or
+  start a break; the two lengths in Settings. The clock has `aria-live="off"`
+  and a label read once. The tray shows the time left as its title (macOS and
+  Linux; `set_tray_status`) and in the tooltip, and quitting logs the running
+  timer. Not done: no statistics yet, the timer isn't kept across restarts,
+  and sessions can't be edited or deleted.
 
 ### Accessibility and loading (M8)
 

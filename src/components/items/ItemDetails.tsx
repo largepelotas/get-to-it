@@ -47,6 +47,7 @@ import {
   useUI,
 } from '@/store/ui';
 import { Checkbox } from './Checkbox';
+import { FocusField } from './FocusField';
 import { LabelChips } from './LabelChips';
 import { LabelDot, LabelPicker } from './LabelPicker';
 import { PRIORITIES, PRIORITY_COLOR, PRIORITY_LABEL } from './priority';
@@ -454,6 +455,8 @@ export function ItemDetails({ item, readOnly }: ItemDetailsProps) {
         )}
 
         <ReminderField key={item.id} item={item} readOnly={readOnly} />
+
+        <FocusField item={item} readOnly={readOnly} />
 
         <div>
           <SectionLabel>Priority</SectionLabel>

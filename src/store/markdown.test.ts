@@ -7,7 +7,7 @@ import { createItem, setChecked, setItemNotes, setWontDo } from './actions/items
 import { createSection } from './actions/sections';
 import { archiveList, createList, deleteList, moveListToFolder } from './actions/lists';
 import { setNoteContent } from './actions/notes';
-import { resetForTests, useData } from './data';
+import { commit, resetForTests, useData } from './data';
 import { listToMarkdown, markdownFiles, safeFileName } from './markdown';
 
 beforeEach(() => resetForTests(new MemoryRepository()));
@@ -197,6 +197,31 @@ describe('listToMarkdown with deadlines', () => {
         '- [ ] Only deadline (deadline 2026-10-11)',
         '',
       ].join('\n'),
+    );
+  });
+});
+
+describe('focused time', () => {
+  // Bug prevented: time logged with the focus timer missing from the Markdown export, or
+  // untracked tasks gaining a "focused" part.
+  it('adds the focused total to tasks that have logged time', () => {
+    const list = createList({ type: 'todo', title: 'Work' });
+    const a = createItem(list, { text: 'Write plan' })!;
+    createItem(list, { text: 'Other' });
+    const row = (id: string, seconds: number) => ({
+      id,
+      itemId: a,
+      kind: 'pomodoro' as const,
+      startedAt: 1,
+      endedAt: 2,
+      seconds,
+    });
+    commit('Log focus', (tx) => {
+      tx.put('focusSessions', row('s1', 900));
+      tx.put('focusSessions', row('s2', 3600));
+    });
+    expect(md(list)).toBe(
+      ['# Work', '', '- [ ] Write plan (focused 1 h 15 min)', '- [ ] Other', ''].join('\n'),
     );
   });
 });

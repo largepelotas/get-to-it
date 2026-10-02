@@ -7,7 +7,8 @@ import { createItem, setChecked, setDue } from './actions/items';
 import { createList } from './actions/lists';
 import { addReminder, dismissReminders, setReminderConstant } from './actions/reminders';
 import { commit, flushWrites, resetForTests, setSetting, useData } from './data';
-import { startReminderScheduler } from './reminderScheduler';
+import { pauseTimer, startTimer, useFocus } from './focus';
+import { FOCUS_END_ID, startReminderScheduler } from './reminderScheduler';
 
 let repo: MemoryRepository;
 let list: string;
@@ -16,6 +17,7 @@ let schedules: ScheduledReminder[][];
 let fire: (fired: { id: string; at: number }) => void;
 let missed: string[][];
 let reviews: number;
+let focusEnds: number;
 let stop: (() => void) | null = null;
 
 beforeEach(() => {
@@ -26,6 +28,8 @@ beforeEach(() => {
   schedules = [];
   missed = [];
   reviews = 0;
+  focusEnds = 0;
+  useFocus.setState({ timer: null });
 });
 
 afterEach(() => stop?.());
@@ -39,6 +43,7 @@ function start() {
     },
     onMissed: (entries) => missed.push(entries.map((e) => e.item.text)),
     onDailyReview: () => void reviews++,
+    onFocusEnd: () => void focusEnds++,
     now: () => now,
   });
 }
@@ -254,5 +259,52 @@ describe('daily review', () => {
     now = at('2026-10-05', '14:00');
     createItem(list, { text: 'E', dueDate: '2026-10-06' });
     expect(lastEntries()[0].body).toBe('2 tasks due today · 3 overdue');
+  });
+});
+
+describe('focus timer end', () => {
+  const entry = () => lastEntries().find((e) => e.id === FOCUS_END_ID);
+
+  // Bug prevented: the end-of-countdown notification never being scheduled, so a hidden window
+  // gets no notice when the Pomodoro ends.
+  it('schedules a running Pomodoro at its end, and removes it when paused', () => {
+    const id = createItem(list, { text: 'Write plan' })!;
+    start();
+    expect(lastEntries().some((e) => e.id === FOCUS_END_ID)).toBe(false);
+    startTimer('pomodoro', id, 25, now);
+    expect(entry()).toEqual({
+      id: FOCUS_END_ID,
+      at: now + 25 * MIN,
+      title: 'Focus done',
+      body: '25 min on \u201cWrite plan\u201d',
+    });
+    pauseTimer(now + MIN);
+    expect(entry()).toBeUndefined();
+  });
+
+  it('schedules a break', () => {
+    start();
+    startTimer('break', null, 5, now);
+    expect(entry()).toEqual({
+      id: FOCUS_END_ID,
+      at: now + 5 * MIN,
+      title: 'Break over',
+      body: 'Back to it',
+    });
+  });
+
+  // Bug prevented: a stopwatch (which never ends) scheduling a notification.
+  it('schedules nothing for a stopwatch', () => {
+    const id = createItem(list, { text: 'Write plan' })!;
+    start();
+    startTimer('stopwatch', id, null, now);
+    expect(entry()).toBeUndefined();
+  });
+
+  // Bug prevented: the app not hearing that the countdown fired, so the timer never finishes.
+  it('tells the app when the end fires', () => {
+    start();
+    fire({ id: FOCUS_END_ID, at: now });
+    expect(focusEnds).toBe(1);
   });
 });

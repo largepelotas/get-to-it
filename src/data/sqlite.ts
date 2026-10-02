@@ -20,6 +20,11 @@ function snake(field: string): string {
   return field.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 }
 
+/** The SQL table for a table of the data (`focusSessions` is `focus_sessions`). */
+function sqlTable(table: TableName): string {
+  return snake(table);
+}
+
 function columns(spec: Record<string, ColumnType>): Column[] {
   return Object.entries(spec).map(([field, type]) => ({ field, column: snake(field), type }));
 }
@@ -131,6 +136,14 @@ const SCHEMA: Record<TableName, Column[]> = {
     content: 'text',
     plainText: 'text',
     updatedAt: 'int',
+  }),
+  focusSessions: columns({
+    id: 'text',
+    itemId: 'text',
+    kind: 'text',
+    startedAt: 'int',
+    endedAt: 'int',
+    seconds: 'int',
   }),
 };
 
@@ -265,6 +278,18 @@ export const MIGRATIONS: string[][] = [
   ],
   // A task's end time (a time range) and its deadline.
   [`ALTER TABLE items ADD COLUMN end_time TEXT`, `ALTER TABLE items ADD COLUMN deadline TEXT`],
+  // Focus sessions: time logged on a task with the focus timer.
+  [
+    `CREATE TABLE focus_sessions (
+      id TEXT PRIMARY KEY NOT NULL,
+      item_id TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('pomodoro', 'stopwatch')),
+      started_at INTEGER NOT NULL,
+      ended_at INTEGER NOT NULL,
+      seconds INTEGER NOT NULL
+    )`,
+    `CREATE INDEX focus_sessions_item_id ON focus_sessions (item_id)`,
+  ],
 ];
 
 function toColumnValue(value: unknown, type: ColumnType): unknown {
@@ -310,7 +335,7 @@ export function recordToRow(table: TableName, record: Record<string, unknown>): 
 
 function putSql(table: TableName): string {
   const cols = SCHEMA[table].map((c) => c.column);
-  return `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
+  return `INSERT OR REPLACE INTO ${sqlTable(table)} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
 }
 
 export class SqliteRepository implements Repository {
@@ -336,7 +361,7 @@ export class SqliteRepository implements Repository {
     await this.migrate();
     const tables = emptyTables();
     for (const table of TABLE_NAMES) {
-      const records = await this.db.select(`SELECT * FROM ${table}`);
+      const records = await this.db.select(`SELECT * FROM ${sqlTable(table)}`);
       const target = tables[table] as Record<string, AnyRow>;
       for (const record of records) {
         const row = recordToRow(table, record);
@@ -365,16 +390,16 @@ export class SqliteRepository implements Repository {
     for (const table of TABLE_NAMES) {
       statements.push(
         {
-          sql: `INSERT OR REPLACE INTO tombstones (entity, id, deleted_at) SELECT '${table}', id, ? FROM ${table}`,
+          sql: `INSERT OR REPLACE INTO tombstones (entity, id, deleted_at) SELECT '${table}', id, ? FROM ${sqlTable(table)}`,
           params: [now],
         },
-        { sql: `DELETE FROM ${table}`, params: [] },
+        { sql: `DELETE FROM ${sqlTable(table)}`, params: [] },
         ...Object.values(tables[table] ?? {}).map((row) => ({
           sql: putSql(table),
           params: rowToRecord(table, row),
         })),
         {
-          sql: `DELETE FROM tombstones WHERE entity = '${table}' AND id IN (SELECT id FROM ${table})`,
+          sql: `DELETE FROM tombstones WHERE entity = '${table}' AND id IN (SELECT id FROM ${sqlTable(table)})`,
           params: [],
         },
       );
@@ -406,7 +431,7 @@ export class SqliteRepository implements Repository {
           return [{ sql: putSql(op.table), params: rowToRecord(op.table, op.row) }];
         case 'delete':
           return [
-            { sql: `DELETE FROM ${op.table} WHERE id = ?`, params: [op.id] },
+            { sql: `DELETE FROM ${sqlTable(op.table)} WHERE id = ?`, params: [op.id] },
             {
               sql: 'INSERT OR REPLACE INTO tombstones (entity, id, deleted_at) VALUES (?, ?, ?)',
               params: [op.table, op.id, now],

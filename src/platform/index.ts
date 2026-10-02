@@ -140,8 +140,9 @@ export async function quitApp(): Promise<void> {
   if (isTauri) await invoke('quit_app');
 }
 
-export async function setTrayTooltip(text: string): Promise<void> {
-  if (isTauri) await invoke('set_tray_tooltip', { text });
+/** The tray's tooltip and, where the platform shows one (macOS, Linux), a short title beside the icon. */
+export async function setTrayStatus(tooltip: string, title: string | null): Promise<void> {
+  if (isTauri) await invoke('set_tray_status', { tooltip, title });
 }
 
 // Clipboard
