@@ -117,6 +117,7 @@ for (const palette of PALETTES)
         'Tomorrow',
         'Next 7 days',
         'Upcoming',
+        'Calendar',
         'Eisenhower matrix',
         'Reminders',
         'Archive',
@@ -125,6 +126,23 @@ for (const palette of PALETTES)
         await page.getByRole('button', { name: new RegExp(`^${view}`) }).click();
         await expect(page.getByRole('heading', { level: 1, name: view })).toBeVisible();
         await expectAccessible(page);
+        if (view === 'Calendar') {
+          // The Unscheduled panel too.
+          await page.getByRole('button', { name: 'Tasks' }).click();
+          await expect(
+            page.getByRole('complementary', { name: 'Unscheduled tasks' }),
+          ).toBeVisible();
+          await settled(page);
+          await expectAccessible(page);
+          await page.getByRole('button', { name: 'Tasks' }).click();
+          await expect(page.getByRole('complementary', { name: 'Unscheduled tasks' })).toBeHidden();
+          // The week layout too, then back to Month so the setting does not carry on.
+          await page.getByRole('button', { name: 'Week', exact: true }).click();
+          await expect(page.getByRole('region', { name: /^Friday, / })).toBeVisible();
+          await settled(page);
+          await expectAccessible(page);
+          await page.getByRole('button', { name: 'Month', exact: true }).click();
+        }
       }
 
       for (const shortcut of ['ControlOrMeta+,', 'ControlOrMeta+/', 'ControlOrMeta+k']) {

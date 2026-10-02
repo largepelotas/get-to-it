@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import { addTasks, openApp, openList, row, sidebarButton } from './helpers';
 
 test('Today and Upcoming gather dated tasks from every list', async ({ page }) => {
+  // A Wednesday, so "tomorrow" falls in the same Upcoming week whenever this runs.
+  await page.clock.setFixedTime(new Date(2026, 9, 7, 12));
   await openApp(page);
   await openList(page, 'Inbox');
   await addTasks(page, 'Call Sam today', 'Dentist tomorrow 9am', 'Someday maybe');
@@ -13,7 +15,10 @@ test('Today and Upcoming gather dated tasks from every list', async ({ page }) =
 
   await page.getByRole('button', { name: /^Upcoming/ }).click();
   await expect(row(page, 'Dentist')).toBeVisible();
-  await expect(row(page, 'Call Sam')).toHaveCount(0);
+  // Upcoming starts today, so today's tasks show too, under a "Today" heading.
+  await expect(
+    page.getByRole('region', { name: /^Today · / }).getByRole('listitem', { name: 'Call Sam' }),
+  ).toBeVisible();
   await expect(row(page, 'Someday maybe')).toHaveCount(0);
 });
 

@@ -113,6 +113,16 @@ describe('folders and lists', () => {
 });
 
 describe('loading settings', () => {
+  // Bug prevented: a hand-edited layout name reaching the calendar, which then has no layout to draw.
+  it('keeps a known calendar layout and falls back to month for anything else', async () => {
+    await initData(new MemoryRepository({ settings: { calendarLayout: 'week' } }));
+    expect(useData.getState().settings.calendarLayout).toBe('week');
+    await initData(new MemoryRepository({ settings: { calendarLayout: 'year' as never } }));
+    expect(useData.getState().settings.calendarLayout).toBe('month');
+    await initData(new MemoryRepository({ settings: {} }));
+    expect(useData.getState().settings.calendarLayout).toBe('month');
+  });
+
   // Bug prevented: data saved before these settings existed loading without defaults.
   it('uses defaults for missing settings and drops unknown view names', async () => {
     await initData(new MemoryRepository({ settings: { theme: 'dark' } }));

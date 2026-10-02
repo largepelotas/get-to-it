@@ -5,7 +5,7 @@ import { QuickAdd } from '@/components/items/QuickAdd';
 import { focusQuickAdd } from '@/hooks/useAppShortcuts';
 import { Button, Dialog, Input, Label, Select } from '@/components/ui';
 import type { ListType } from '@/data/types';
-import { addDaysKey, todayKey } from '@/lib/dates';
+import { addDaysKey, todayKey, upcomingStart } from '@/lib/dates';
 import { bySortKey } from '@/lib/order';
 import { createList, LIST_TYPE_LABEL } from '@/store/actions/lists';
 import { useData } from '@/store/data';
@@ -144,6 +144,7 @@ function QuickAddDialog() {
   // Each date view's own quick add dates new tasks for its day, so this does too.
   const [defaultDue] = useState(() => {
     const { kind } = useUI.getState().view;
+    if (kind === 'upcoming') return upcomingStart(useUI.getState().upcomingFrom, todayKey());
     if (kind === 'today' || kind === 'next7') return todayKey();
     return kind === 'tomorrow' ? addDaysKey(todayKey(), 1) : null;
   });

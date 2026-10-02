@@ -1,3 +1,4 @@
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import clsx from 'clsx';
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { toggleItem, trashItems } from '@/commands';
@@ -21,7 +22,7 @@ import {
 } from '@/store/ui';
 import { useFocus } from '@/store/focus';
 import { itemMenuEntries } from './itemMenu';
-import { ItemRow, type RowClickKind, type RowKeyMode } from './ItemRow';
+import { ItemRow, type DragBits, type RowClickKind, type RowKeyMode } from './ItemRow';
 import { handleSelectionKey } from './selection';
 
 export interface SmartSection {
@@ -39,6 +40,8 @@ export interface SmartSection {
   bare?: boolean;
   /** The heading names the day, so rows show only their time. */
   timeOnly?: boolean;
+  /** Makes the section a drop target with this id, highlighted while a drag is over it. */
+  dropId?: string;
 }
 
 interface FocusRequest {
@@ -54,6 +57,38 @@ export interface SmartListProps {
   grid?: boolean;
   /** The list this view is of: its own top-level tasks don't say which list they're in. */
   homeListId?: string;
+  /** Rows can be dragged (to a section with a `dropId`); the view supplies the DndContext. */
+  draggable?: boolean;
+}
+
+/** A row that can be dragged by its grip. The row stays put; the view shows a DragOverlay instead. */
+function DraggableRow({ id, children }: { id: string; children: (drag: DragBits) => ReactNode }) {
+  const { setNodeRef, isDragging, attributes, listeners } = useDraggable({ id });
+  return children({
+    ref: setNodeRef,
+    // The overlay looks lifted; the row left behind is only dimmed.
+    style: isDragging ? { opacity: 0.5 } : {},
+    dragging: false,
+    handle: { ...attributes, ...listeners, tabIndex: -1 },
+  });
+}
+
+interface SectionBoxProps {
+  className: string;
+  'aria-label': string;
+  children: ReactNode;
+}
+
+/** A section that accepts drops, with a ring while a drag is over it. */
+function DropSection({ dropId, className, ...props }: SectionBoxProps & { dropId: string }) {
+  const { setNodeRef, isOver } = useDroppable({ id: dropId });
+  return (
+    <section
+      ref={setNodeRef}
+      className={clsx(className, isOver && 'rounded-md bg-hover ring-1 ring-accent')}
+      {...props}
+    />
+  );
 }
 
 /**
@@ -61,7 +96,13 @@ export interface SmartListProps {
  * checked and deleted, but not nested or reordered, since the order here is
  * by date rather than the list's own.
  */
-export function SmartList({ sections, onExitTop, grid = false, homeListId }: SmartListProps) {
+export function SmartList({
+  sections,
+  onExitTop,
+  grid = false,
+  homeListId,
+  draggable = false,
+}: SmartListProps) {
   const selectedId = useUI((s) => s.selectedItemId);
   const multiIds = useUI((s) => s.multiSelectedIds);
   const reminded = useItemsWithReminders();
@@ -184,70 +225,88 @@ export function SmartList({ sections, onExitTop, grid = false, homeListId }: Sma
       tabIndex={-1}
       className={clsx('outline-none', grid && 'grid gap-4 md:grid-cols-2')}
     >
-      {sections.map((section, sectionIndex) => (
-        <section
-          key={section.key}
-          aria-label={
-            section.label ?? (typeof section.title === 'string' ? section.title : section.key)
-          }
-          className={grid ? 'min-w-0 rounded-lg border border-line px-2 pb-2' : 'mb-5'}
-        >
-          {!section.bare && (
-            <h2
-              className={clsx(
-                'flex h-8 items-center gap-2 border-b border-line px-2 text-[13px] font-semibold',
-                section.tone === 'danger' ? 'text-danger' : 'text-fg',
-                grid && 'h-9',
-              )}
-            >
-              <span className="min-w-0 flex-1 truncate">{section.title}</span>
-              {section.actions}
-            </h2>
-          )}
-          {!section.rows.length && section.emptyText && (
-            <p className="px-2 py-2 text-sm text-fg-muted">{section.emptyText}</p>
-          )}
-          <div role="list" className="pt-1">
-            {section.rows.map((row, rowIndex) => {
-              const i = starts[sectionIndex] + rowIndex;
-              const id = row.item.id;
-              return (
-                <ItemRow
-                  key={id}
-                  row={row}
-                  origin={
-                    row.list.id === homeListId && !row.parent
-                      ? undefined
-                      : { list: row.list, parentText: row.parent?.text }
-                  }
-                  timeOnly={section.timeOnly}
-                  readOnly={false}
-                  selected={id === selectedId}
-                  multiSelected={multiIds.includes(id)}
-                  hasReminder={reminded.has(id)}
-                  focusing={focusedId === id}
-                  tabbable={id === selectedId || (i === 0 && !selectionShown)}
-                  onToggle={() => toggle(i)}
-                  menu={() =>
-                    itemMenuEntries(row.item, {
-                      openDetails: () => openDetails(id),
-                      goToList: () => {
-                        openList(row.list.id);
-                        selectItem(id);
-                      },
-                      remove: () => trashItems([id]),
-                    })
-                  }
-                  onSelect={(editing) => focusItem(id, editing)}
-                  onClickRow={(kind) => clickRow(id, kind)}
-                  onOpenDetails={() => openDetails(id)}
-                  onKeyDown={(e, mode) => onRowKey(e, i, mode)}
-                />
-              );
-            })}
-          </div>
-        </section>
-      ))}
+      {sections.map((section, sectionIndex) => {
+        const boxProps = {
+          'aria-label':
+            section.label ?? (typeof section.title === 'string' ? section.title : section.key),
+          className: grid ? 'min-w-0 rounded-lg border border-line px-2 pb-2' : 'mb-5',
+        };
+        const content = (
+          <>
+            {!section.bare && (
+              <h2
+                className={clsx(
+                  'flex h-8 items-center gap-2 border-b border-line px-2 text-[13px] font-semibold',
+                  section.tone === 'danger' ? 'text-danger' : 'text-fg',
+                  grid && 'h-9',
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{section.title}</span>
+                {section.actions}
+              </h2>
+            )}
+            {!section.rows.length && section.emptyText && (
+              <p className="px-2 py-2 text-sm text-fg-muted">{section.emptyText}</p>
+            )}
+            <div role="list" className="pt-1">
+              {section.rows.map((row, rowIndex) => {
+                const i = starts[sectionIndex] + rowIndex;
+                const id = row.item.id;
+                const renderRow = (drag?: DragBits) => (
+                  <ItemRow
+                    key={id}
+                    drag={drag}
+                    row={row}
+                    origin={
+                      row.list.id === homeListId && !row.parent
+                        ? undefined
+                        : { list: row.list, parentText: row.parent?.text }
+                    }
+                    timeOnly={section.timeOnly}
+                    readOnly={false}
+                    selected={id === selectedId}
+                    multiSelected={multiIds.includes(id)}
+                    hasReminder={reminded.has(id)}
+                    focusing={focusedId === id}
+                    tabbable={id === selectedId || (i === 0 && !selectionShown)}
+                    onToggle={() => toggle(i)}
+                    menu={() =>
+                      itemMenuEntries(row.item, {
+                        openDetails: () => openDetails(id),
+                        goToList: () => {
+                          openList(row.list.id);
+                          selectItem(id);
+                        },
+                        remove: () => trashItems([id]),
+                      })
+                    }
+                    onSelect={(editing) => focusItem(id, editing)}
+                    onClickRow={(kind) => clickRow(id, kind)}
+                    onOpenDetails={() => openDetails(id)}
+                    onKeyDown={(e, mode) => onRowKey(e, i, mode)}
+                  />
+                );
+                return draggable ? (
+                  <DraggableRow key={id} id={id}>
+                    {renderRow}
+                  </DraggableRow>
+                ) : (
+                  renderRow()
+                );
+              })}
+            </div>
+          </>
+        );
+        return section.dropId ? (
+          <DropSection key={section.key} dropId={section.dropId} {...boxProps}>
+            {content}
+          </DropSection>
+        ) : (
+          <section key={section.key} {...boxProps}>
+            {content}
+          </section>
+        );
+      })}
     </div>
   );
 }

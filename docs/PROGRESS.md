@@ -821,6 +821,52 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   Linux; `set_tray_status`) and in the tooltip, and quitting logs the running
   timer. Not done: no statistics yet, the timer isn't kept across restarts,
   and sessions can't be edited or deleted.
+- Better Upcoming and a calendar (after M8; step 10 of
+  `docs/todoist-gap.md`). **Upcoming** now starts at today, like Todoist:
+  an Overdue section (with Reschedule), then every remaining day of the
+  week shown even when empty, then later days that have tasks. A week
+  strip above the quick-add field (seven buttons with the day's task
+  count; past days disabled; today marked) picks the start day; the
+  header has Previous week, Today, Next week and "Jump to a date". The
+  start day is `useUI.upcomingFrom` (null is today; `upcomingStart` in
+  `lib/dates.ts` clamps a stale past day to today; `navigate` resets it),
+  the model is `upcomingModel(rows, today, from, weekStartsOn)` in
+  `store/smart.ts` (plus `countByDay`), and `startOfWeekKey`/`weekDays`
+  are in `lib/dates.ts`. The quick-add field and dialog date new tasks on
+  the start day. Rows can be dragged onto another day's section or strip
+  button (dnd-kit; `SmartList` gained `draggable` and
+  `SmartSection.dropId`; the drop ids live in `components/views/dayDrop.ts`
+  with a `day:`/`strip:` prefix since dnd-kit keeps one droppable per id);
+  a multi-selection moves together when the dragged row is in it. The
+  **Calendar** is a built-in view (hideable, in the palette) with a
+  layout setting `calendarLayout` (`month`, `week`, `days`; cleaned in
+  `normalizeSettings` and the snapshot reader; no migration, the settings
+  table is key/value). `store/calendar.ts` is the pure side: `monthGrid`
+  (the weeks that cover a month), `addMonthsKey` (in `lib/dates.ts`,
+  clamped to the month's length), `monthTitle`/`rangeTitle`, `rowsByDay`,
+  `unscheduledRows`/`unscheduledSections` (open undated tasks by list),
+  `timedBlocks` (minutes from midnight, a 30-minute block for a task with
+  no end, overlapping blocks share lanes), `allDayRows` and
+  `slotFromOffset` (a pointer offset to a 15-minute slot). The month
+  layout (`components/calendar/MonthGrid.tsx`) is a grid of
+  `<section>`s named by their date, each listing `TaskChip`s (time, text,
+  priority edge; click opens details; drag to another day). The week and
+  3-day layouts (`TimeGrid.tsx`, `HOUR_PX` = 48) have day headings, an
+  all-day row and a time grid where timed tasks are blocks from their
+  due time to their end time, with a current-time line on today and a
+  ghost where a drag would land; the grid opens scrolled to 7:00 or the
+  first block. Drops: a day or all-day cell → `moveTasksToDay(ids, date)`
+  in `commands.ts` (through `setDueDates`, keeps times, toast "Moved to
+  Tomorrow"; Upcoming uses it too), a timed task on the all-day row loses
+  its time (a multi-selection dropped there goes through
+  `moveTasksToDay` and keeps its times), and a time slot → `moveTaskToTime(id, date, time)` →
+  `moveDueTo` in `store/actions/items.ts` (the end moves to keep the
+  length, or goes when it would pass midnight). The "Tasks" button opens
+  a panel of unscheduled tasks (`UnscheduledPanel.tsx`, a `SmartList`
+  with `draggable`) to drag onto the calendar. Not done: no resizing a
+  block to change its end, no agenda layout, dragging has no keyboard
+  path (the due picker covers it), the calendar shows open tasks only,
+  and Today/Upcoming still don't list a task on its deadline day.
 
 ### Accessibility and loading (M8)
 

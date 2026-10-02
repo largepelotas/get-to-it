@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addMinutes,
+  addMonthsKey,
   formatDateKey,
   formatDue,
   formatDuration,
@@ -8,8 +9,13 @@ import {
   formatTimeRange,
   isOverdue,
   isTimeAfter,
+  minutesOf,
   msUntilTomorrow,
   nextWeekKey,
+  startOfWeekKey,
+  timeOfMinutes,
+  upcomingStart,
+  weekDays,
 } from './dates';
 
 describe('dates', () => {
@@ -19,6 +25,34 @@ describe('dates', () => {
     expect(nextWeekKey('2026-09-30', 0)).toBe('2026-10-04');
     // On the first day of the week, it's a week later.
     expect(nextWeekKey('2026-10-05', 1)).toBe('2026-10-12');
+  });
+
+  // Bug prevented: the Upcoming strip starting on the wrong weekday, or splitting a week across months.
+  it('finds the week that holds a date, Monday or Sunday first', () => {
+    // 30 September 2026 is a Wednesday.
+    expect(startOfWeekKey('2026-09-30', 1)).toBe('2026-09-28');
+    expect(startOfWeekKey('2026-09-30', 0)).toBe('2026-09-27');
+    expect(startOfWeekKey('2026-09-28', 1)).toBe('2026-09-28');
+    expect(startOfWeekKey('2026-09-27', 1)).toBe('2026-09-21');
+    expect(weekDays('2026-09-30', 1)).toEqual([
+      '2026-09-28',
+      '2026-09-29',
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+      '2026-10-03',
+      '2026-10-04',
+    ]);
+    expect(weekDays('2026-09-30', 0)[0]).toBe('2026-09-27');
+    expect(weekDays('2026-09-30', 0)[6]).toBe('2026-10-03');
+  });
+
+  // Bug prevented: a stored Upcoming start day that slipped into the past dating things in the past.
+  it('never starts Upcoming before today', () => {
+    expect(upcomingStart(null, '2026-10-02')).toBe('2026-10-02');
+    expect(upcomingStart('2026-09-01', '2026-10-02')).toBe('2026-10-02');
+    expect(upcomingStart('2026-10-02', '2026-10-02')).toBe('2026-10-02');
+    expect(upcomingStart('2026-10-12', '2026-10-02')).toBe('2026-10-12');
   });
 
   it('labels dates relative to today', () => {
@@ -83,5 +117,29 @@ describe('time ranges', () => {
     expect(isTimeAfter('14:30', '14:00')).toBe(true);
     expect(isTimeAfter('14:00', '14:00')).toBe(false);
     expect(isTimeAfter('09:00', '14:00')).toBe(false);
+  });
+
+  // Bug prevented: the calendar's Next jumping two months (Jan 31 + 1 month rolling into March)
+  // or landing on a day that doesn't exist.
+  it('adds months, clamping to the length of the month', () => {
+    expect(addMonthsKey('2026-10-02', 1)).toBe('2026-11-02');
+    expect(addMonthsKey('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addMonthsKey('2028-01-31', 1)).toBe('2028-02-29');
+    expect(addMonthsKey('2026-12-15', 1)).toBe('2027-01-15');
+    expect(addMonthsKey('2026-01-15', -1)).toBe('2025-12-15');
+    expect(addMonthsKey('2026-03-31', -1)).toBe('2026-02-28');
+  });
+});
+
+describe('minutesOf and timeOfMinutes', () => {
+  // Bug prevented: the grid and the drop maths disagreeing about what a time is in minutes.
+  it('convert between HH:mm and minutes from midnight', () => {
+    expect(minutesOf('00:00')).toBe(0);
+    expect(minutesOf('09:15')).toBe(555);
+    expect(minutesOf('23:45')).toBe(1425);
+    expect(timeOfMinutes(0)).toBe('00:00');
+    expect(timeOfMinutes(555)).toBe('09:15');
+    expect(timeOfMinutes(1425)).toBe('23:45');
+    expect(timeOfMinutes(minutesOf('14:30'))).toBe('14:30');
   });
 });

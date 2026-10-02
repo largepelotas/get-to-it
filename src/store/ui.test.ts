@@ -7,6 +7,7 @@ import {
   selectAll,
   selectItem,
   selectRange,
+  setUpcomingFrom,
   toggleSelected,
   useUI,
 } from './ui';
@@ -108,5 +109,16 @@ describe('selecting several tasks', () => {
     navigate({ kind: 'upcoming' });
     expect(multi()).toEqual([]);
     expect(primary()).toBeNull();
+  });
+});
+
+describe('upcomingFrom', () => {
+  // Bug prevented: Upcoming reopening on a week you navigated to last time.
+  it('is cleared by navigating away', () => {
+    navigate({ kind: 'upcoming' });
+    setUpcomingFrom('2026-10-12');
+    expect(useUI.getState().upcomingFrom).toBe('2026-10-12');
+    navigate({ kind: 'today' });
+    expect(useUI.getState().upcomingFrom).toBeNull();
   });
 });

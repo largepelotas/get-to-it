@@ -1,6 +1,7 @@
 import type { LoadResult } from '@/data/repository';
 import {
   BUILT_IN_VIEWS,
+  CALENDAR_LAYOUTS,
   COLOR_NAMES,
   DEFAULT_SETTINGS,
   emptyTables,
@@ -8,6 +9,7 @@ import {
   MAX_FOCUS_MINUTES,
   TABLE_NAMES,
   type AnyRow,
+  type CalendarLayout,
   type Settings,
   type Snapshot,
   type TableName,
@@ -272,6 +274,8 @@ function checkSettings(raw: unknown): Partial<Settings> {
       if (['system', 'light', 'dark'].includes(value as string)) out[key] = value;
     } else if (key === 'palette') {
       if (isPaletteName(value)) out[key] = value;
+    } else if (key === 'calendarLayout') {
+      if (CALENDAR_LAYOUTS.includes(value as CalendarLayout)) out[key] = value;
     } else if (key === 'weekStartsOn') {
       if (value === 0 || value === 1) out[key] = value;
     } else if (typeof value === typeof fallback) {

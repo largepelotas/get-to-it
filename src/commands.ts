@@ -20,6 +20,7 @@ import {
   deleteItems,
   duplicateItem,
   moveDueDates,
+  moveDueTo,
   moveItemToList,
   moveItemsToList,
   setChecked,
@@ -457,6 +458,30 @@ export function setTasksDue(ids: string[], date: string | null): void {
       ? `Cleared the date on ${tasks(live.length)}`
       : `Rescheduled ${tasks(live.length)}`,
   );
+}
+
+/**
+ * Puts tasks on a day (a drop on the calendar or Upcoming), keeping their
+ * times. Undated tasks get the date too. One Undo toast.
+ */
+export function moveTasksToDay(ids: string[], date: string): void {
+  const { items } = useData.getState().tables;
+  const live = liveIds(ids).filter((id) => items[id].dueDate !== date);
+  if (!live.length || !recorded(() => setDueDates(live, date))) return;
+  const day = formatDateKey(date);
+  toastWithUndo(live.length === 1 ? `Moved to ${day}` : `Moved ${tasks(live.length)} to ${day}`);
+}
+
+/**
+ * Puts one task on a day at a time, or with no time when `time` is null (a
+ * drop on the calendar's time grid or all-day row). Does nothing if it is
+ * already there. One Undo toast.
+ */
+export function moveTaskToTime(id: string, date: string, time: string | null): void {
+  const item = useData.getState().tables.items[id];
+  if (!item || item.deletedAt || (item.dueDate === date && item.dueTime === time)) return;
+  if (!recorded(() => moveDueTo(id, date, time))) return;
+  toastWithUndo(`Moved to ${formatDue(date, time)}`);
 }
 
 /** Today's "Reschedule": moves overdue tasks to a day, keeping their times. */

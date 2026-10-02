@@ -5,6 +5,7 @@ import { archiveList, createList } from './actions/lists';
 import { createItem, setChecked, setEndTime } from './actions/items';
 import { resetForTests, useData } from './data';
 import {
+  countByDay,
   dueRows,
   next7Count,
   next7Model,
@@ -84,11 +85,94 @@ describe('Today and Upcoming', () => {
     expect(texts(t.overdue)).toEqual(['Old']);
     expect(texts(t.today)).toEqual(['Now']);
     expect(todayCount(rows(), today)).toBe(2);
-    const groups = upcomingModel(rows(), today);
-    expect(groups.map((g) => [g.date, texts(g.rows)])).toEqual([
+    const { overdue, days } = upcomingModel(rows(), today, today, 1);
+    expect(texts(overdue)).toEqual(['Old']);
+    // 30 Sep 2026 is a Wednesday: the week runs to Sunday 4 Oct, then later days with rows.
+    expect(days.map((g) => [g.date, texts(g.rows)])).toEqual([
+      ['2026-09-30', ['Now']],
       ['2026-10-01', ['Tomorrow B', 'Tomorrow A']],
+      ['2026-10-02', []],
+      ['2026-10-03', []],
+      ['2026-10-04', []],
       ['2026-10-07', ['Next week']],
     ]);
+  });
+});
+
+describe('Upcoming from a chosen day', () => {
+  const today = '2026-09-30';
+
+  // Bug prevented: overdue tasks showing under a later week, where they are not "coming up".
+  it('shows overdue only when the view starts today', () => {
+    add(work, 'Old', '2026-09-28');
+    expect(texts(upcomingModel(rows(), today, today, 1).overdue)).toEqual(['Old']);
+    expect(upcomingModel(rows(), today, '2026-10-05', 1).overdue).toEqual([]);
+  });
+
+  // Bug prevented: empty days dropping out of the strip's week.
+  it('keeps the rest of the starting week when days are empty', () => {
+    const { days } = upcomingModel(rows(), today, '2026-10-01', 1);
+    expect(days.map((d) => d.date)).toEqual([
+      '2026-10-01',
+      '2026-10-02',
+      '2026-10-03',
+      '2026-10-04',
+    ]);
+  });
+
+  // Bug prevented: tasks between today and the chosen day leaking into the view.
+  it('leaves out days before the starting day', () => {
+    add(work, 'Today', '2026-09-30');
+    add(work, 'Skipped', '2026-10-02');
+    add(work, 'Shown', '2026-10-06');
+    const { days } = upcomingModel(rows(), today, '2026-10-05', 1);
+    expect(days.map((d) => d.date)).toEqual([
+      '2026-10-05',
+      '2026-10-06',
+      '2026-10-07',
+      '2026-10-08',
+      '2026-10-09',
+      '2026-10-10',
+      '2026-10-11',
+    ]);
+    expect(texts(days.flatMap((d) => d.rows))).toEqual(['Shown']);
+  });
+
+  // Bug prevented: a long run of empty days after the week filling the view.
+  it('adds a day after the week only when it has tasks', () => {
+    add(work, 'Far', '2026-10-20');
+    const { days } = upcomingModel(rows(), today, today, 1);
+    expect(days.map((d) => d.date)).toEqual([
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+      '2026-10-03',
+      '2026-10-04',
+      '2026-10-20',
+    ]);
+  });
+
+  // Bug prevented: ignoring the week-start setting, so a Sunday-first week ends a day early.
+  it('ends the week on Saturday when weeks start on Sunday', () => {
+    const { days } = upcomingModel(rows(), today, today, 0);
+    expect(days.map((d) => d.date)).toEqual([
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+      '2026-10-03',
+    ]);
+  });
+
+  it('counts open tasks per due date', () => {
+    add(work, 'A', '2026-10-01');
+    add(home, 'B', '2026-10-01');
+    add(work, 'C', '2026-10-02');
+    expect(countByDay(rows())).toEqual(
+      new Map([
+        ['2026-10-01', 2],
+        ['2026-10-02', 1],
+      ]),
+    );
   });
 });
 

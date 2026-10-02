@@ -1,4 +1,12 @@
-import { addDays, differenceInCalendarDays, format, isValid, parse } from 'date-fns';
+import {
+  addDays,
+  addMonths,
+  differenceInCalendarDays,
+  format,
+  isValid,
+  parse,
+  startOfWeek,
+} from 'date-fns';
 
 /** Local calendar date as YYYY-MM-DD. */
 export type DateKey = string;
@@ -31,6 +39,11 @@ export function todayKey(now: Date = new Date()): DateKey {
 
 export function addDaysKey(key: DateKey, days: number): DateKey {
   return toDateKey(addDays(fromDateKey(key), days));
+}
+
+/** The same day `months` months on (or back), clamped to the month's length: Jan 31 + 1 is Feb 28. */
+export function addMonthsKey(key: DateKey, months: number): DateKey {
+  return toDateKey(addMonths(fromDateKey(key), months));
 }
 
 export function daysBetween(from: DateKey, to: DateKey): number {
@@ -89,6 +102,16 @@ export function formatTimeRange(start: string, end: string | null): string {
   return end ? `${formatTime(start)}\u2013${formatTime(end)}` : formatTime(start);
 }
 
+/** Minutes from midnight of an HH:mm time. */
+export function minutesOf(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+}
+
+/** The HH:mm time `minutes` after midnight (0 to 1439). */
+export function timeOfMinutes(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
 /** HH:mm plus `minutes`, or null if that would pass midnight or `minutes` isn't positive. */
 export function addMinutes(time: string, minutes: number): string | null {
   if (!(minutes > 0)) return null;
@@ -142,6 +165,22 @@ export function nextWeekKey(today: DateKey, weekStartsOn: 0 | 1): DateKey {
   const weekday = fromDateKey(today).getDay();
   const daysLeft = (7 - weekday + weekStartsOn) % 7 || 7;
   return addDaysKey(today, daysLeft);
+}
+
+/** The first day of the week that holds `key` (Monday or Sunday, following the setting). */
+export function startOfWeekKey(key: DateKey, weekStartsOn: 0 | 1): DateKey {
+  return toDateKey(startOfWeek(fromDateKey(key), { weekStartsOn }));
+}
+
+/** The seven days of the week that holds `key`, first day first. */
+export function weekDays(key: DateKey, weekStartsOn: 0 | 1): DateKey[] {
+  const first = startOfWeekKey(key, weekStartsOn);
+  return Array.from({ length: 7 }, (_, i) => addDaysKey(first, i));
+}
+
+/** The day Upcoming starts from: the stored day, or today if there is none or it has passed. */
+export function upcomingStart(upcomingFrom: DateKey | null, today: DateKey): DateKey {
+  return upcomingFrom && upcomingFrom > today ? upcomingFrom : today;
 }
 
 /** Milliseconds until the next local midnight. */

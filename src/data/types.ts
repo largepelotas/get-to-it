@@ -250,10 +250,15 @@ export const BUILT_IN_VIEWS = [
   'tomorrow',
   'next7',
   'upcoming',
+  'calendar',
   'matrix',
   'reminders',
 ] as const;
 export type BuiltInView = (typeof BUILT_IN_VIEWS)[number];
+
+/** The calendar's layouts: a month grid, a week, or three days. */
+export const CALENDAR_LAYOUTS = ['month', 'week', 'days'] as const;
+export type CalendarLayout = (typeof CALENDAR_LAYOUTS)[number];
 
 /** How a view orders its tasks. `manual` is the list's own order (a smart view treats it as `date`). */
 export const SORT_KEYS = ['manual', 'date', 'priority', 'name', 'added'] as const;
@@ -292,6 +297,8 @@ export interface Settings {
   /** Read dates, repeats and priority out of quick-add text. */
   parseDates: boolean;
   weekStartsOn: 0 | 1;
+  /** Which layout the Calendar view shows. */
+  calendarLayout: CalendarLayout;
   /** When reminders for all-day tasks fire, HH:mm. */
   allDayReminderTime: string;
   /** Where quick-add puts tasks from Today and Upcoming. */
@@ -346,6 +353,7 @@ export const DEFAULT_SETTINGS: Settings = {
   closeToTray: true,
   parseDates: true,
   weekStartsOn: 1,
+  calendarLayout: 'month',
   allDayReminderTime: '09:00',
   defaultListId: null,
   groceryCategories: DEFAULT_GROCERY_CATEGORIES,
