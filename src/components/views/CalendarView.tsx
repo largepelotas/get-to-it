@@ -6,28 +6,36 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
 } from '@dnd-kit/core';
 import clsx from 'clsx';
 import { Calendar, ChevronLeft, ChevronRight, PanelRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { moveTasksToDay } from '@/commands';
+import { moveTasksToDay, moveTaskToTime } from '@/commands';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
+import { HOUR_PX, TimeGrid, type SlotGhost } from '@/components/calendar/TimeGrid';
 import { UNSCHEDULED_PANEL_ID, UnscheduledPanel } from '@/components/calendar/UnscheduledPanel';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { Button, IconButton } from '@/components/ui';
 import { CALENDAR_LAYOUTS, type CalendarLayout } from '@/data/types';
 import { useItemsWithReminders } from '@/hooks/useReminders';
 import { useToday } from '@/hooks/useToday';
-import { addDaysKey, addMonthsKey, weekDays, type DateKey } from '@/lib/dates';
+import { addDaysKey, addMonthsKey, timeOfMinutes, weekDays, type DateKey } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
-import { monthTitle, rangeTitle, rowsByDay, unscheduledRows } from '@/store/calendar';
+import {
+  monthTitle,
+  rangeTitle,
+  rowsByDay,
+  slotFromOffset,
+  unscheduledRows,
+} from '@/store/calendar';
 import { setSetting, useData } from '@/store/data';
 import { useFocus } from '@/store/focus';
 import { dueRows, type DueRow } from '@/store/smart';
 import { selectedIds, selectItem, useUI } from '@/store/ui';
 import { dropIds } from '@/components/calendar/dropIds';
-import { dateFromDropId } from './dayDrop';
-import { EmptyState, ViewHeader } from './ViewHeader';
+import { dateFromDropId, dropKind } from './dayDrop';
+import { ViewHeader } from './ViewHeader';
 
 const LAYOUT_LABEL: Record<CalendarLayout, string> = {
   month: 'Month',
@@ -61,6 +69,7 @@ export function CalendarView() {
   const [anchor, setAnchor] = useState<DateKey>(today);
   const [panelOpen, setPanelOpen] = useState(false);
   const [dragged, setDragged] = useState<DueRow | null>(null);
+  const [ghost, setGhost] = useState<SlotGhost | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const rows = useMemo(() => dueRows(items, lists), [items, lists]);
@@ -80,11 +89,43 @@ export function CalendarView() {
         : addDaysKey(anchor, direction * (layout === 'week' ? 7 : SEVERAL_DAYS)),
     );
 
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
+  /** The day and time under a dragged task over a time-grid column, or null elsewhere. */
+  const slotUnder = ({ active, over }: DragMoveEvent | DragEndEvent): SlotGhost | null => {
+    if (!over || dropKind(String(over.id)) !== 'slot') return null;
+    const date = dateFromDropId(String(over.id));
+    const top = active.rect.current.translated?.top;
+    // The column's rect and the dragged element's rect are both on screen, so the grid's own scroll cancels out.
+    return date && top !== undefined
+      ? { date, minutes: slotFromOffset(top - over.rect.top, HOUR_PX) }
+      : null;
+  };
+
+  const onDragMove = (event: DragMoveEvent) => {
+    const next = slotUnder(event);
+    setGhost((prev) =>
+      prev?.date === next?.date && prev?.minutes === next?.minutes ? prev : next,
+    );
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
     setDragged(null);
+    setGhost(null);
+    const { active, over } = event;
     const date = over ? dateFromDropId(String(over.id)) : null;
-    if (!date) return;
-    moveTasksToDay(dropIds(String(active.id), selectedIds()), date);
+    if (!date || !over) return;
+    const id = String(active.id);
+    const kind = dropKind(String(over.id));
+    if (kind === 'slot') {
+      // Only the dragged task takes the time; the rest of a selection keep theirs.
+      const slot = slotUnder(event);
+      if (slot) moveTaskToTime(id, date, timeOfMinutes(slot.minutes));
+      return;
+    }
+    const ids = dropIds(id, selectedIds());
+    const only = ids.length === 1 ? rows.find((r) => r.item.id === ids[0]) : undefined;
+    // On the all-day row a timed task loses its time; a day drop (month) keeps it.
+    if (kind === 'allday' && only?.item.dueTime) moveTaskToTime(only.item.id, date, null);
+    else moveTasksToDay(ids, date);
   };
 
   return (
@@ -97,8 +138,12 @@ export function CalendarView() {
         if (!selectedIds().includes(id)) selectItem(id);
         setDragged([...rows, ...undated].find((r) => r.item.id === id) ?? null);
       }}
+      onDragMove={onDragMove}
       onDragEnd={onDragEnd}
-      onDragCancel={() => setDragged(null)}
+      onDragCancel={() => {
+        setDragged(null);
+        setGhost(null);
+      }}
     >
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
@@ -162,7 +207,15 @@ export function CalendarView() {
               focusedId={focusedId}
             />
           ) : (
-            <EmptyState title="Week and 3-day layouts are coming." />
+            <TimeGrid
+              days={days!}
+              today={today}
+              byDay={byDay}
+              selectedId={selectedId}
+              reminded={reminded}
+              focusedId={focusedId}
+              ghost={ghost}
+            />
           )}
         </div>
         {panelOpen && <UnscheduledPanel />}

@@ -19,6 +19,7 @@ import {
   setChecked,
   clearDue,
   moveDueDates,
+  moveDueTo,
   setDeadline,
   setDue,
   setDueDates,
@@ -893,5 +894,58 @@ describe('deadlines and end times', () => {
       endTime: '15:30',
       deadline: '2026-10-15',
     });
+  });
+});
+
+describe('moveDueTo', () => {
+  const timed = (extra = {}) =>
+    createItem(list, {
+      text: 'Call',
+      dueDate: '2026-10-02',
+      dueTime: '14:00',
+      endTime: '15:30',
+      ...extra,
+    })!;
+
+  // Bug prevented: dragging a block to a new time shrinking it to nothing, or leaving its end behind.
+  it('moves the end time with the start, keeping the length', () => {
+    const a = timed();
+    moveDueTo(a, '2026-10-03', '09:15');
+    expect(item(a)).toMatchObject({ dueDate: '2026-10-03', dueTime: '09:15', endTime: '10:45' });
+  });
+
+  // Bug prevented: an end time past midnight (a range that ends before it starts).
+  it('drops the end time when it would pass midnight', () => {
+    const a = timed();
+    moveDueTo(a, '2026-10-02', '23:00');
+    expect(item(a)).toMatchObject({ dueTime: '23:00', endTime: null });
+  });
+
+  // Bug prevented: an invented end time on a task that never had a length.
+  it('gives an untimed task a time but no end', () => {
+    const a = createItem(list, { text: 'Plain', dueDate: '2026-10-02' })!;
+    moveDueTo(a, '2026-10-02', '10:00');
+    expect(item(a)).toMatchObject({ dueTime: '10:00', endTime: null });
+  });
+
+  // Bug prevented: dropping on the all-day row leaving a time or end behind.
+  it('clears both times when given null', () => {
+    const a = timed();
+    moveDueTo(a, '2026-10-04', null);
+    expect(item(a)).toMatchObject({ dueDate: '2026-10-04', dueTime: null, endTime: null });
+  });
+
+  // Bug prevented: moving a repeating task wiping its repeat rule, and snoozes surviving the move.
+  it('keeps the repeat rule, is one undo step, and labels it', () => {
+    const a = timed();
+    setRecurrence(a, { freq: 'daily', interval: 1, mode: 'schedule' });
+    const rule = item(a).recurrence;
+    const before = useData.getState().past.length;
+    moveDueTo(a, '2026-10-03', '08:00');
+    expect(item(a).recurrence).toEqual(rule);
+    expect(useData.getState().past.length).toBe(before + 1);
+    expect(useData.getState().past.at(-1)?.label).toBe('Due date');
+    undo();
+    expect(item(a)).toMatchObject({ dueDate: '2026-10-02', dueTime: '14:00', endTime: '15:30' });
   });
 });

@@ -1,5 +1,5 @@
 import type { Item, Priority, Recurrence } from '@/data/types';
-import { isDateKey, isTimeAfter, isTimeString, todayKey } from '@/lib/dates';
+import { addMinutes, isDateKey, isTimeAfter, isTimeString, minutesOf, todayKey } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { keyBetween } from '@/lib/order';
 import { parseQuickAdd } from '@/lib/quickAdd';
@@ -307,6 +307,26 @@ export function setDue(id: string, dueDate: string | null, dueTime: string | nul
       dueTime: time,
       endTime: time && end && isTimeAfter(end, time) ? end : null,
     });
+    clearSnoozes(tx, id);
+  });
+}
+
+/**
+ * Puts a task on a day at a time (or with no time), as a drag on the calendar
+ * does. A timed task keeps its length: the end time moves with the start, and
+ * goes if the task had no end, the time is cleared, or the end would pass midnight.
+ */
+export function moveDueTo(id: string, dueDate: string, dueTime: string | null): void {
+  if (!isDateKey(dueDate)) return;
+  commit('Due date', (tx) => {
+    const item = tx.get('items', id);
+    if (!item) return;
+    const time = isTimeString(dueTime) ? dueTime : null;
+    let endTime: string | null = null;
+    if (time && item.dueTime && item.endTime) {
+      endTime = addMinutes(time, minutesOf(item.endTime) - minutesOf(item.dueTime));
+    }
+    tx.update('items', id, { dueDate, dueTime: time, endTime });
     clearSnoozes(tx, id);
   });
 }

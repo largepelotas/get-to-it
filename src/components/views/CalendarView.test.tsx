@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '@/App';
 import { MemoryRepository } from '@/data/memory';
 import { createItem } from '@/store/actions/items';
+import { formatTime } from '@/lib/dates';
 import { createList } from '@/store/actions/lists';
 import { resetForTests, setSetting, useData } from '@/store/data';
 import { navigate, openDialog, useUI } from '@/store/ui';
@@ -81,7 +82,7 @@ describe('Calendar', () => {
     expect(main().getByText('October 2026')).toBeInTheDocument();
   });
 
-  it('switches layout, saves it, and shows the placeholder', async () => {
+  it('switches layout and saves it', async () => {
     const user = userEvent.setup();
     render(<App />);
     const layout = within(main().getByRole('group', { name: 'Layout' }));
@@ -89,14 +90,13 @@ describe('Calendar', () => {
     await user.click(layout.getByRole('button', { name: 'Week' }));
     expect(useData.getState().settings.calendarLayout).toBe('week');
     expect(main().getByText('Sep 28 – Oct 4, 2026')).toBeInTheDocument();
-    expect(main().getByText('Week and 3-day layouts are coming.')).toBeInTheDocument();
     await user.click(main().getByRole('button', { name: 'Next' }));
     expect(main().getByText('Oct 5 – 11, 2026')).toBeInTheDocument();
     await user.click(layout.getByRole('button', { name: '3 days' }));
     expect(useData.getState().settings.calendarLayout).toBe('days');
     expect(layout.getByRole('button', { name: '3 days' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(layout.getByRole('button', { name: 'Month' }));
-    expect(main().queryByText('Week and 3-day layouts are coming.')).not.toBeInTheDocument();
+    expect(main().getByText('October 2026')).toBeInTheDocument();
   });
 
   it('shows undated tasks by list in the Tasks panel', async () => {
@@ -143,6 +143,81 @@ describe('Calendar', () => {
   it('starts in the saved layout', () => {
     setSetting('calendarLayout', 'week');
     render(<App />);
-    expect(main().getByText('Week and 3-day layouts are coming.')).toBeInTheDocument();
+    expect(main().getAllByRole('heading', { level: 2 })).toHaveLength(7);
+  });
+});
+
+describe('Calendar week and 3-day layouts', () => {
+  const headings = () => main().getAllByRole('heading', { level: 2 });
+
+  // Bug prevented: the week layout missing days, or marking the wrong day as today.
+  it('shows seven day headings with today marked', () => {
+    setSetting('calendarLayout', 'week');
+    render(<App />);
+    expect(headings().map((h) => h.textContent)).toEqual([
+      'Mon28',
+      'Tue29',
+      'Wed30',
+      'Thu1',
+      'Fri2',
+      'Sat3',
+      'Sun4',
+    ]);
+    expect(within(headings()[4]).getByText('2')).toHaveAttribute('aria-current', 'date');
+    expect(main().getAllByText('2', { selector: '[aria-current]' })).toHaveLength(1);
+  });
+
+  // Bug prevented: a timed task shown as a one-line chip with no range, or in the all-day row.
+  it('draws a timed task as a block with its range, and an untimed one in the all-day row', () => {
+    setSetting('calendarLayout', 'week');
+    createItem(work, {
+      text: 'Review',
+      dueDate: '2026-10-02',
+      dueTime: '14:00',
+      endTime: '15:30',
+    });
+    render(<App />);
+    const friday = within(screen.getByRole('region', { name: 'Friday, October 2' }));
+    const block = friday.getByRole('button', { name: 'Review' });
+    expect(block).toHaveTextContent(`${formatTime('14:00')}\u2013${formatTime('15:30')}`);
+    // 14:00 is 14 * 48 px down; 90 minutes is 72 px tall.
+    expect(block.closest('li')).toHaveStyle({ top: '672px', height: '72px' });
+    const allDay = within(screen.getByRole('group', { name: 'All day, Thursday, October 1' }));
+    expect(allDay.getByRole('button', { name: 'Pay rent' })).toBeInTheDocument();
+    expect(friday.queryByRole('button', { name: 'Pay rent' })).not.toBeInTheDocument();
+  });
+
+  // Bug prevented: overlapping tasks drawn on top of each other at the same left edge.
+  it('puts overlapping tasks side by side', () => {
+    setSetting('calendarLayout', 'week');
+    createItem(work, { text: 'One', dueDate: '2026-10-03', dueTime: '09:00', endTime: '10:00' });
+    createItem(work, { text: 'Two', dueDate: '2026-10-03', dueTime: '09:30' });
+    render(<App />);
+    const friday = within(screen.getByRole('region', { name: 'Saturday, October 3' }));
+    const left = (name: string) => friday.getByRole('button', { name }).closest('li')!.style.left;
+    expect(left('One')).toBe('0%');
+    expect(left('Two')).toBe('50%');
+  });
+
+  // Bug prevented: the 3-day layout starting from the wrong day or not moving by 3 days.
+  it('shows three days from the anchor and moves by three', async () => {
+    setSetting('calendarLayout', 'days');
+    const user = userEvent.setup();
+    render(<App />);
+    expect(headings().map((h) => h.textContent)).toEqual(['Fri2', 'Sat3', 'Sun4']);
+    expect(main().getByText('Oct 2 – 4, 2026')).toBeInTheDocument();
+    await user.click(main().getByRole('button', { name: 'Next' }));
+    expect(main().getByText('Oct 5 – 7, 2026')).toBeInTheDocument();
+  });
+
+  // Bug prevented: the current-time line drawn in every column, or missing from today's.
+  it('draws the current-time line in today’s column only', () => {
+    setSetting('calendarLayout', 'week');
+    render(<App />);
+    const lines = screen.getAllByTestId('now-line');
+    expect(lines).toHaveLength(1);
+    expect(screen.getByRole('region', { name: 'Friday, October 2' })).toContainElement(lines[0]);
+    // 12:00 is 12 * 48 px down, less half the 2px line.
+    expect(lines[0]).toHaveStyle({ top: '575px' });
   });
 });

@@ -20,6 +20,7 @@ import {
   deleteItems,
   duplicateItem,
   moveDueDates,
+  moveDueTo,
   moveItemToList,
   moveItemsToList,
   setChecked,
@@ -469,6 +470,18 @@ export function moveTasksToDay(ids: string[], date: string): void {
   if (!live.length || !recorded(() => setDueDates(live, date))) return;
   const day = formatDateKey(date);
   toastWithUndo(live.length === 1 ? `Moved to ${day}` : `Moved ${tasks(live.length)} to ${day}`);
+}
+
+/**
+ * Puts one task on a day at a time, or with no time when `time` is null (a
+ * drop on the calendar's time grid or all-day row). Does nothing if it is
+ * already there. One Undo toast.
+ */
+export function moveTaskToTime(id: string, date: string, time: string | null): void {
+  const item = useData.getState().tables.items[id];
+  if (!item || item.deletedAt || (item.dueDate === date && item.dueTime === time)) return;
+  if (!recorded(() => moveDueTo(id, date, time))) return;
+  toastWithUndo(`Moved to ${formatDue(date, time)}`);
 }
 
 /** Today's "Reschedule": moves overdue tasks to a day, keeping their times. */

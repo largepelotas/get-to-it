@@ -1,6 +1,6 @@
 import type { Item, List } from '@/data/types';
 import { bySortKey } from '@/lib/order';
-import { addDaysKey, weekDays, type DateKey } from '@/lib/dates';
+import { addDaysKey, minutesOf, weekDays, type DateKey } from '@/lib/dates';
 import type { FlatRow } from './tree';
 
 /** A task shown in Today or Upcoming, with the list it comes from. */
@@ -180,10 +180,9 @@ export function next7Count(rows: DueRow[], today: DateKey): number {
 
 /** Minutes from start to end, summed over the rows that have both a due time and an end time. */
 export function scheduledMinutes(rows: DueRow[]): number {
-  const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
   let total = 0;
   for (const { item } of rows) {
-    if (item.dueTime && item.endTime) total += minutes(item.endTime) - minutes(item.dueTime);
+    if (item.dueTime && item.endTime) total += minutesOf(item.endTime) - minutesOf(item.dueTime);
   }
   return total;
 }

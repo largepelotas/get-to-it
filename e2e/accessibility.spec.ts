@@ -136,6 +136,12 @@ for (const palette of PALETTES)
           await expectAccessible(page);
           await page.getByRole('button', { name: 'Tasks' }).click();
           await expect(page.getByRole('complementary', { name: 'Unscheduled tasks' })).toBeHidden();
+          // The week layout too, then back to Month so the setting does not carry on.
+          await page.getByRole('button', { name: 'Week', exact: true }).click();
+          await expect(page.getByRole('region', { name: /^Friday, / })).toBeVisible();
+          await settled(page);
+          await expectAccessible(page);
+          await page.getByRole('button', { name: 'Month', exact: true }).click();
         }
       }
 

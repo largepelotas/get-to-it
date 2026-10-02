@@ -3,10 +3,13 @@ import { MemoryRepository } from '@/data/memory';
 import { createItem } from './actions/items';
 import { createList } from './actions/lists';
 import {
+  allDayRows,
   monthGrid,
   monthTitle,
   rangeTitle,
   rowsByDay,
+  slotFromOffset,
+  timedBlocks,
   unscheduledRows,
   unscheduledSections,
 } from './calendar';
@@ -93,5 +96,89 @@ describe('rows', () => {
     const sections = unscheduledSections(rows, Object.values(lists));
     expect(sections.map((s) => s.list.title)).toEqual(['Work', 'Home']);
     expect(sections[0].rows.map((r) => r.item.text)).toEqual(['W1', 'W2']);
+  });
+});
+
+describe('timedBlocks', () => {
+  const blocksOf = (specs: { text: string; dueTime?: string; endTime?: string }[]) => {
+    resetForTests(new MemoryRepository());
+    const list = createList({ type: 'todo', title: 'Tasks' });
+    for (const s of specs) createItem(list, { dueDate: '2026-10-02', ...s });
+    return timedBlocks(dueRows(useData.getState().tables.items, useData.getState().tables.lists));
+  };
+  const shape = (b: ReturnType<typeof blocksOf>) =>
+    b.map((x) => `${x.row.item.text}:${x.start}-${x.end}:${x.lane}/${x.lanes}`);
+
+  // Bug prevented: a lone task being squeezed into a partial-width column.
+  it('puts a block with no neighbours in lane 0 of 1', () => {
+    expect(shape(blocksOf([{ text: 'A', dueTime: '09:00', endTime: '10:00' }]))).toEqual([
+      'A:540-600:0/1',
+    ]);
+  });
+
+  // Bug prevented: overlapping blocks drawn on top of each other.
+  it('splits two overlapping blocks into two lanes', () => {
+    const b = blocksOf([
+      { text: 'A', dueTime: '09:00', endTime: '10:00' },
+      { text: 'B', dueTime: '09:30', endTime: '10:30' },
+    ]);
+    expect(shape(b)).toEqual(['A:540-600:0/2', 'B:570-630:1/2']);
+  });
+
+  // Bug prevented: a block reusing the wrong lane, or a cluster's width differing between its blocks.
+  it('reuses the first free lane and shares the cluster width', () => {
+    const b = blocksOf([
+      { text: 'A', dueTime: '09:00', endTime: '10:00' },
+      { text: 'B', dueTime: '09:30', endTime: '11:00' },
+      { text: 'C', dueTime: '10:00', endTime: '10:45' },
+    ]);
+    expect(shape(b)).toEqual(['A:540-600:0/2', 'B:570-660:1/2', 'C:600-645:0/2']);
+  });
+
+  // Bug prevented: back-to-back tasks counted as overlapping and drawn half width.
+  it('does not count a block ending exactly when the next starts as overlapping', () => {
+    const b = blocksOf([
+      { text: 'A', dueTime: '09:00', endTime: '10:00' },
+      { text: 'B', dueTime: '10:00', endTime: '11:00' },
+    ]);
+    expect(shape(b)).toEqual(['A:540-600:0/1', 'B:600-660:0/1']);
+  });
+
+  // Bug prevented: a task with no end being drawn with no height, or clusters merging across a gap.
+  it('gives a task with no end 30 minutes and ignores untimed tasks', () => {
+    const b = blocksOf([
+      { text: 'A', dueTime: '09:00' },
+      { text: 'B', dueTime: '09:30' },
+      { text: 'Untimed' },
+    ]);
+    expect(shape(b)).toEqual(['A:540-570:0/1', 'B:570-600:0/1']);
+  });
+});
+
+describe('allDayRows', () => {
+  // Bug prevented: timed tasks showing in the all-day row as well as the grid.
+  it('keeps only the rows without a time', () => {
+    resetForTests(new MemoryRepository());
+    const list = createList({ type: 'todo', title: 'Tasks' });
+    createItem(list, { text: 'Timed', dueDate: '2026-10-02', dueTime: '09:00' });
+    createItem(list, { text: 'Plain', dueDate: '2026-10-02' });
+    const rows = dueRows(useData.getState().tables.items, useData.getState().tables.lists);
+    expect(allDayRows(rows).map((r) => r.item.text)).toEqual(['Plain']);
+  });
+});
+
+describe('slotFromOffset', () => {
+  // Bug prevented: drops landing on the wrong time because of the wrong scale or rounding up.
+  it('rounds down to a quarter hour', () => {
+    expect(slotFromOffset(0, 48)).toBe(0);
+    expect(slotFromOffset(480, 48)).toBe(600);
+    expect(slotFromOffset(487, 48)).toBe(600);
+    expect(slotFromOffset(492, 48)).toBe(615);
+  });
+
+  // Bug prevented: a drop above or below the grid producing a negative or next-day time.
+  it('clamps to 00:00 through 23:45', () => {
+    expect(slotFromOffset(-30, 48)).toBe(0);
+    expect(slotFromOffset(5000, 48)).toBe(1425);
   });
 });

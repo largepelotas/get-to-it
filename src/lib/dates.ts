@@ -102,6 +102,16 @@ export function formatTimeRange(start: string, end: string | null): string {
   return end ? `${formatTime(start)}\u2013${formatTime(end)}` : formatTime(start);
 }
 
+/** Minutes from midnight of an HH:mm time. */
+export function minutesOf(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+}
+
+/** The HH:mm time `minutes` after midnight (0 to 1439). */
+export function timeOfMinutes(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
 /** HH:mm plus `minutes`, or null if that would pass midnight or `minutes` isn't positive. */
 export function addMinutes(time: string, minutes: number): string | null {
   if (!(minutes > 0)) return null;

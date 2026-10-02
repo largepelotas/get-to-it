@@ -15,27 +15,46 @@ function chipTime(row: DueRow): string | null {
   return endTime ? `${formatTime(dueTime)}–${formatTime(endTime)}` : formatTime(dueTime);
 }
 
+/** Where a task is drawn on a time grid: CSS offsets inside its day's column. */
+export interface BlockPlace {
+  top: number;
+  height: number;
+  left: string;
+  width: string;
+}
+
 /**
  * A task on a calendar day: one line with its time and name. Clicking opens
- * its details; the whole chip can be dragged to another day.
+ * its details; the whole chip can be dragged to another day. With `block` it
+ * is drawn on a time grid instead: positioned in its column, the time range
+ * on the first line and the name below.
  */
 export function TaskChip({
   row,
   selected,
   hasReminder,
   focusing,
+  block,
 }: {
   row: DueRow;
   selected: boolean;
   hasReminder: boolean;
   focusing: boolean;
+  block?: BlockPlace;
 }) {
   const { item } = row;
   const { setNodeRef, isDragging, attributes, listeners } = useDraggable({ id: item.id });
   const time = chipTime(row);
   const priority = PRIORITY_COLOR[item.priority];
   return (
-    <li>
+    <li
+      className={block ? 'absolute' : undefined}
+      style={
+        block
+          ? { top: block.top, height: block.height, left: block.left, width: block.width }
+          : undefined
+      }
+    >
       <button
         ref={setNodeRef}
         type="button"
@@ -55,17 +74,20 @@ export function TaskChip({
         }}
         style={{ borderLeftColor: priority ? colorVar(priority) : 'transparent' }}
         className={clsx(
-          'flex w-full cursor-pointer items-center gap-1 rounded-sm border-l-2 px-1.5 py-0.5 text-left text-xs transition-colors hover:bg-hover',
-          selected ? 'bg-selected' : 'bg-elevated',
+          'flex w-full cursor-pointer rounded-sm border-l-2 px-1.5 text-left text-xs transition-colors hover:bg-hover',
+          block
+            ? 'h-full flex-col items-start gap-0 overflow-hidden py-0.5 text-fg'
+            : 'items-center gap-1 py-0.5',
+          selected ? 'bg-selected' : block ? 'bg-accent-soft' : 'bg-elevated',
           isDragging && 'opacity-50',
         )}
       >
         {time && (
-          <span aria-hidden className="shrink-0 text-fg-muted">
+          <span aria-hidden className="max-w-full shrink-0 truncate text-fg-muted">
             {time}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate">{item.text}</span>
+        <span className={clsx('min-w-0 truncate', block ? 'w-full' : 'flex-1')}>{item.text}</span>
         {item.recurrence && <Repeat aria-hidden className="size-3 shrink-0 text-fg-muted" />}
         {focusing && <Timer aria-hidden className="size-3 shrink-0 text-accent" />}
       </button>

@@ -9,9 +9,11 @@ import {
   formatTimeRange,
   isOverdue,
   isTimeAfter,
+  minutesOf,
   msUntilTomorrow,
   nextWeekKey,
   startOfWeekKey,
+  timeOfMinutes,
   upcomingStart,
   weekDays,
 } from './dates';
@@ -126,5 +128,18 @@ describe('time ranges', () => {
     expect(addMonthsKey('2026-12-15', 1)).toBe('2027-01-15');
     expect(addMonthsKey('2026-01-15', -1)).toBe('2025-12-15');
     expect(addMonthsKey('2026-03-31', -1)).toBe('2026-02-28');
+  });
+});
+
+describe('minutesOf and timeOfMinutes', () => {
+  // Bug prevented: the grid and the drop maths disagreeing about what a time is in minutes.
+  it('convert between HH:mm and minutes from midnight', () => {
+    expect(minutesOf('00:00')).toBe(0);
+    expect(minutesOf('09:15')).toBe(555);
+    expect(minutesOf('23:45')).toBe(1425);
+    expect(timeOfMinutes(0)).toBe('00:00');
+    expect(timeOfMinutes(555)).toBe('09:15');
+    expect(timeOfMinutes(1425)).toBe('23:45');
+    expect(timeOfMinutes(minutesOf('14:30'))).toBe('14:30');
   });
 });
