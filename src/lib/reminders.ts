@@ -27,10 +27,16 @@ export type ReminderState =
   /** Dismissed. */
   | 'done';
 
-/** A task a reminder can fire for: open, not deleted, in a list that's neither archived nor in the Trash. */
+/** A task a reminder can fire for: open, not deleted, in a list that's neither archived nor in the Trash. Habits have no reminders. */
 export function isRemindable(item: Item | undefined, list: List | undefined): item is Item {
   return (
-    !!item && !item.deletedAt && !item.checked && !!list && !list.deletedAt && !list.archivedAt
+    !!item &&
+    !item.deletedAt &&
+    !item.checked &&
+    !!list &&
+    !list.deletedAt &&
+    !list.archivedAt &&
+    list.type !== 'habit'
   );
 }
 

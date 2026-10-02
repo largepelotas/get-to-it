@@ -56,6 +56,7 @@ const item = (text: string, extra: Partial<Item> = {}): Item => ({
   recurrence: null,
   quantity: null,
   category: null,
+  habit: null,
   createdAt: 1,
   updatedAt: 1,
   deletedAt: null,

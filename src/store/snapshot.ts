@@ -16,6 +16,7 @@ import {
   type Tables,
 } from '@/data/types';
 import { cleanMinutes } from '@/lib/focus';
+import { sanitizeHabitGoal } from './habits';
 import { isDateKey, isTimeAfter, isTimeString } from '@/lib/dates';
 import { isPaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
@@ -48,6 +49,7 @@ export function makeSnapshot(tables: Tables, settings: Settings, now = Date.now(
       completions: Object.values(tables.completions),
       notes: Object.values(tables.notes),
       focusSessions: Object.values(tables.focusSessions),
+      checkIns: Object.values(tables.checkIns),
     },
     settings: exported,
   };
@@ -104,7 +106,7 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
   lists: {
     id,
     folderId: opt(id),
-    type: oneOf(['todo', 'grocery', 'note']),
+    type: oneOf(['todo', 'grocery', 'note', 'habit']),
     title: str,
     color,
     pinned: or(bool, false),
@@ -140,6 +142,8 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     recurrence: (v) => sanitizeRecurrence(v),
     quantity: opt(str),
     category: opt(str),
+    // Null when missing (a file from before habits); a goal that can't be read is every day.
+    habit: (v) => (v === undefined || v === null ? null : sanitizeHabitGoal(v)),
     createdAt: num,
     updatedAt: num,
     deletedAt: opt(num),
@@ -193,6 +197,12 @@ const ROW_CHECKS: Record<TableName, Record<string, Check>> = {
     endedAt: num,
     seconds: num,
   },
+  checkIns: {
+    id,
+    itemId: id,
+    day: (v, f) => (isDateKey(v) ? v : fail(f, 'should be a date (YYYY-MM-DD)')),
+    createdAt: num,
+  },
 };
 
 const TABLE_LABEL: Record<TableName, string> = {
@@ -206,6 +216,7 @@ const TABLE_LABEL: Record<TableName, string> = {
   completions: 'completion',
   notes: 'note',
   focusSessions: 'focus session',
+  checkIns: 'check-in',
 };
 
 function checkRow(table: TableName, raw: unknown, index: number): AnyRow {

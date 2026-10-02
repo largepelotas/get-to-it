@@ -21,6 +21,8 @@ export class MemoryRepository implements Repository {
       i.endTime = i.endTime ?? null;
       i.deadline = i.deadline ?? null;
     }
+    // Items saved before habits existed don't have the field.
+    for (const i of Object.values(this.tables.items)) i.habit = i.habit ?? null;
   }
 
   async load(): Promise<LoadResult> {
@@ -34,6 +36,7 @@ export class MemoryRepository implements Repository {
     for (const i of Object.values(this.tables.items)) {
       i.endTime = i.endTime ?? null;
       i.deadline = i.deadline ?? null;
+      i.habit = i.habit ?? null;
     }
     this.settings = structuredClone(data.settings);
   }

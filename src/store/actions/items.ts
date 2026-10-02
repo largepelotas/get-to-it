@@ -108,6 +108,8 @@ export function insertItem(tx: Tx, listId: string, input: NewItem): string {
     recurrence: input.recurrence ?? null,
     quantity: input.quantity ?? null,
     category: input.category ?? null,
+    // A habit list's items are habits, with the default goal; no other item has one.
+    habit: tx.get('lists', listId)?.type === 'habit' ? { period: 'day' } : null,
     createdAt: tx.now,
     updatedAt: tx.now,
     deletedAt: null,
@@ -695,7 +697,7 @@ export function moveItemToList(id: string, listId: string): void {
   commit('Move task', (tx) => {
     const item = tx.get('items', id);
     const target = tx.get('lists', listId);
-    if (!item || item.deletedAt || item.listId === listId) return;
+    if (!item || item.deletedAt || item.listId === listId || item.habit) return;
     if (!target || target.type !== 'todo' || target.archivedAt || target.deletedAt) return;
     const subtasks = descendantIds(itemIndex(tx, item.listId), id);
     tx.update('items', id, {
@@ -732,7 +734,7 @@ export function moveItemsToList(ids: string[], listId: string): void {
     if (!target || target.type !== 'todo' || target.archivedAt || target.deletedAt) return;
     for (const id of withoutDescendants((id) => tx.get('items', id), ids)) {
       const item = tx.get('items', id);
-      if (!item || item.deletedAt || item.listId === listId) continue;
+      if (!item || item.deletedAt || item.listId === listId || item.habit) continue;
       const subtasks = descendantIds(itemIndex(tx, item.listId), id);
       tx.update('items', id, {
         listId,

@@ -84,6 +84,8 @@ const SCHEMA: Record<TableName, Column[]> = {
     // Added in migration 7.
     endTime: 'text',
     deadline: 'text',
+    // Added in migration 9.
+    habit: 'json',
   }),
   labels: columns({
     id: 'text',
@@ -144,6 +146,12 @@ const SCHEMA: Record<TableName, Column[]> = {
     startedAt: 'int',
     endedAt: 'int',
     seconds: 'int',
+  }),
+  checkIns: columns({
+    id: 'text',
+    itemId: 'text',
+    day: 'text',
+    createdAt: 'int',
   }),
 };
 
@@ -289,6 +297,40 @@ export const MIGRATIONS: string[][] = [
       seconds INTEGER NOT NULL
     )`,
     `CREATE INDEX focus_sessions_item_id ON focus_sessions (item_id)`,
+  ],
+  // Habits: a fourth list type, a goal on each habit, and the check-ins.
+  // SQLite cannot change a CHECK in place, so the lists table is rebuilt with the
+  // wider one: copy every row across, swap the tables, and recreate its indexes
+  // (it has none besides the primary key).
+  [
+    `CREATE TABLE lists_new (
+      id TEXT PRIMARY KEY NOT NULL,
+      folder_id TEXT,
+      type TEXT NOT NULL CHECK (type IN ('todo', 'grocery', 'note', 'habit')),
+      title TEXT NOT NULL,
+      color TEXT,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      sort_key TEXT NOT NULL,
+      show_completed INTEGER NOT NULL DEFAULT 1,
+      archived_at INTEGER,
+      deleted_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `INSERT INTO lists_new (id, folder_id, type, title, color, pinned, sort_key, show_completed,
+      archived_at, deleted_at, created_at, updated_at)
+      SELECT id, folder_id, type, title, color, pinned, sort_key, show_completed,
+      archived_at, deleted_at, created_at, updated_at FROM lists`,
+    `DROP TABLE lists`,
+    `ALTER TABLE lists_new RENAME TO lists`,
+    `ALTER TABLE items ADD COLUMN habit TEXT`,
+    `CREATE TABLE check_ins (
+      id TEXT PRIMARY KEY NOT NULL,
+      item_id TEXT NOT NULL,
+      day TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX check_ins_item_id ON check_ins (item_id)`,
   ],
 ];
 

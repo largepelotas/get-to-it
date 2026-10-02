@@ -26,6 +26,7 @@ const PLACEHOLDER: Record<ListType, string> = {
   todo: 'e.g. This week',
   grocery: 'e.g. Weekly shop',
   note: 'e.g. Meeting notes',
+  habit: 'e.g. Morning routine',
 };
 
 function NewListDialog({ dialog }: { dialog: Extract<DialogState, { kind: 'newList' }> }) {
