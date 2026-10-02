@@ -4,8 +4,10 @@ import { formatShortcut, isEditableTarget, matchesShortcut } from './shortcuts';
 const key = (
   key: string,
   mods: Partial<Record<'meta' | 'ctrl' | 'shift' | 'alt', boolean>> = {},
+  code?: string,
 ) => ({
   key,
+  code,
   metaKey: !!mods.meta,
   ctrlKey: !!mods.ctrl,
   shiftKey: !!mods.shift,
@@ -44,6 +46,66 @@ describe('the backslash shortcut', () => {
   it('is shown as a backslash', () => {
     expect(formatShortcut(`Mod+${BACKSLASH}`, true)).toBe('⌘' + BACKSLASH);
     expect(formatShortcut(`Mod+${BACKSLASH}`, false)).toBe('Ctrl+' + BACKSLASH);
+  });
+});
+
+// Bug prevented: shortcuts on digits and punctuation being unreachable on layouts that
+// print something else on those keys, or need Shift to type them.
+describe('layouts other than US', () => {
+  it('matches the digit keys by position on AZERTY, where they print & é "', () => {
+    expect(matchesShortcut(key('&', { ctrl: true }, 'Digit1'), 'Mod+1', false)).toBe(true);
+    expect(matchesShortcut(key('é', { meta: true }, 'Digit2'), 'Mod+2', true)).toBe(true);
+    expect(matchesShortcut(key('"', { ctrl: true }, 'Digit3'), 'Mod+3', false)).toBe(true);
+    expect(matchesShortcut(key('&', {}, 'Digit1'), '1', false)).toBe(true);
+    expect(matchesShortcut(key("'", {}, 'Digit4'), '4', false)).toBe(true);
+    // Each key is one digit only.
+    expect(matchesShortcut(key('&', {}, 'Digit1'), '2', false)).toBe(false);
+    // The modifiers still have to be right.
+    expect(matchesShortcut(key('&', {}, 'Digit1'), 'Mod+1', false)).toBe(false);
+    expect(matchesShortcut(key('&', { ctrl: true }, 'Digit1'), '1', false)).toBe(false);
+  });
+
+  it('matches a digit typed with Shift, as AZERTY types them', () => {
+    expect(matchesShortcut(key('1', { shift: true }, 'Digit1'), '1', false)).toBe(true);
+    expect(matchesShortcut(key('2', { ctrl: true, shift: true }, 'Digit2'), 'Mod+2', false)).toBe(
+      true,
+    );
+  });
+
+  it('keeps Shift+digit from being the plain digit on a US layout', () => {
+    expect(matchesShortcut(key('!', { shift: true }, 'Digit1'), '1', false)).toBe(false);
+    expect(matchesShortcut(key('!', { meta: true, shift: true }, 'Digit1'), 'Mod+1', true)).toBe(
+      false,
+    );
+    expect(matchesShortcut(key('?', { ctrl: true, shift: true }, 'Slash'), 'Mod+/', false)).toBe(
+      false,
+    );
+    expect(matchesShortcut(key('1', {}, 'Digit1'), '1', false)).toBe(true);
+    expect(matchesShortcut(key('1', {}, 'Numpad1'), '1', false)).toBe(true);
+  });
+
+  it('reaches Mod+/ and Mod+\\ on a German keyboard', () => {
+    // "/" is Shift+7 there.
+    expect(matchesShortcut(key('/', { ctrl: true, shift: true }, 'Digit7'), 'Mod+/', false)).toBe(
+      true,
+    );
+    // The keys in the US positions print "-" and "#".
+    expect(matchesShortcut(key('-', { ctrl: true }, 'Slash'), 'Mod+/', false)).toBe(true);
+    expect(matchesShortcut(key('#', { ctrl: true }, 'Backslash'), `Mod+${BACKSLASH}`, false)).toBe(
+      true,
+    );
+    expect(matchesShortcut(key(';', { meta: true }, 'Comma'), 'Mod+,', true)).toBe(true);
+  });
+
+  it('leaves a key that types a letter alone, whatever its position', () => {
+    // Dvorak has Z where US has "/", and W where US has ",".
+    expect(matchesShortcut(key('z', { meta: true }, 'Slash'), 'Mod+/', true)).toBe(false);
+    expect(matchesShortcut(key('z', { meta: true }, 'Slash'), 'Mod+Z', true)).toBe(true);
+    expect(matchesShortcut(key('w', { meta: true }, 'Comma'), 'Mod+,', true)).toBe(false);
+    // Letters are matched by what they type, never by position.
+    expect(matchesShortcut(key('a', { ctrl: true }, 'KeyQ'), 'Mod+Q', false)).toBe(false);
+    // Shift still matters for a letter.
+    expect(matchesShortcut(key('E', { shift: true }, 'KeyE'), 'e', false)).toBe(false);
   });
 });
 

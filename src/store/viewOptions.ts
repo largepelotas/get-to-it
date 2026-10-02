@@ -52,6 +52,14 @@ export function sameViewOptions(a: ViewOptions, b: ViewOptions): boolean {
   return a.sort === b.sort && a.group === b.group && a.layout === b.layout;
 }
 
+/**
+ * True when a to-do list is drawn some other way than in its own order: sorted,
+ * grouped or as a board. Only its open tasks are shown then.
+ */
+export function isArranged(options: ViewOptions): boolean {
+  return options.sort !== 'manual' || options.group !== 'default' || options.layout === 'board';
+}
+
 /** The options a view uses: what was saved for it, with defaults for anything missing. */
 export function viewOptionsFor(settings: Pick<Settings, 'viewOptions'>, view: View): ViewOptions {
   const key = viewKey(view);

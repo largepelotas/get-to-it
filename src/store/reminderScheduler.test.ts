@@ -57,6 +57,9 @@ function task(text: string, dueTime: string, offsetMinutes = 0) {
   return { id, r };
 }
 
+/** What's stored for a dealt-with reminder counted from a due date: that date and time as UTC. */
+const mark = (date: string, time: string) => Date.parse(`${date}T${time}:00Z`);
+
 describe('reminder scheduler', () => {
   it('schedules upcoming reminders and reports missed ones at launch', () => {
     const late = task('Standup', '09:30');
@@ -69,7 +72,7 @@ describe('reminder scheduler', () => {
     });
     expect(missed).toEqual([['Standup', 'Lunch']]);
     // Missed reminders go to the inbox.
-    expect(reminder(late.r).firedFor).toBe(toTimestamp('2026-10-05', '09:30'));
+    expect(reminder(late.r).firedFor).toBe(mark('2026-10-05', '09:30'));
   });
 
   it('reschedules when data changes and records fired reminders', () => {
@@ -78,7 +81,7 @@ describe('reminder scheduler', () => {
     expect(lastSchedule()).toEqual(['Review']);
     now = toTimestamp('2026-10-05', '14:45');
     fire({ id: t.r, at: now });
-    expect(reminder(t.r).firedFor).toBe(now);
+    expect(reminder(t.r).firedFor).toBe(mark('2026-10-05', '14:45'));
     expect(lastSchedule()).toEqual([]);
   });
 
@@ -96,10 +99,10 @@ describe('reminder scheduler', () => {
     setDue(t.id, '2026-10-05', '11:00');
     expect(lastSchedule()).toEqual([]);
     expect(missed).toEqual([]);
-    expect(reminder(t.r).dismissedFor).toBe(toTimestamp('2026-10-05', '11:00'));
+    expect(reminder(t.r).dismissedFor).toBe(mark('2026-10-05', '11:00'));
     await flushWrites();
     const saved = (await repo.load()).tables.reminders[t.r];
-    expect(saved.dismissedFor).toBe(toTimestamp('2026-10-05', '11:00'));
+    expect(saved.dismissedFor).toBe(mark('2026-10-05', '11:00'));
   });
 
   it('sends nothing once stopped', () => {

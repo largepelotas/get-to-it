@@ -355,6 +355,43 @@ describe('repeating tasks', () => {
   });
 });
 
+describe('monthly repeats and short months', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const monthly = { freq: 'monthly', interval: 1, mode: 'schedule' } as const;
+  const item = (id: string) => useData.getState().tables.items[id];
+
+  // Bug prevented: a task due on the 31st every month sliding to the 28th for good.
+  it('goes back to the 31st after February', () => {
+    vi.setSystemTime(new Date(2026, 0, 31, 10, 0));
+    const list = createList({ type: 'todo' });
+    const id = createItem(list, { text: 'Rent', dueDate: '2026-01-31', recurrence: monthly })!;
+    setChecked(id, true);
+    expect(item(id).dueDate).toBe('2026-02-28');
+    vi.setSystemTime(new Date(2026, 1, 28, 10, 0));
+    setChecked(id, true);
+    expect(item(id).dueDate).toBe('2026-03-31');
+    vi.setSystemTime(new Date(2026, 2, 31, 10, 0));
+    skipOccurrence(id);
+    expect(item(id).dueDate).toBe('2026-04-30');
+  });
+
+  it('counts from a date picked by hand', () => {
+    vi.setSystemTime(new Date(2026, 0, 31, 10, 0));
+    const list = createList({ type: 'todo' });
+    const id = createItem(list, { text: 'Rent', dueDate: '2026-01-31', recurrence: monthly })!;
+    setChecked(id, true);
+    setDue(id, '2026-02-15');
+    expect(item(id).recurrence).toEqual(monthly);
+    vi.setSystemTime(new Date(2026, 1, 15, 10, 0));
+    setChecked(id, true);
+    expect(item(id).dueDate).toBe('2026-03-15');
+  });
+});
+
 describe('moving to another list', () => {
   let other: string;
   beforeEach(() => {

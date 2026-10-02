@@ -58,6 +58,9 @@ describe('adding and removing', () => {
   });
 });
 
+/** What's stored for a dealt-with reminder counted from a due date: that date and time as UTC. */
+const mark = (date: string, time: string) => Date.parse(`${date}T${time}:00Z`);
+
 describe('bookkeeping', () => {
   it('records delivery only for the current fire time, outside undo history', () => {
     const a = addReminder(task, { kind: 'relative', offsetMinutes: 0 })!;
@@ -65,17 +68,18 @@ describe('bookkeeping', () => {
     markFired([{ id: a, at: 1 }]);
     expect(get(a).firedFor).toBeNull();
     markFired([{ id: a, at: timeOf(a)! }]);
-    expect(get(a).firedFor).toBe(timeOf(a));
+    expect(get(a).firedFor).toBe(mark('2026-10-05', '15:00'));
     expect(useData.getState().past).toHaveLength(past);
   });
 
   it('dismisses and skips for the current fire time', () => {
     const a = addReminder(task, { kind: 'relative', offsetMinutes: 0 })!;
     dismissReminders([a]);
-    expect(get(a).dismissedFor).toBe(timeOf(a));
+    expect(get(a).dismissedFor).toBe(mark('2026-10-05', '15:00'));
     const b = addReminder(task, { kind: 'relative', offsetMinutes: 5 })!;
     markSkipped([{ id: b, at: 42 }]);
-    expect(get(b)).toMatchObject({ firedFor: 42, dismissedFor: 42 });
+    const skipped = mark('2026-10-05', '14:55');
+    expect(get(b)).toMatchObject({ firedFor: skipped, dismissedFor: skipped });
   });
 
   it('snoozes to a new fire time, which a due-date change clears', () => {
@@ -98,7 +102,7 @@ describe('bookkeeping', () => {
     dismissReminders([a]);
     setChecked(task, true);
     expect(timeOf(a)).toBe(first + 86_400_000);
-    expect(get(a).dismissedFor).toBe(first);
+    expect(get(a).dismissedFor).toBe(mark('2026-10-05', '15:00'));
   });
 });
 

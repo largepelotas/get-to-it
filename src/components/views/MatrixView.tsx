@@ -30,10 +30,13 @@ export function MatrixView() {
         key: box,
         label: MATRIX_TITLE[box],
         title: (
-          <>
-            <span>{MATRIX_TITLE[box]}</span>
-            <span className="truncate font-normal text-fg-subtle">{MATRIX_HINT[box]}</span>
-          </>
+          // The hint gives way first in a narrow box. The space is for the heading read as text.
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate">{MATRIX_TITLE[box]}</span>{' '}
+            <span className="min-w-0 shrink-[100] truncate font-normal text-fg-subtle">
+              {MATRIX_HINT[box]}
+            </span>
+          </span>
         ),
         rows: model.boxes[box],
         emptyText: 'Nothing here.',

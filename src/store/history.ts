@@ -80,7 +80,29 @@ export class Tx {
   }
 }
 
-/** Returns new tables with each change set to its `before` or `after` state. */
+/**
+ * The row a change leaves behind when it's undone (`before`) or redone (`after`).
+ * Only the fields the change itself altered are put back. Anything written to the
+ * row since then outside undo history (a reminder marked as delivered, a section
+ * collapsed) stays as it is.
+ */
+function revertedRow(
+  current: AnyRow | undefined,
+  change: Change,
+  side: 'before' | 'after',
+): AnyRow | undefined {
+  const to = change[side] as Record<string, unknown> | undefined;
+  const from = change[side === 'before' ? 'after' : 'before'] as
+    Record<string, unknown> | undefined;
+  if (!to || !from || !current) return to as AnyRow | undefined;
+  const next: Record<string, unknown> = { ...current };
+  for (const key of new Set([...Object.keys(to), ...Object.keys(from)])) {
+    if (!Object.is(to[key], from[key])) next[key] = to[key];
+  }
+  return next as unknown as AnyRow;
+}
+
+/** Returns new tables with each change taken back to its `before` state or forward to its `after`. */
 export function applyChanges(
   tables: Tables,
   changes: Change[],
@@ -95,7 +117,7 @@ export function applyChanges(
       copied.add(change.table);
     }
     const target = next[change.table] as Record<string, AnyRow>;
-    const row = change[side];
+    const row = revertedRow(target[change.id], change, side);
     if (row) target[change.id] = touch && 'updatedAt' in row ? { ...row, updatedAt: touch } : row;
     else delete target[change.id];
   }

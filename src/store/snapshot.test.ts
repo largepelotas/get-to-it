@@ -20,6 +20,12 @@ import {
 
 let repo: MemoryRepository;
 
+/** A list and a task for rows in a hand-written file to belong to. */
+const OWNER = {
+  lists: [{ id: 'L', type: 'todo', title: 'L', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+  items: [{ id: 'I', listId: 'L', text: 'I', sortKey: 'a0', createdAt: 1, updatedAt: 1 }],
+};
+
 beforeEach(() => {
   repo = new MemoryRepository();
   resetForTests(repo);
@@ -152,6 +158,7 @@ describe('snapshots', () => {
         app: 'checklist',
         version: 1,
         tables: {
+          ...OWNER,
           reminders: [
             { id: 'A', ...base },
             { id: 'B', ...base, constant: true },
@@ -468,7 +475,7 @@ describe('snapshots of end times and deadlines', () => {
 });
 
 describe('focus sessions in snapshots', () => {
-  const session = {
+  const sessionRow = {
     id: 'S1',
     itemId: 'I1',
     kind: 'stopwatch',
@@ -482,6 +489,9 @@ describe('focus sessions in snapshots', () => {
 
   // Bug prevented: logged focus time lost in an export and import.
   it('round-trips a focus session', () => {
+    const list = createList({ type: 'todo' });
+    const item = createItem(list, { text: 'Write' })!;
+    const session = { ...sessionRow, itemId: item };
     commit('Log focus', (tx) => tx.put('focusSessions', session), { undoable: false });
     const parsed = parseSnapshot(exportNow());
     expect(parsed.tables.focusSessions).toEqual({ S1: session });
@@ -489,7 +499,7 @@ describe('focus sessions in snapshots', () => {
 
   // Bug prevented: a session of an unknown kind (hand-edited file) loading and breaking totals.
   it('refuses a session with an unknown kind, naming it', () => {
-    expect(() => parseSnapshot(withSessions([{ ...session, kind: 'nap' }]))).toThrow(
+    expect(() => parseSnapshot(withSessions([{ ...sessionRow, kind: 'nap' }]))).toThrow(
       /focus session 1/,
     );
   });
@@ -515,7 +525,7 @@ describe('focus sessions in snapshots', () => {
 });
 
 describe('habits in snapshots', () => {
-  const habitFile = (items: unknown[], checkIns: unknown[] = [], lists: unknown[] = []) =>
+  const habitFile = (items: unknown[], checkIns: unknown[] = [], lists: unknown[] = OWNER.lists) =>
     JSON.stringify({ app: 'checklist', version: 1, tables: { lists, items, checkIns } });
   const row = { id: 'H', listId: 'L', text: 'Run', sortKey: 'a0', createdAt: 1, updatedAt: 1 };
 
@@ -602,5 +612,84 @@ describe('habits in snapshots', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('snapshots with broken references', () => {
+  const stamp = { sortKey: 'a0', createdAt: 1, updatedAt: 1 };
+  const todo = (id: string) => ({ id, type: 'todo', title: id, ...stamp });
+  const task = (id: string, listId: string, parentId: string | null = null) => ({
+    id,
+    listId,
+    parentId,
+    text: id,
+    ...stamp,
+  });
+  const file = (tables: Record<string, unknown[]>) =>
+    parseSnapshot(JSON.stringify({ app: 'checklist', version: 1, tables })).tables;
+
+  // Bug prevented: tasks that are each other's parent have no top, so they never show and
+  // can't be deleted.
+  it('gives a loop of subtasks a top, and keeps the rest of the chain', () => {
+    const { items } = file({
+      lists: [todo('L')],
+      items: [task('A', 'L', 'C'), task('B', 'L', 'A'), task('C', 'L', 'B'), task('S', 'L', 'S')],
+    });
+    const tops = Object.values(items).filter((i) => i.parentId === null);
+    // The loop of three is cut in one place only.
+    expect(tops).toHaveLength(2);
+    expect(items.S.parentId).toBeNull();
+    for (const start of ['A', 'B', 'C']) {
+      let steps = 0;
+      for (let at = items[start]; at.parentId; at = items[at.parentId]) steps++;
+      expect(steps).toBeLessThan(3);
+    }
+  });
+
+  it('makes a subtask top-level when its parent is missing or in another list', () => {
+    const { items } = file({
+      lists: [todo('L'), todo('M')],
+      items: [task('P', 'M'), task('A', 'L', 'P'), task('B', 'L', 'gone'), task('C', 'M', 'P')],
+    });
+    expect(items.A.parentId).toBeNull();
+    expect(items.B.parentId).toBeNull();
+    expect(items.C.parentId).toBe('P');
+  });
+
+  it('drops rows whose list or task isn’t in the file', () => {
+    const tables = file({
+      lists: [{ ...todo('L'), folderId: 'gone' }],
+      items: [task('A', 'L'), task('X', 'nowhere')],
+      sections: [{ id: 'S', listId: 'nowhere', title: 'S', ...stamp }],
+      notes: [{ id: 'nowhere', content: '{}', plainText: '', updatedAt: 1 }],
+      reminders: [
+        { id: 'R1', itemId: 'A', kind: 'absolute', at: 5, ...stamp },
+        { id: 'R2', itemId: 'X', kind: 'absolute', at: 5, ...stamp },
+      ],
+      completions: [{ id: 'C1', itemId: 'gone', dueDate: null, completedAt: 5 }],
+      focusSessions: [
+        { id: 'F1', itemId: 'X', kind: 'pomodoro', startedAt: 1, endedAt: 2, seconds: 1 },
+      ],
+    });
+    expect(tables.lists.L.folderId).toBeNull();
+    expect(Object.keys(tables.items)).toEqual(['A']);
+    expect(Object.keys(tables.reminders)).toEqual(['R1']);
+    expect(tables.sections).toEqual({});
+    expect(tables.notes).toEqual({});
+    expect(tables.completions).toEqual({});
+    expect(tables.focusSessions).toEqual({});
+  });
+
+  it('keeps one check-in a day for a habit', () => {
+    const { checkIns } = file({
+      lists: [{ ...todo('L'), type: 'habit' }],
+      items: [task('H', 'L')],
+      checkIns: [
+        { id: 'C1', itemId: 'H', day: '2020-01-02', createdAt: 1 },
+        { id: 'C2', itemId: 'H', day: '2020-01-02', createdAt: 2 },
+        { id: 'C3', itemId: 'H', day: '2020-01-03', createdAt: 3 },
+      ],
+    });
+    expect(Object.keys(checkIns)).toEqual(['C1', 'C3']);
   });
 });

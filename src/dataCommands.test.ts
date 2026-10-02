@@ -12,6 +12,8 @@ const platform = vi.hoisted(() => ({
   openTextFile: vi.fn(),
   saveFolder: vi.fn(),
   writeBackup: vi.fn(),
+  quitApp: vi.fn(),
+  cancelQuit: vi.fn(),
 }));
 vi.mock('./platform', async (original) => ({
   ...(await original<typeof import('./platform')>()),
@@ -23,7 +25,7 @@ vi.mock('sonner', () => ({
   toast: Object.assign(toasts.message, { error: toasts.error, dismiss: vi.fn() }),
 }));
 
-const { exportJson, exportMarkdown, importJson } = await import('./dataCommands');
+const { exportJson, exportMarkdown, importJson, quitWhenSaved } = await import('./dataCommands');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -112,5 +114,33 @@ describe('data commands', () => {
       'Can’t import this file. The file isn’t a Checklist export.',
     );
     expect(useData.getState().tables).toBe(before);
+  });
+
+  it('quits once everything is saved', async () => {
+    createList({ type: 'todo', title: 'Saved' });
+    await quitWhenSaved();
+    expect(platform.quitApp).toHaveBeenCalledOnce();
+    expect(platform.cancelQuit).not.toHaveBeenCalled();
+  });
+
+  it('stays open and asks when the last changes can’t be saved', async () => {
+    const repo = new MemoryRepository();
+    vi.spyOn(repo, 'write').mockRejectedValue(new Error('disk full'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    resetForTests(repo);
+    createList({ type: 'todo', title: 'Unsaved' });
+
+    await quitWhenSaved();
+    expect(repo.write).toHaveBeenCalledTimes(2);
+    expect(platform.quitApp).not.toHaveBeenCalled();
+    expect(platform.cancelQuit).toHaveBeenCalledOnce();
+    const dialog = useUI.getState().dialog;
+    expect(dialog).toMatchObject({ kind: 'confirm', title: 'Quit without saving?' });
+    expect(dialog?.kind === 'confirm' && dialog.message).toContain('disk full');
+
+    if (dialog?.kind === 'confirm') dialog.onConfirm();
+    expect(platform.quitApp).toHaveBeenCalledOnce();
+    resetForTests(new MemoryRepository());
+    vi.restoreAllMocks();
   });
 });

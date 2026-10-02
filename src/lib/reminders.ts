@@ -62,9 +62,33 @@ export function fireTime(reminder: Reminder, item: Item, allDayTime: string): nu
     : base;
 }
 
-export function reminderState(reminder: Reminder, at: number, now: number): ReminderState {
-  if (reminder.dismissedFor === at) return 'done';
-  if (reminder.firedFor === at) return 'fired';
+/**
+ * What `firedFor` and `dismissedFor` hold to say the fire time `at` has been
+ * dealt with. A fixed moment (a custom reminder, a snooze) is its own mark. A
+ * reminder measured from the due date is marked by that date and time read as
+ * UTC, less the offset: the same number in whatever time zone the computer is
+ * in and whatever the all-day reminder time is, so moving either doesn't make
+ * a reminder that was dealt with look new.
+ */
+export function fireMark(reminder: Reminder, item: Item, at: number): number {
+  const snoozed = reminder.snoozedUntil !== null && at === reminder.snoozedUntil;
+  if (reminder.kind === 'absolute' || snoozed || !item.dueDate) return at;
+  const [y, m, d] = item.dueDate.split('-').map(Number);
+  const [h, min] = (item.dueTime ?? '00:00').split(':').map(Number);
+  return Date.UTC(y, m - 1, d, h, min) - (reminder.offsetMinutes ?? 0) * MINUTE;
+}
+
+export function reminderState(
+  reminder: Reminder,
+  item: Item,
+  at: number,
+  now: number,
+): ReminderState {
+  const mark = fireMark(reminder, item, at);
+  // `at` itself is what was stored before marks existed.
+  const dealtWith = (stored: number | null) => stored === mark || stored === at;
+  if (dealtWith(reminder.dismissedFor)) return 'done';
+  if (dealtWith(reminder.firedFor)) return 'fired';
   return at > now ? 'scheduled' : 'due';
 }
 
@@ -90,7 +114,13 @@ export function reminderEntries(
     if (!isRemindable(item, list)) continue;
     const at = fireTime(reminder, item, allDayTime);
     if (at === null) continue;
-    entries.push({ reminder, item, list: list!, at, state: reminderState(reminder, at, now) });
+    entries.push({
+      reminder,
+      item,
+      list: list!,
+      at,
+      state: reminderState(reminder, item, at, now),
+    });
   }
   return entries.sort((a, b) => a.at - b.at || (a.reminder.id < b.reminder.id ? -1 : 1));
 }

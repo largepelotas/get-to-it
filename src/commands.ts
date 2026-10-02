@@ -44,6 +44,7 @@ import {
   createSection,
   deleteSection,
   moveItemsToSection,
+  setSectionCollapsed,
   UNTITLED_SECTION,
 } from './store/actions/sections';
 import { deleteListForever, emptyTrash } from './store/actions/trash';
@@ -60,7 +61,13 @@ import {
 import { lastEntryId, redo, setSetting, undo, undoEntry, useData } from './store/data';
 import type { ColumnDrop } from './store/board';
 import { normalizeLabelName, sameLabelName } from './store/labels';
-import { DEFAULT_VIEW_OPTIONS, sameViewOptions, viewKey } from './store/viewOptions';
+import {
+  DEFAULT_VIEW_OPTIONS,
+  isArranged,
+  sameViewOptions,
+  viewKey,
+  viewOptionsFor,
+} from './store/viewOptions';
 import { listToMarkdown } from './store/markdown';
 import {
   closeDialog,
@@ -188,11 +195,13 @@ export async function copyAsMarkdown(id: string): Promise<void> {
 
 /**
  * Opens an item's list with the item selected and in view: collapsed parents
- * are expanded, and a finished item's section is shown. To-do items also get
- * the details panel.
+ * and a collapsed section are expanded, and a finished item's section is
+ * shown. To-do items also get the details panel unless `details` is false,
+ * which leaves the panel as the move to the list left it.
  */
-export function revealItem(id: string): void {
-  const { items, lists } = useData.getState().tables;
+export function revealItem(id: string, options: { details?: boolean } = {}): void {
+  const { tables, settings } = useData.getState();
+  const { items, lists, sections } = tables;
   const item = items[id];
   const list = item && lists[item.listId];
   if (!item || !list) return;
@@ -203,11 +212,32 @@ export function revealItem(id: string): void {
   }
   if (list.type === 'grocery' ? item.checked : top.checked) {
     if (!list.showCompleted) setShowCompleted(list.id, true);
+  } else if (list.type === 'todo') {
+    // An open task sits under its top-level task's section, which hides its rows while collapsed.
+    const section = sections[top.sectionId ?? ''];
+    if (section?.listId === list.id && section.collapsed) setSectionCollapsed(section.id, false);
+  }
+  // A sorted or grouped list draws only its open tasks, so a finished one has no row
+  // there. Put the list back in its own order, where the Completed group shows it.
+  const view: View = { kind: 'list', listId: list.id };
+  if (
+    list.type === 'todo' &&
+    !list.deletedAt &&
+    !list.archivedAt &&
+    (item.checked || top.checked) &&
+    isArranged(viewOptionsFor(settings, view))
+  ) {
+    setViewOptions(view, DEFAULT_VIEW_OPTIONS);
+    toast(`${quote(list.title)} is back in list order to show the completed task`, {
+      duration: 3000,
+    });
   }
   openList(list.id);
   useUI.setState({
     selectedItemId: id,
-    detailsOpen: list.type === 'todo' || list.type === 'habit',
+    ...(options.details === false
+      ? {}
+      : { detailsOpen: list.type === 'todo' || list.type === 'habit' }),
     reveal: id,
   });
 }

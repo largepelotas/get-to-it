@@ -48,7 +48,7 @@ function occurrenceAfter(rule: Recurrence, anchor: DateKey, after: DateKey): Dat
     }
     case 'monthly': {
       const start = fromDateKey(anchor);
-      const dom = start.getDate();
+      const dom = rule.day ?? start.getDate();
       for (let k = 0; ; k++) {
         const m = start.getMonth() + k * interval;
         const candidate = monthlyOn(start.getFullYear() + Math.floor(m / 12), m % 12, dom);
@@ -61,7 +61,7 @@ function occurrenceAfter(rule: Recurrence, anchor: DateKey, after: DateKey): Dat
         const candidate = monthlyOn(
           start.getFullYear() + k * interval,
           start.getMonth(),
-          start.getDate(),
+          rule.day ?? start.getDate(),
         );
         if (candidate > after) return candidate;
       }
@@ -83,6 +83,27 @@ function addInterval(rule: Recurrence, from: DateKey): DateKey {
     case 'yearly':
       return toDateKey(addYears(date, n));
   }
+}
+
+const keepsDay = (rule: Recurrence) =>
+  rule.mode === 'schedule' && (rule.freq === 'monthly' || rule.freq === 'yearly');
+
+/**
+ * The rule with the day of the month it's meant for written into it, taken from
+ * the due date unless it's there already. Done before a task moves to its next
+ * date: "monthly on the 31st" then lands on 28 February and goes back to the
+ * 31st in March, instead of staying on the 28th.
+ */
+export function anchored(rule: Recurrence, dueDate: DateKey | null): Recurrence {
+  if (!keepsDay(rule) || rule.day || !dueDate) return rule;
+  return { ...rule, day: fromDateKey(dueDate).getDate() };
+}
+
+/** The rule without its noted day, for when the due date is moved by hand: the new date decides. */
+export function unanchored(rule: Recurrence | null): Recurrence | null {
+  if (!rule?.day) return rule;
+  const { day: _day, ...rest } = rule;
+  return rest;
 }
 
 /**
@@ -136,6 +157,7 @@ export function describeRecurrence(rule: Recurrence, dueDate?: DateKey | null): 
       return days.length ? `${every} on ${listDays(days)}` : every;
     }
     case 'monthly':
+      if (rule.day) return `${every} on the ${ordinal(rule.day)}`;
       return dueDate ? `${every} on the ${ordinal(fromDateKey(dueDate).getDate())}` : every;
     case 'yearly':
       return dueDate ? `${every} on ${format(fromDateKey(dueDate), 'MMM d')}` : every;
@@ -156,6 +178,8 @@ export function sanitizeRecurrence(value: unknown): Recurrence | null {
     const days = [...new Set(v.weekdays.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
     if (days.length) rule.weekdays = days as Weekday[];
   }
+  const day = Number(v.day);
+  if (keepsDay(rule) && Number.isInteger(day) && day >= 1 && day <= 31) rule.day = day;
   return rule;
 }
 

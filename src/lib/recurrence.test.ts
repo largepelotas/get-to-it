@@ -3,7 +3,9 @@ import type { Recurrence } from '@/data/types';
 import {
   describeRecurrence,
   firstOccurrence,
+  anchored,
   nextDueDate,
+  unanchored,
   sanitizeRecurrence,
   skipDueDate,
 } from './recurrence';
@@ -64,6 +66,43 @@ describe('nextDueDate on a schedule', () => {
 
   it('uses today when there is no due date', () => {
     expect(nextDueDate(rule({}), null, WED)).toBe('2026-10-01');
+  });
+});
+
+describe('the day a monthly or yearly repeat is meant for', () => {
+  // Bug prevented: "monthly on the 31st" becoming the 28th for good after one February.
+  it('comes back to the 31st after a short month', () => {
+    const r = anchored(rule({ freq: 'monthly' }), '2026-01-31');
+    expect(r.day).toBe(31);
+    expect(nextDueDate(r, '2026-01-31', '2026-01-31')).toBe('2026-02-28');
+    expect(nextDueDate(r, '2026-02-28', '2026-02-28')).toBe('2026-03-31');
+    expect(nextDueDate(r, '2026-03-31', '2026-03-31')).toBe('2026-04-30');
+    expect(nextDueDate(r, '2026-04-30', '2026-04-30')).toBe('2026-05-31');
+    expect(skipDueDate(r, '2026-02-28')).toBe('2026-03-31');
+  });
+
+  it('comes back to 29 February in the next leap year', () => {
+    const r = anchored(rule({ freq: 'yearly' }), '2028-02-29');
+    expect(nextDueDate(r, '2028-02-29', '2028-02-29')).toBe('2029-02-28');
+    expect(nextDueDate(r, '2031-02-28', '2031-02-28')).toBe('2032-02-29');
+  });
+
+  it('is noted once, and only on monthly and yearly schedules', () => {
+    const r = anchored(rule({ freq: 'monthly' }), '2026-01-31');
+    expect(anchored(r, '2026-02-28')).toBe(r);
+    const weekly = rule({ freq: 'weekly' });
+    expect(anchored(weekly, '2026-01-31')).toBe(weekly);
+    const after = rule({ freq: 'monthly', mode: 'completion' });
+    expect(anchored(after, '2026-01-31')).toBe(after);
+    expect(unanchored(r)).toEqual(rule({ freq: 'monthly' }));
+  });
+
+  it('is described, and survives a clean-up only where it belongs', () => {
+    const r = rule({ freq: 'monthly', day: 31 });
+    expect(describeRecurrence(r, '2026-02-28')).toBe('Every month on the 31st');
+    expect(sanitizeRecurrence(r)).toEqual(r);
+    expect(sanitizeRecurrence({ ...r, day: 40 })).toEqual(rule({ freq: 'monthly' }));
+    expect(sanitizeRecurrence({ ...r, freq: 'weekly' })).toEqual(rule({ freq: 'weekly' }));
   });
 });
 

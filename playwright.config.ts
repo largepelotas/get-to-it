@@ -6,6 +6,15 @@ import { defineConfig, devices } from '@playwright/test';
 // downloads (`npx playwright install chromium`).
 const executablePath = process.env.PW_CHROMIUM_PATH || undefined;
 
+// The tests press ControlOrMeta, which is ⌘ on a Mac, while the app decides between
+// ⌘ and Ctrl from the user agent, and Playwright's desktop Chrome says Windows. On a
+// Mac, say Mac, so the two agree.
+const desktopChrome = devices['Desktop Chrome'];
+const userAgent =
+  process.platform === 'darwin'
+    ? desktopChrome.userAgent.replace(/\(Windows[^)]*\)/, '(Macintosh; Intel Mac OS X 10_15_7)')
+    : desktopChrome.userAgent;
+
 export default defineConfig({
   testDir: 'e2e',
   fullyParallel: true,
@@ -22,7 +31,8 @@ export default defineConfig({
     {
       name: 'chromium',
       use: {
-        ...devices['Desktop Chrome'],
+        ...desktopChrome,
+        userAgent,
         viewport: { width: 1180, height: 760 },
         launchOptions: { executablePath },
       },

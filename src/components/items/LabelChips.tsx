@@ -2,11 +2,15 @@ import { openLabel } from '@/store/ui';
 import type { Label } from '@/data/types';
 import { LabelDot } from './LabelPicker';
 
-/** A task's labels as small chips. Each opens that label's view; none is a tab stop. */
+/**
+ * A task's labels as small chips. Each opens that label's view; none is a tab
+ * stop. In a tight row the chips are the first thing to give way: they shorten
+ * their names, then clip.
+ */
 export function LabelChips({ labels }: { labels: Label[] }) {
   if (!labels.length) return null;
   return (
-    <span className="flex max-w-56 min-w-0 items-center gap-1 overflow-hidden">
+    <span className="flex max-w-56 min-w-0 shrink-[100] items-center gap-1 overflow-hidden">
       {labels.map((label) => (
         <button
           key={label.id}
@@ -18,7 +22,7 @@ export function LabelChips({ labels }: { labels: Label[] }) {
             e.stopPropagation();
             openLabel(label.id);
           }}
-          className="flex max-w-28 min-w-0 shrink-0 items-center gap-1 rounded-full border border-line px-1.5 py-px text-[11px] leading-4 text-fg-muted hover:bg-line hover:text-fg"
+          className="flex max-w-28 min-w-0 items-center gap-1 rounded-full border border-line px-1.5 py-px text-[11px] leading-4 text-fg-muted hover:bg-line hover:text-fg"
         >
           <LabelDot color={label.color} />
           <span className="truncate">{label.name}</span>

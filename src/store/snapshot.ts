@@ -297,6 +297,60 @@ function checkSettings(raw: unknown): Partial<Settings> {
 }
 
 /**
+ * Mends rows that point at something the file doesn't have, in place. Each of
+ * these would otherwise leave rows that never show and can't be removed, or a
+ * task tree with no top:
+ *
+ * - a list in a missing folder moves out of it;
+ * - a note, section or item of a missing list is dropped, and so is a
+ *   reminder, completion or focus session of a missing item;
+ * - a subtask whose parent is missing, in another list, or (following the
+ *   parents up) itself becomes a top-level task;
+ * - a habit keeps one check-in a day.
+ */
+function repairReferences(tables: Tables): void {
+  const { folders, lists, items } = tables;
+  for (const list of Object.values(lists)) {
+    if (list.folderId && !folders[list.folderId]) list.folderId = null;
+  }
+  for (const note of Object.values(tables.notes)) {
+    if (!lists[note.id]) delete tables.notes[note.id];
+  }
+  for (const section of Object.values(tables.sections)) {
+    if (!lists[section.listId]) delete tables.sections[section.id];
+  }
+  for (const item of Object.values(items)) {
+    if (!lists[item.listId]) delete items[item.id];
+  }
+  for (const item of Object.values(items)) {
+    const parent = item.parentId ? items[item.parentId] : undefined;
+    if (item.parentId && parent?.listId !== item.listId) item.parentId = null;
+  }
+  for (const item of Object.values(items)) {
+    const seen = new Set([item.id]);
+    for (let up = item; up.parentId; up = items[up.parentId]) {
+      if (seen.has(up.parentId)) {
+        // A loop: cut it here, which gives it a top.
+        up.parentId = null;
+        break;
+      }
+      seen.add(up.parentId);
+    }
+  }
+  for (const table of ['reminders', 'completions', 'focusSessions'] as const) {
+    for (const row of Object.values(tables[table])) {
+      if (!items[row.itemId]) delete tables[table][row.id];
+    }
+  }
+  const ticked = new Set<string>();
+  for (const checkIn of Object.values(tables.checkIns)) {
+    const key = `${checkIn.itemId} ${checkIn.day}`;
+    if (ticked.has(key)) delete tables.checkIns[checkIn.id];
+    ticked.add(key);
+  }
+}
+
+/**
  * Reads an exported file. Throws an `ImportError` with a message for the
  * user if it isn't a Checklist export this version can read.
  */
@@ -342,6 +396,7 @@ export function parseSnapshot(json: string): LoadResult & { exportedAt: number |
     if (!tables.items[checkIn.itemId]?.habit || checkIn.day > today)
       delete tables.checkIns[checkIn.id];
   }
+  repairReferences(tables);
   const settings = checkSettings(snapshot.settings);
   if (settings.defaultListId && !tables.lists[settings.defaultListId])
     settings.defaultListId = null;

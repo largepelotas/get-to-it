@@ -4,7 +4,14 @@ import { newId } from '@/lib/id';
 import { keyBetween } from '@/lib/order';
 import { parseQuickAdd } from '@/lib/quickAdd';
 import type { ReminderSpec } from '@/lib/reminders';
-import { firstOccurrence, nextDueDate, sanitizeRecurrence, skipDueDate } from '@/lib/recurrence';
+import {
+  anchored,
+  firstOccurrence,
+  nextDueDate,
+  sanitizeRecurrence,
+  skipDueDate,
+  unanchored,
+} from '@/lib/recurrence';
 import { docFromText, docToPlainText, isDocEmpty, parseDoc, type RichNode } from '@/lib/richText';
 import { commit, useData } from '../data';
 import type { Tx } from '../history';
@@ -287,6 +294,15 @@ export function setPriorities(ids: string[], priority: Priority): void {
   });
 }
 
+/**
+ * A due date picked by hand. On a repeating task the new date is where the
+ * repeat now counts from, so the day of the month it had noted goes.
+ */
+function movedByHand(item: Item | undefined, dueDate: string): Partial<Item> {
+  if (!item?.recurrence?.day || item.dueDate === dueDate) return { dueDate };
+  return { dueDate, recurrence: unanchored(item.recurrence) };
+}
+
 export function clearDue(id: string): void {
   commit('Clear due date', (tx) => {
     tx.update('items', id, { dueDate: null, dueTime: null, endTime: null, recurrence: null });
@@ -303,9 +319,10 @@ export function setDue(id: string, dueDate: string | null, dueTime: string | nul
   commit('Due date', (tx) => {
     const time = isTimeString(dueTime) ? dueTime : null;
     // A range moves with its day, as long as it still has a start it comes after.
-    const end = tx.get('items', id)?.endTime ?? null;
+    const item = tx.get('items', id);
+    const end = item?.endTime ?? null;
     tx.update('items', id, {
-      dueDate,
+      ...movedByHand(item, dueDate),
       dueTime: time,
       endTime: time && end && isTimeAfter(end, time) ? end : null,
     });
@@ -328,7 +345,7 @@ export function moveDueTo(id: string, dueDate: string, dueTime: string | null): 
     if (time && item.dueTime && item.endTime) {
       endTime = addMinutes(time, minutesOf(item.endTime) - minutesOf(item.dueTime));
     }
-    tx.update('items', id, { dueDate, dueTime: time, endTime });
+    tx.update('items', id, { ...movedByHand(item, dueDate), dueTime: time, endTime });
     clearSnoozes(tx, id);
   });
 }
@@ -338,8 +355,9 @@ export function moveDueDates(ids: string[], dueDate: string): void {
   if (!isDateKey(dueDate)) return;
   commit(ids.length === 1 ? 'Due date' : 'Reschedule tasks', (tx) => {
     for (const id of ids) {
-      if (!tx.get('items', id)?.dueDate) continue;
-      tx.update('items', id, { dueDate });
+      const item = tx.get('items', id);
+      if (!item?.dueDate) continue;
+      tx.update('items', id, movedByHand(item, dueDate));
       clearSnoozes(tx, id);
     }
   });
@@ -356,7 +374,7 @@ export function setDueDates(ids: string[], dueDate: string | null): void {
       if (!tx.get('items', id)) continue;
       if (dueDate === null) {
         tx.update('items', id, { dueDate: null, dueTime: null, endTime: null, recurrence: null });
-      } else tx.update('items', id, { dueDate });
+      } else tx.update('items', id, movedByHand(tx.get('items', id), dueDate));
       clearSnoozes(tx, id);
     }
   });
@@ -436,14 +454,15 @@ export const repeatsOnCheck = (item: Item) => !!item.recurrence && !item.checked
  */
 function completeOccurrence(tx: Tx, item: Item): string {
   const today = todayKey(new Date(tx.now));
-  const next = nextDueDate(item.recurrence!, item.dueDate, today);
+  const rule = anchored(item.recurrence!, item.dueDate);
+  const next = nextDueDate(rule, item.dueDate, today);
   tx.put('completions', {
     id: newId(),
     itemId: item.id,
     dueDate: item.dueDate,
     completedAt: tx.now,
   });
-  tx.update('items', item.id, { dueDate: next });
+  tx.update('items', item.id, { dueDate: next, recurrence: rule });
   clearSnoozes(tx, item.id);
   for (const childId of descendantIds(itemIndex(tx, item.listId), item.id)) {
     if (tx.get('items', childId)?.checked) {
@@ -505,8 +524,9 @@ export function skipOccurrence(id: string): string | null {
   return commit('Skip occurrence', (tx) => {
     const item = tx.get('items', id);
     if (!item || item.deletedAt || item.checked || !item.recurrence || !item.dueDate) return null;
-    const next = skipDueDate(item.recurrence, item.dueDate, todayKey(new Date(tx.now)));
-    tx.update('items', id, { dueDate: next });
+    const rule = anchored(item.recurrence, item.dueDate);
+    const next = skipDueDate(rule, item.dueDate, todayKey(new Date(tx.now)));
+    tx.update('items', id, { dueDate: next, recurrence: rule });
     clearSnoozes(tx, id);
     return next;
   });

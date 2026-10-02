@@ -6,7 +6,8 @@ import { homeView, newFolder } from './commands';
 import { MemoryRepository } from './data/memory';
 import { resetForTests, useData } from './store/data';
 import { seedIfNeeded } from './store/seed';
-import { navigate, useUI } from './store/ui';
+import { createList } from './store/actions/lists';
+import { navigate, openDialog, useUI } from './store/ui';
 
 beforeEach(() => {
   resetForTests(new MemoryRepository());
@@ -24,6 +25,23 @@ describe('App', () => {
     for (const name of ['Inbox', 'Groceries', 'Welcome', 'Work']) {
       expect(sidebar().getByRole('button', { name })).toBeInTheDocument();
     }
+  });
+
+  it('changes the default list in Settings', async () => {
+    const user = userEvent.setup();
+    const work = Object.values(useData.getState().tables.folders)[0].id;
+    const team = createList({ type: 'todo', title: 'Team', folderId: work });
+    render(<App />);
+    act(() => openDialog({ kind: 'settings' }));
+    const field = await screen.findByLabelText('Default list');
+    expect(
+      within(field)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Inbox', 'Work › Team']);
+    await user.selectOptions(field, 'Work › Team');
+    expect(useData.getState().settings.defaultListId).toBe(team);
+    expect(homeView()).toEqual({ kind: 'list', listId: team });
   });
 
   it('creates a list from the New list dialog and opens it', async () => {

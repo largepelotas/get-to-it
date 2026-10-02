@@ -15,6 +15,7 @@ export const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.us
 const tauriExecutor: SqlExecutor = {
   select: (sql, params = []) => invoke('db_select', { sql, params }),
   batch: (statements) => invoke('db_batch', { statements }),
+  backup: (label) => invoke('db_backup', { label }),
 };
 
 export function createRepository(): Repository {
@@ -140,6 +141,11 @@ export async function quitApp(): Promise<void> {
   if (isTauri) await invoke('quit_app');
 }
 
+/** Answers a quit request with "not now": the app stays open and its window comes forward. */
+export async function cancelQuit(): Promise<void> {
+  if (isTauri) await invoke('cancel_quit');
+}
+
 /** The tray's tooltip and, where the platform shows one (macOS, Linux), a short title beside the icon. */
 export async function setTrayStatus(tooltip: string, title: string | null): Promise<void> {
   if (isTauri) await invoke('set_tray_status', { tooltip, title });
@@ -190,21 +196,13 @@ export async function saveTextFile(
     );
     return true;
   }
-  const { save } = await import('@tauri-apps/plugin-dialog');
-  const path = await save({ defaultPath: defaultName, filters: [filter] });
-  if (!path) return false;
-  await invoke('write_text_file', { path, contents });
-  return true;
+  // The dialog is shown by the native side, so a path never passes through here.
+  return invoke<boolean>('save_text_file', { defaultName, contents, filter });
 }
 
 /** Asks for a file and reads it. Returns null if the user cancelled. */
 export async function openTextFile(filter: FileFilter): Promise<string | null> {
-  if (isTauri) {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({ multiple: false, directory: false, filters: [filter] });
-    if (typeof path !== 'string') return null;
-    return invoke<string>('read_text_file', { path });
-  }
+  if (isTauri) return invoke<string | null>('open_text_file', { filter });
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -233,14 +231,10 @@ export async function saveFolder(
     download(`${folderName}.md`, `${combined}\n`, 'text/markdown');
     return true;
   }
-  const { open } = await import('@tauri-apps/plugin-dialog');
-  const dir = await open({ directory: true, multiple: false, title: 'Choose where to export' });
-  if (typeof dir !== 'string') return false;
-  await invoke('write_files', {
-    dir,
+  return invoke<boolean>('save_files', {
+    title: 'Choose where to export',
     files: files.map((f) => ({ path: `${folderName}/${f.path}`, contents: f.contents })),
   });
-  return true;
 }
 
 /** True where automatic backups are written (the desktop app). */
