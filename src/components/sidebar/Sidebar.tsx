@@ -5,6 +5,8 @@ import {
   Calendar,
   CalendarDays,
   CalendarRange,
+  ChartColumn,
+  CircleCheck,
   Ellipsis,
   FolderPlus,
   Keyboard,
@@ -166,6 +168,22 @@ export function Sidebar() {
             label="Eisenhower matrix"
             active={view.kind === 'matrix'}
             onClick={() => navigate({ kind: 'matrix' })}
+          />
+        )}
+        {shows('completed') && (
+          <SidebarItem
+            icon={<CircleCheck className={navIcon} style={{ color: colorVar('green') }} />}
+            label="Completed"
+            active={view.kind === 'completed'}
+            onClick={() => navigate({ kind: 'completed' })}
+          />
+        )}
+        {shows('stats') && (
+          <SidebarItem
+            icon={<ChartColumn className={navIcon} style={{ color: colorVar('teal') }} />}
+            label="Statistics"
+            active={view.kind === 'stats'}
+            onClick={() => navigate({ kind: 'stats' })}
           />
         )}
         {shows('reminders') && (

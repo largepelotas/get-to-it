@@ -10,6 +10,8 @@ export type View =
   | { kind: 'calendar' }
   | { kind: 'reminders' }
   | { kind: 'matrix' }
+  | { kind: 'completed' }
+  | { kind: 'stats' }
   | { kind: 'list'; listId: string }
   | { kind: 'label'; labelId: string }
   | { kind: 'filter'; filterId: string }

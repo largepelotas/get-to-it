@@ -172,6 +172,8 @@ const VIEW_NAME: Record<BuiltInView, string> = {
   upcoming: 'Upcoming',
   calendar: 'Calendar',
   matrix: 'Eisenhower matrix',
+  completed: 'Completed',
+  stats: 'Statistics',
   reminders: 'Reminders',
 };
 
