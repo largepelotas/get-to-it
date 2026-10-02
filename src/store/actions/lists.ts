@@ -10,6 +10,7 @@ export const LIST_TYPE_LABEL: Record<ListType, string> = {
   todo: 'To-do list',
   grocery: 'Grocery list',
   note: 'Note',
+  habit: 'Habits',
 };
 
 /** Lists in a folder (or at the top level), in sidebar order. */

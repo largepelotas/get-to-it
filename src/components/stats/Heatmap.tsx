@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { useLayoutEffect, useRef } from 'react';
 import { fromDateKey, type DateKey } from '@/lib/dates';
 import { heatLevel, type HeatLevel } from '@/store/stats';
 
@@ -40,10 +41,17 @@ export function Heatmap({ weeks, values, label, name }: HeatmapProps) {
     const first = week.find((d) => d !== null && d.endsWith('-01'));
     return first ? format(fromDateKey(first), 'MMM') : '';
   });
+  // Open at the newest week, which is at the right-hand end. Runs again if the weeks change.
+  const boxRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (box) box.scrollLeft = box.scrollWidth;
+  }, [weeks]);
   const columns = `repeat(${weeks.length}, ${CELL}px)`;
 
   return (
     <div
+      ref={boxRef}
       // Focusable so the keyboard can scroll it sideways when the window is narrow.
       tabIndex={0}
       role="group"

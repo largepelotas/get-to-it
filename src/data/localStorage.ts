@@ -35,6 +35,8 @@ export class LocalStorageRepository extends MemoryRepository {
             // Items saved before deadlines existed don't have these.
             endTime: item.endTime ?? null,
             deadline: item.deadline ?? null,
+            // Items saved before habits existed don't have this.
+            habit: item.habit ?? null,
           },
         ]),
       );

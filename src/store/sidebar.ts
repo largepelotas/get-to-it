@@ -1,5 +1,7 @@
-import type { Folder, Item, List, Tables } from '@/data/types';
+import type { CheckIn, Folder, Item, List, Tables } from '@/data/types';
+import type { DateKey } from '@/lib/dates';
 import { bySortKey } from '@/lib/order';
+import { checkedDays, isDue } from './habits';
 
 export interface SidebarFolder {
   folder: Folder;
@@ -48,11 +50,30 @@ export function sidebarModel({ lists, folders }: Pick<Tables, 'lists' | 'folders
   return { pinned, unfiled, folders: inFolders, archived, trashed };
 }
 
-/** Unchecked, undeleted items per list (subtasks included). */
-export function openCounts(items: Record<string, Item>): Map<string, number> {
+/** What a habit list's count needs: the check-ins, and which day and week it is. */
+export interface HabitCountInput {
+  checkIns: Record<string, CheckIn>;
+  today: DateKey;
+  weekStartsOn: 0 | 1;
+}
+
+/**
+ * Unchecked, undeleted items per list (subtasks included). A habit list counts the habits
+ * still due today instead; without `habits` its habits are not counted.
+ */
+export function openCounts(
+  items: Record<string, Item>,
+  habits?: HabitCountInput,
+): Map<string, number> {
   const counts = new Map<string, number>();
+  const checkIns = habits ? Object.values(habits.checkIns) : [];
   for (const item of Object.values(items)) {
-    if (item.checked || item.deletedAt) continue;
+    if (item.deletedAt) continue;
+    if (item.habit) {
+      if (!habits) continue;
+      const days = checkedDays(checkIns, item.id);
+      if (!isDue(item.habit, days, habits.today, habits.weekStartsOn)) continue;
+    } else if (item.checked) continue;
     counts.set(item.listId, (counts.get(item.listId) ?? 0) + 1);
   }
   return counts;

@@ -172,7 +172,13 @@ export async function copyAsMarkdown(id: string): Promise<void> {
   const list = tables.lists[id];
   if (!list) return;
   try {
-    await copyText(listToMarkdown(tables, list, settings.groceryCategories));
+    await copyText(
+      listToMarkdown(
+        { ...tables, weekStartsOn: settings.weekStartsOn },
+        list,
+        settings.groceryCategories,
+      ),
+    );
     toast(`Copied ${quote(list.title)} as Markdown`, { duration: 2000 });
   } catch (err) {
     console.error('Copying failed', err);
@@ -199,7 +205,11 @@ export function revealItem(id: string): void {
     if (!list.showCompleted) setShowCompleted(list.id, true);
   }
   openList(list.id);
-  useUI.setState({ selectedItemId: id, detailsOpen: list.type === 'todo', reveal: id });
+  useUI.setState({
+    selectedItemId: id,
+    detailsOpen: list.type === 'todo' || list.type === 'habit',
+    reveal: id,
+  });
 }
 
 export function newFolder(): void {

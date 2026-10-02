@@ -93,8 +93,13 @@ export function Sidebar() {
   const renaming = useUI((s) => s.renaming);
 
   const model = useMemo(() => sidebarModel({ lists, folders }), [lists, folders]);
-  const counts = useMemo(() => openCounts(items), [items]);
+  const checkIns = useData((s) => s.tables.checkIns);
+  const weekStartsOn = useData((s) => s.settings.weekStartsOn);
   const today = useToday();
+  const counts = useMemo(
+    () => openCounts(items, { checkIns, today, weekStartsOn }),
+    [items, checkIns, today, weekStartsOn],
+  );
   const counted = useMemo(() => {
     const rows = dueRows(items, lists);
     return {

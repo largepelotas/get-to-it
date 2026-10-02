@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '@/data/types';
 import { backupDue, backupName, backUp, backUpIfDue } from './backup';
 import { createItem, setItemNotes } from './actions/items';
 import { addReminder } from './actions/reminders';
+import { addHabit, setHabitGoal, toggleCheckIn } from './actions/habits';
 import { createList, deleteList } from './actions/lists';
 import { createFilter } from './actions/filters';
 import { createLabel } from './actions/labels';
@@ -87,7 +88,7 @@ describe('snapshots', () => {
     data.tables.items[0].dueDate = null;
     data.tables.lists[0].type = 'kanban';
     expect(() => parseSnapshot(JSON.stringify(data))).toThrow(
-      'In list 1, type should be one of todo, grocery, note.',
+      'In list 1, type should be one of todo, grocery, note, habit.',
     );
   });
 
@@ -510,5 +511,96 @@ describe('focus sessions in snapshots', () => {
     }
     const { settings } = parseSnapshot(withSessions([], { focusMinutes: 45, breakMinutes: 10 }));
     expect(settings).toMatchObject({ focusMinutes: 45, breakMinutes: 10 });
+  });
+});
+
+describe('habits in snapshots', () => {
+  const habitFile = (items: unknown[], checkIns: unknown[] = [], lists: unknown[] = []) =>
+    JSON.stringify({ app: 'checklist', version: 1, tables: { lists, items, checkIns } });
+  const row = { id: 'H', listId: 'L', text: 'Run', sortKey: 'a0', createdAt: 1, updatedAt: 1 };
+
+  // Bug prevented: a habit list, its goals or its check-ins lost in an export and import.
+  it('round-trips a habit list, a weekly goal and a check-in', () => {
+    const list = createList({ type: 'habit' });
+    const habit = addHabit(list, 'Run')!;
+    setHabitGoal(habit, { period: 'week', times: 3 });
+    toggleCheckIn(habit, '2020-01-02');
+    const parsed = parseSnapshot(exportNow());
+    expect(parsed.tables.lists[list].type).toBe('habit');
+    expect(parsed.tables.items[habit].habit).toEqual({ period: 'week', times: 3 });
+    expect(Object.values(parsed.tables.checkIns)).toMatchObject([
+      { itemId: habit, day: '2020-01-02' },
+    ]);
+  });
+
+  // Bug prevented: a file exported before habits existed being refused, or its tasks coming in
+  // with habit undefined instead of null.
+  it('reads an older file as having no habits and no check-ins', () => {
+    const parsed = parseSnapshot(habitFile([row]));
+    expect(parsed.tables.items.H.habit).toBeNull();
+    expect(parsed.tables.checkIns).toEqual({});
+  });
+
+  // Bug prevented: a hand-edited goal (0 or 99 times a week) imported as it is.
+  it('cleans a goal that is out of range', () => {
+    const list = createList({ type: 'habit' });
+    const habit = addHabit(list, 'Run')!;
+    const file = JSON.parse(exportNow());
+    file.tables.items.find((i: { id: string }) => i.id === habit).habit = {
+      period: 'week',
+      times: 99,
+    };
+    const parsed = parseSnapshot(JSON.stringify(file));
+    expect(parsed.tables.items[habit].habit).toEqual({ period: 'week', times: 7 });
+  });
+
+  // Bug prevented: a habit imported without a goal showing a tick box that does nothing.
+  it('gives a habit with no goal in the file the everyday goal', () => {
+    const list = createList({ type: 'habit' });
+    const habit = addHabit(list, 'Run')!;
+    const file = JSON.parse(exportNow());
+    file.tables.items.find((i: { id: string }) => i.id === habit).habit = null;
+    const parsed = parseSnapshot(JSON.stringify(file));
+    expect(parsed.tables.items[habit].habit).toEqual({ period: 'day' });
+  });
+
+  // Bug prevented: a task imported with a goal being counted as a habit and refusing to move,
+  // and check-ins left behind for something that isn't a habit.
+  it('drops a goal, and its check-ins, from an item outside a habit list', () => {
+    const checkIn = { id: 'C', itemId: 'H', day: '2020-01-02', createdAt: 1 };
+    const parsed = parseSnapshot(habitFile([{ ...row, habit: { period: 'day' } }], [checkIn]));
+    expect(parsed.tables.items.H.habit).toBeNull();
+    expect(parsed.tables.checkIns).toEqual({});
+  });
+
+  // Bug prevented: a check-in with a day that isn't a date breaking streaks.
+  it('refuses a check-in without a real day, naming it', () => {
+    const bad = { id: 'C', itemId: 'H', day: '30/09/2026', createdAt: 1 };
+    expect(() => parseSnapshot(habitFile([row], [bad]))).toThrow(/check-in 1/);
+  });
+
+  // Bug prevented: a hand-edited file with check-ins dated in the future giving streaks and
+  // "done" days that haven't happened.
+  it('leaves out check-ins dated after today, without an error', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 8, 30, 12));
+      const list = {
+        id: 'L',
+        type: 'habit',
+        title: 'R',
+        sortKey: 'a0',
+        createdAt: 1,
+        updatedAt: 1,
+      };
+      const checkIns = [
+        { id: 'C1', itemId: 'H', day: '2026-09-30', createdAt: 1 },
+        { id: 'C2', itemId: 'H', day: '2026-10-01', createdAt: 1 },
+      ];
+      const parsed = parseSnapshot(habitFile([row], checkIns, [list]));
+      expect(Object.keys(parsed.tables.checkIns)).toEqual(['C1']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

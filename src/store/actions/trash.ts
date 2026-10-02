@@ -1,7 +1,7 @@
 import { commit } from '../data';
 import type { Tx } from '../history';
 
-/** Permanently removes items with their reminders, completion history and focus sessions. */
+/** Permanently removes items with their reminders, completion history, focus sessions and check-ins. */
 function purgeItems(tx: Tx, itemIds: Set<string>): void {
   if (!itemIds.size) return;
   for (const reminder of tx.all('reminders')) {
@@ -12,6 +12,9 @@ function purgeItems(tx: Tx, itemIds: Set<string>): void {
   }
   for (const session of tx.all('focusSessions')) {
     if (itemIds.has(session.itemId)) tx.remove('focusSessions', session.id);
+  }
+  for (const checkIn of tx.all('checkIns')) {
+    if (itemIds.has(checkIn.itemId)) tx.remove('checkIns', checkIn.id);
   }
   for (const id of itemIds) tx.remove('items', id);
 }

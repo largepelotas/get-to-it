@@ -1,7 +1,7 @@
 # Checklist
 
-A desktop app for macOS and Windows for to-do lists, grocery lists and
-rich-text notes. It's built with Tauri 2, React and TypeScript, and keeps
+A desktop app for macOS and Windows for to-do lists, grocery lists,
+habit lists and rich-text notes. It's built with Tauri 2, React and TypeScript, and keeps
 data in a local SQLite database.
 
 - [Plan](docs/PLAN.md): decisions, features and milestones

@@ -944,6 +944,44 @@ drop, from)` in `commands.ts`: a section column → `moveTasksToSection`
   filtering Completed by list or label, exporting statistics, and a task
   that was un-ticked and ticked again counts on its latest day only (the
   data keeps one `completedAt`).
+- Habits (after step 12; step 13 of `docs/todoist-gap.md`). A fourth list
+  type, `'habit'`. A habit is an `Item` in a habit list with `Item.habit`
+  (`{ period: 'day' }` or `{ period: 'week', times }`, null elsewhere), so
+  ordering, renaming, Trash, undo and search come free; `Item.checked` is
+  not used. Check-ins are a new table, `checkIns` (`CheckIn { id, itemId,
+day, createdAt }`, at most one per habit per day, removed with the habit
+  when the Trash is emptied). Schema version 9 rebuilds `lists` to allow
+  the type, adds `items.habit` and creates `check_ins`; the browser
+  preview and memory storage default the new table and field, and an older
+  export still imports. `store/habits.ts` is the pure side (`checkedDays`,
+  `isDue`, `weekCount`, `currentStreak`, `bestStreak`, `streakLabel`,
+  `goalLabel`, `habitDayValues`); a streak is not broken by today being
+  unticked, and a weekly streak counts weeks that reached `times`.
+  `store/actions/habits.ts` has `addHabit`, `setHabitGoal` and
+  `toggleCheckIn` (future days refused); moving habits between lists is
+  refused; `parseSnapshot` leaves out check-ins dated after today. Habits are kept out of every task view, Completed, Statistics
+  and reminders, and a habit list's sidebar count is the habits due today.
+  The screens are in `components/habits/`: `HabitList` (quick add "Add a
+  habit", an "N of M done today" line, rows reorderable by drag and
+  Alt+Up/Down; Shift+A on a focused row focuses the quick add and the next
+  habit goes to the top), `HabitRow` (today's checkbox, an editable name, "Every day"
+  or "2 of 3 this week", the streak with a flame, and seven day buttons
+  named like "Wed 30 Sep, done" with `aria-pressed`, hidden below a
+  container width of `@xl` (the buttons are the shared `HabitWeek`); the description is "Every day. 5 day streak.
+  Done today."), `habitMenu.tsx` (Check in, Goal, Rename, Move, Delete) and
+  `HabitDetails` (the same `data-region="details"` panel: name, a Goal
+  picker, current / best / total figures, a "Last 7 days" section with the
+  same `HabitWeek` buttons at every width, a "Past year" `Heatmap`, which
+  opens scrolled to the newest week (as does the Statistics one), and the
+  same rich-text notes field the task panel uses). `ListView` picks them
+  for habit lists. Space on a row checks today in, Enter or a click opens
+  details. The day buttons are Tab stops on the selected row only. The New
+  list dialog has a fourth card and the palette reads "New habit"; the
+  "Move to" pickers and the Ctrl+Shift+A dialog already listed only to-do
+  lists. Not done: reminders for habits, habits in Today or any task view,
+  amounts, specific weekdays, pausing or archiving one habit, an all-habits
+  statistics screen, a starter habit list and a
+  description line on the New list card.
 
 ### Accessibility and loading (M8)
 

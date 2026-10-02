@@ -146,7 +146,8 @@ export function paletteCommands({
   const commands: (PaletteCommand | false | undefined)[] = [
     hasQuickAdd && {
       id: 'new-task',
-      label: list?.type === 'grocery' ? 'New item' : 'New task',
+      label:
+        list?.type === 'grocery' ? 'New item' : list?.type === 'habit' ? 'New habit' : 'New task',
       keywords: 'add create',
       icon: Plus,
       shortcut: SHORTCUTS.newTask,

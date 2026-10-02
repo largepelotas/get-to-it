@@ -55,3 +55,14 @@ export async function expectAccessible(page: Page): Promise<void> {
   );
   expect(found).toEqual([]);
 }
+
+/** Creates a list of the given type (as named in the New list dialog) and opens it. */
+export async function createList(page: Page, type: string, title: string): Promise<void> {
+  await sidebar(page).getByRole('button', { name: 'New list' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New list' });
+  await dialog.getByRole('radio', { name: type }).check();
+  await dialog.getByLabel('Name').fill(title);
+  await dialog.getByRole('button', { name: 'Create' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('textbox', { name: 'List name' })).toHaveValue(title);
+}

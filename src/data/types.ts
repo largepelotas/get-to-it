@@ -1,4 +1,4 @@
-export type ListType = 'todo' | 'grocery' | 'note';
+export type ListType = 'todo' | 'grocery' | 'note' | 'habit';
 
 export const COLOR_NAMES = [
   'red',
@@ -62,6 +62,9 @@ export interface Recurrence {
   mode: 'schedule' | 'completion';
 }
 
+/** How often a habit is meant to be done: every day, or N times in a week (1 to 7). */
+export type HabitGoal = { period: 'day' } | { period: 'week'; times: number };
+
 export interface Item {
   id: string;
   listId: string;
@@ -104,6 +107,8 @@ export interface Item {
   quantity: string | null;
   /** Grocery: a category id from settings. */
   category: string | null;
+  /** Habit lists: how often the habit is meant to be done. Null on every item outside a habit list. */
+  habit: HabitGoal | null;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -179,6 +184,15 @@ export interface Note {
   updatedAt: number;
 }
 
+/** A habit checked in on one day. At most one per habit per day. */
+export interface CheckIn {
+  id: string;
+  itemId: string;
+  /** Local calendar date, YYYY-MM-DD. */
+  day: string;
+  createdAt: number;
+}
+
 export type FocusKind = 'pomodoro' | 'stopwatch';
 
 /** Time spent on a task with the focus timer, logged when the timer stops. */
@@ -205,6 +219,7 @@ export interface Tables {
   completions: Record<string, Completion>;
   notes: Record<string, Note>;
   focusSessions: Record<string, FocusSession>;
+  checkIns: Record<string, CheckIn>;
 }
 
 export type TableName = keyof Tables;
@@ -222,6 +237,7 @@ export const TABLE_NAMES: TableName[] = [
   'completions',
   'notes',
   'focusSessions',
+  'checkIns',
 ];
 
 export function emptyTables(): Tables {
@@ -236,6 +252,7 @@ export function emptyTables(): Tables {
     completions: {},
     notes: {},
     focusSessions: {},
+    checkIns: {},
   };
 }
 

@@ -24,6 +24,7 @@ function item(id: string, parentId: string | null, sortKey: string): Item {
     recurrence: null,
     quantity: null,
     category: null,
+    habit: null,
     createdAt: 0,
     updatedAt: 0,
     deletedAt: null,

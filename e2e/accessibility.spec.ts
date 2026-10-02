@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   addTasks,
+  createList,
   expectAccessible,
   openApp,
   openList,
@@ -84,6 +85,19 @@ for (const palette of PALETTES)
       await expect(page.getByText('Stopped · under a minute')).toBeHidden();
       await openList(page, 'Welcome');
       await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
+      await expectAccessible(page);
+
+      // A habit list, with a habit checked in and its details open.
+      await createList(page, 'Habits', 'Routine');
+      const habit = page.getByRole('textbox', { name: 'Add a habit' });
+      for (const text of ['Read', 'Stretch']) {
+        await habit.fill(text);
+        await habit.press('Enter');
+      }
+      await row(page, 'Read').getByRole('checkbox', { name: 'Read' }).click();
+      await row(page, 'Read').click();
+      await expect(page.getByRole('complementary', { name: 'Habit details' })).toBeVisible();
+      await settled(page);
       await expectAccessible(page);
 
       // The label view, and the label picker open on a labelled task.

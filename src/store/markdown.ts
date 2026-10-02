@@ -1,4 +1,5 @@
 import type {
+  CheckIn,
   FocusSession,
   GroceryCategory,
   Item,
@@ -7,12 +8,14 @@ import type {
   Section,
   Tables,
 } from '@/data/types';
+import { todayKey, type DateKey } from '@/lib/dates';
 import { bySortKey } from '@/lib/order';
 import { focusSeconds } from './focus';
 import { formatFocusTotal } from '@/lib/focus';
 import { describeRecurrence } from '@/lib/recurrence';
 import { docToMarkdown, escapeMarkdown, parseDoc } from '@/lib/richText';
 import { groceryModel } from './grocery';
+import { checkedDays, currentStreak, DEFAULT_HABIT_GOAL, goalLabel, streakLabel } from './habits';
 import { itemLabels } from './labels';
 import { buildTree, type TreeNode } from './tree';
 
@@ -23,7 +26,10 @@ import { buildTree, type TreeNode } from './tree';
  */
 
 type Source = Pick<Tables, 'items' | 'notes'> &
-  Partial<Pick<Tables, 'sections' | 'labels' | 'focusSessions'>>;
+  Partial<Pick<Tables, 'sections' | 'labels' | 'focusSessions' | 'checkIns'>> & {
+    /** Habit streaks start the week here. Monday when missing. */
+    weekStartsOn?: 0 | 1;
+  };
 
 const PRIORITY = ['', 'P1', 'P2', 'P3'];
 
@@ -110,6 +116,26 @@ function todoMarkdown(
   return sections.join('\n\n');
 }
 
+/** One line per habit: "- Name (every day, 5 day streak)". Streaks are as of `today`. */
+function habitMarkdown(
+  items: Record<string, Item>,
+  checkIns: Record<string, CheckIn>,
+  listId: string,
+  today: DateKey,
+  weekStartsOn: 0 | 1,
+): string {
+  const rows = Object.values(checkIns);
+  return Object.values(items)
+    .filter((i) => i.listId === listId && !i.deletedAt)
+    .sort(bySortKey)
+    .map((i) => {
+      const goal = i.habit ?? DEFAULT_HABIT_GOAL;
+      const streak = currentStreak(goal, checkedDays(rows, i.id), today, weekStartsOn);
+      return `- ${escapeMarkdown(i.text)} (${goalLabel(goal).toLowerCase()}, ${streakLabel(goal, streak)})`;
+    })
+    .join('\n');
+}
+
 function groceryLine(item: Item, category?: string): string {
   const extra = [item.quantity, category].filter(Boolean).join(', ');
   return `- [${item.checked ? 'x' : ' '}] ${escapeMarkdown(item.text)}${extra ? ` (${escapeMarkdown(extra)})` : ''}`;
@@ -150,6 +176,14 @@ export function listBodyMarkdown(
       return groceryMarkdown(source.items, list.id, categories);
     case 'note':
       return docToMarkdown(parseDoc(source.notes[list.id]?.content));
+    case 'habit':
+      return habitMarkdown(
+        source.items,
+        source.checkIns ?? {},
+        list.id,
+        todayKey(),
+        source.weekStartsOn ?? 1,
+      );
   }
 }
 
@@ -191,7 +225,9 @@ export interface MarkdownFile {
  */
 export function markdownFiles(
   tables: Pick<Tables, 'folders' | 'lists' | 'items' | 'notes'> &
-    Partial<Pick<Tables, 'sections' | 'labels' | 'focusSessions'>>,
+    Partial<Pick<Tables, 'sections' | 'labels' | 'focusSessions' | 'checkIns'>> & {
+      weekStartsOn?: 0 | 1;
+    },
   categories: GroceryCategory[],
 ): MarkdownFile[] {
   const used = new Set<string>();

@@ -99,3 +99,21 @@ describe('LocalStorageRepository focus sessions', () => {
     window.localStorage.removeItem('checklist:data:v1');
   });
 });
+
+describe('LocalStorageRepository habits', () => {
+  // Bug prevented: data saved before habits existed loading with no checkIns table or with
+  // habit undefined on items.
+  it('reads data saved without checkIns or a habit goal as having none', async () => {
+    window.localStorage.setItem(
+      'checklist:data:v1',
+      JSON.stringify({
+        tables: { items: { I1: { id: 'I1', listId: 'L1', parentId: null, text: 'Old' } } },
+        settings: {},
+      }),
+    );
+    const { tables } = await new LocalStorageRepository().load();
+    expect(tables.checkIns).toEqual({});
+    expect(tables.items.I1.habit).toBeNull();
+    window.localStorage.removeItem('checklist:data:v1');
+  });
+});

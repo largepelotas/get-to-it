@@ -51,7 +51,10 @@ export async function exportJson(): Promise<void> {
 export async function exportMarkdown(): Promise<void> {
   const { tables, settings } = useData.getState();
   try {
-    const files = markdownFiles(tables, settings.groceryCategories);
+    const files = markdownFiles(
+      { ...tables, weekStartsOn: settings.weekStartsOn },
+      settings.groceryCategories,
+    );
     if (await saveFolder(`Checklist ${stamp()}`, files)) {
       toast(`Exported ${files.length === 1 ? '1 list' : `${files.length} lists`} as Markdown`);
     }
