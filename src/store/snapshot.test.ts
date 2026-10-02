@@ -578,4 +578,29 @@ describe('habits in snapshots', () => {
     const bad = { id: 'C', itemId: 'H', day: '30/09/2026', createdAt: 1 };
     expect(() => parseSnapshot(habitFile([row], [bad]))).toThrow(/check-in 1/);
   });
+
+  // Bug prevented: a hand-edited file with check-ins dated in the future giving streaks and
+  // "done" days that haven't happened.
+  it('leaves out check-ins dated after today, without an error', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 8, 30, 12));
+      const list = {
+        id: 'L',
+        type: 'habit',
+        title: 'R',
+        sortKey: 'a0',
+        createdAt: 1,
+        updatedAt: 1,
+      };
+      const checkIns = [
+        { id: 'C1', itemId: 'H', day: '2026-09-30', createdAt: 1 },
+        { id: 'C2', itemId: 'H', day: '2026-10-01', createdAt: 1 },
+      ];
+      const parsed = parseSnapshot(habitFile([row], checkIns, [list]));
+      expect(Object.keys(parsed.tables.checkIns)).toEqual(['C1']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

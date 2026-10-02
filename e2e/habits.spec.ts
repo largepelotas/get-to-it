@@ -46,3 +46,30 @@ test('keeps habits out of Today', async ({ page }) => {
   await openList(page, 'Routine');
   await expect(row(page, 'Read')).toBeVisible();
 });
+
+// Bug prevented: a narrow panel opening the heatmap at last year, with today off-screen, and
+// no way to fill in a missed day once the row hides its day buttons.
+test('shows today in the heatmap and the last 7 days in a narrow window', async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 800 });
+  await page.getByRole('textbox', { name: 'Add a habit' }).fill('Read');
+  await page.keyboard.press('Enter');
+  await row(page, 'Read').getByRole('checkbox', { name: 'Read' }).click();
+  await row(page, 'Read').click();
+  const details = page.getByRole('complementary', { name: 'Habit details' });
+  await expect(details.getByRole('heading', { name: 'Last 7 days' })).toBeVisible();
+  const box = details.getByRole('group', { name: 'Heatmap' });
+  const todaySquare = box.locator('[title^="Done on"]').first();
+  await expect(todaySquare).toBeVisible();
+  const inView = await todaySquare.evaluate((el) => {
+    const square = el.getBoundingClientRect();
+    const frame = el.closest('[role="group"]')!.getBoundingClientRect();
+    return square.right <= frame.right + 1 && square.left >= frame.left;
+  });
+  expect(inView).toBe(true);
+
+  await details
+    .getByRole('button', { name: /, not done$/ })
+    .first()
+    .click();
+  await expect(details.getByText('Check-ins').locator('xpath=..')).toContainText('2');
+});

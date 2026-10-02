@@ -959,17 +959,20 @@ day, createdAt }`, at most one per habit per day, removed with the habit
   unticked, and a weekly streak counts weeks that reached `times`.
   `store/actions/habits.ts` has `addHabit`, `setHabitGoal` and
   `toggleCheckIn` (future days refused); moving habits between lists is
-  refused. Habits are kept out of every task view, Completed, Statistics
+  refused; `parseSnapshot` leaves out check-ins dated after today. Habits are kept out of every task view, Completed, Statistics
   and reminders, and a habit list's sidebar count is the habits due today.
   The screens are in `components/habits/`: `HabitList` (quick add "Add a
   habit", an "N of M done today" line, rows reorderable by drag and
-  Alt+Up/Down), `HabitRow` (today's checkbox, an editable name, "Every day"
+  Alt+Up/Down; Shift+A on a focused row focuses the quick add and the next
+  habit goes to the top), `HabitRow` (today's checkbox, an editable name, "Every day"
   or "2 of 3 this week", the streak with a flame, and seven day buttons
   named like "Wed 30 Sep, done" with `aria-pressed`, hidden below a
-  container width of `@xl`; the description is "Every day. 5 day streak.
+  container width of `@xl` (the buttons are the shared `HabitWeek`); the description is "Every day. 5 day streak.
   Done today."), `habitMenu.tsx` (Check in, Goal, Rename, Move, Delete) and
   `HabitDetails` (the same `data-region="details"` panel: name, a Goal
-  picker, current / best / total figures, a "Past year" `Heatmap` and the
+  picker, current / best / total figures, a "Last 7 days" section with the
+  same `HabitWeek` buttons at every width, a "Past year" `Heatmap`, which
+  opens scrolled to the newest week (as does the Statistics one), and the
   same rich-text notes field the task panel uses). `ListView` picks them
   for habit lists. Space on a row checks today in, Enter or a click opens
   details. The day buttons are Tab stops on the selected row only. The New
@@ -977,12 +980,8 @@ day, createdAt }`, at most one per habit per day, removed with the habit
   "Move to" pickers and the Ctrl+Shift+A dialog already listed only to-do
   lists. Not done: reminders for habits, habits in Today or any task view,
   amounts, specific weekdays, pausing or archiving one habit, an all-habits
-  statistics screen, a starter habit list, Shift+A adding at the top, a
-  description line on the New list card, the heatmap does not scroll to
-  today on a narrow panel, the seven day buttons are hidden at narrow
-  widths (so a missed day can't be filled in there), and an imported file
-  can carry check-ins dated after today (the app itself refuses to make
-  them).
+  statistics screen, a starter habit list and a
+  description line on the New list card.
 
 ### Accessibility and loading (M8)
 

@@ -178,6 +178,32 @@ describe('HabitList', () => {
         .map((r) => r.getAttribute('aria-label')),
     ).toEqual(['B', 'A']);
   });
+
+  // Bug prevented: Shift+A doing nothing in a habit list, or adding the habit at the end.
+  it('Shift+A focuses quick add and puts the new habit at the top', async () => {
+    add('A');
+    add('B');
+    const user = userEvent.setup();
+    render(<App />);
+    row('B').focus();
+    await user.keyboard('{Shift>}a{/Shift}');
+    const field = screen.getByRole('textbox', { name: 'Add a habit' });
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue('');
+    await user.keyboard('First{Enter}');
+    expect(
+      within(screen.getByRole('list', { name: 'Habits' }))
+        .getAllByRole('listitem')
+        .map((el) => el.getAttribute('aria-label')),
+    ).toEqual(['First', 'A', 'B']);
+    // Plain quick add still adds at the end.
+    await user.type(field, 'Last{Enter}');
+    expect(
+      within(screen.getByRole('list', { name: 'Habits' }))
+        .getAllByRole('listitem')
+        .map((el) => el.getAttribute('aria-label')),
+    ).toEqual(['First', 'A', 'B', 'Last']);
+  });
 });
 
 describe('New list dialog', () => {

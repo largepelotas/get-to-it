@@ -70,4 +70,22 @@ describe('HabitDetails', () => {
     expect(panel().queryByRole('textbox', { name: 'Add subtask' })).not.toBeInTheDocument();
     expect(panel().getByRole('textbox', { name: 'Habit title' })).toHaveValue('Read');
   });
+
+  // Bug prevented: at narrow widths the row hides its day buttons, so a missed day could not
+  // be filled in anywhere.
+  it('toggles a past day from its Last 7 days section and the streak follows', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(panel().getByRole('heading', { name: 'Last 7 days' })).toBeInTheDocument();
+    const name = (offset: number, done: boolean) =>
+      `${format(fromDateKey(addDaysKey(todayKey(), offset)), 'EEE d MMM')}, ${done ? 'done' : 'not done'}`;
+    // Filling the gap three and four days ago joins the run of three to a run of six.
+    await user.click(panel().getByRole('button', { name: name(-3, false) }));
+    await user.click(panel().getByRole('button', { name: name(-4, false) }));
+    expect(panel().getByRole('button', { name: name(-3, true) })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(panel().getByText('Current streak').closest('div')).toHaveTextContent('6 days');
+  });
 });

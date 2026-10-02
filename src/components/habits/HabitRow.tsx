@@ -1,14 +1,14 @@
 import clsx from 'clsx';
-import { format } from 'date-fns';
 import { Ellipsis, Flame, GripVertical } from 'lucide-react';
 import { useState, type KeyboardEvent } from 'react';
 import { Checkbox } from '@/components/items/Checkbox';
 import type { DragBits } from '@/components/items/ItemRow';
 import { ContextMenu, IconButton, Menu, type MenuEntries } from '@/components/ui';
 import type { Item } from '@/data/types';
-import { fromDateKey, type DateKey } from '@/lib/dates';
+import { type DateKey } from '@/lib/dates';
 import { setItemText } from '@/store/actions/items';
 import { streakLabel } from '@/store/habits';
+import { HabitWeek } from './HabitWeek';
 import { describeHabit, progressText, type HabitStatus } from './habitStatus';
 
 /** Where a key was pressed: on the row itself, or in its name field. */
@@ -127,31 +127,15 @@ export function HabitRow({
         {status.streak > 0 && <Flame aria-hidden className="size-3.5 text-accent" />}
         {streakLabel(status.goal, status.streak)}
       </span>
-      <div role="group" aria-label="Last 7 days" className="hidden shrink-0 gap-1 @xl:flex">
-        {week.map((day) => {
-          const done = status.days.has(day);
-          return (
-            <button
-              key={day}
-              type="button"
-              // Reachable by Tab from the selected row only, so rows stay one stop each.
-              tabIndex={selected ? 0 : -1}
-              disabled={readOnly}
-              aria-pressed={done}
-              aria-label={`${format(fromDateKey(day), 'EEE d MMM')}, ${done ? 'done' : 'not done'}`}
-              onClick={() => onToggleDay(day)}
-              className={clsx(
-                'size-5 rounded-[5px] border text-[10px] leading-none font-medium disabled:opacity-50',
-                done
-                  ? 'border-accent bg-accent text-accent-fg'
-                  : 'border-line-control text-fg-muted hover:bg-hover',
-              )}
-            >
-              {format(fromDateKey(day), 'EEEEE')}
-            </button>
-          );
-        })}
-      </div>
+      <HabitWeek
+        week={week}
+        days={status.days}
+        readOnly={readOnly}
+        // Reachable by Tab from the selected row only, so rows stay one stop each.
+        tabIndex={selected ? 0 : -1}
+        className="hidden @xl:flex"
+        onToggleDay={onToggleDay}
+      />
       <span id={descriptionId} hidden>
         {describeHabit(status, today)}
       </span>

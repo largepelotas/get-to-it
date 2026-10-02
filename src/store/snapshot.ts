@@ -17,7 +17,7 @@ import {
 } from '@/data/types';
 import { cleanMinutes } from '@/lib/focus';
 import { sanitizeHabitGoal } from './habits';
-import { isDateKey, isTimeAfter, isTimeString } from '@/lib/dates';
+import { isDateKey, isTimeAfter, isTimeString, todayKey } from '@/lib/dates';
 import { isPaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
 import { cleanMatrix, cleanViewOptions } from './viewOptions';
@@ -336,8 +336,11 @@ export function parseSnapshot(json: string): LoadResult & { exportedAt: number |
     if (!inHabitList) item.habit = null;
     else if (!item.habit) item.habit = { period: 'day' };
   }
+  // Check-ins for days that haven't happened are left out, as ticking one is refused.
+  const today = todayKey();
   for (const checkIn of Object.values(tables.checkIns)) {
-    if (!tables.items[checkIn.itemId]?.habit) delete tables.checkIns[checkIn.id];
+    if (!tables.items[checkIn.itemId]?.habit || checkIn.day > today)
+      delete tables.checkIns[checkIn.id];
   }
   const settings = checkSettings(snapshot.settings);
   if (settings.defaultListId && !tables.lists[settings.defaultListId])

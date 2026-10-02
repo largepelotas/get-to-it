@@ -66,10 +66,16 @@ function SortableRow({
 function HabitQuickAdd({
   listId,
   inputRef,
+  atTop,
+  onAtTopDone,
   onArrowDown,
 }: {
   listId: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  /** Shift+A was pressed: the next habit goes to the top. */
+  atTop: boolean;
+  /** Called once that habit is added, or when the field is left. */
+  onAtTopDone: () => void;
   onArrowDown: () => void;
 }) {
   const [text, setText] = useState('');
@@ -77,7 +83,10 @@ function HabitQuickAdd({
     if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (addHabit(listId, text)) setText('');
+      if (addHabit(listId, text, atTop)) {
+        setText('');
+        onAtTopDone();
+      }
     } else if (e.key === 'Escape') {
       if (text) setText('');
       else e.currentTarget.blur();
@@ -97,6 +106,7 @@ function HabitQuickAdd({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
+        onBlur={onAtTopDone}
         className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
       />
     </label>
@@ -133,6 +143,7 @@ export function HabitList({ list }: { list: List }) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const quickAddRef = useRef<HTMLInputElement>(null);
+  const [addAtTop, setAddAtTop] = useState(false);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
 
   useLayoutEffect(() => {
@@ -161,6 +172,10 @@ export function HabitList({ list }: { list: List }) {
     setFocus({ target: id, mode });
   };
   const focusQuickAdd = () => setFocus({ target: 'quick-add' });
+  const focusQuickAddAtTop = () => {
+    setAddAtTop(true);
+    focusQuickAdd();
+  };
 
   const remove = (index: number) => {
     const next = items[index + 1] ?? items[index - 1];
@@ -195,6 +210,10 @@ export function HabitList({ list }: { list: List }) {
       openDetails(item.id);
     } else if (readOnly) {
       return;
+    } else if (mode === 'row' && e.target === e.currentTarget && is('Shift+A')) {
+      // As in a to-do list: only on the focused row, never while typing in a field.
+      e.preventDefault();
+      focusQuickAddAtTop();
     } else if (is('Alt+ArrowUp') || is('Alt+ArrowDown')) {
       e.preventDefault();
       moveBy(item, e.key === 'ArrowUp' ? -1 : 1);
@@ -243,6 +262,8 @@ export function HabitList({ list }: { list: List }) {
           <HabitQuickAdd
             listId={list.id}
             inputRef={quickAddRef}
+            atTop={addAtTop}
+            onAtTopDone={() => setAddAtTop(false)}
             onArrowDown={() => items[0] && focusRow(items[0].id)}
           />
         </div>

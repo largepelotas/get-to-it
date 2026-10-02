@@ -8,14 +8,15 @@ import { Button, IconButton, Select } from '@/components/ui';
 import type { Item } from '@/data/types';
 import { useToday } from '@/hooks/useToday';
 import { formatTimestamp, fromDateKey, type DateKey } from '@/lib/dates';
-import { setHabitGoal } from '@/store/actions/habits';
+import { setHabitGoal, toggleCheckIn } from '@/store/actions/habits';
 import { setItemNotes, setItemText } from '@/store/actions/items';
 import { useData } from '@/store/data';
 import { bestStreak, goalLabel, habitDayValues, sameGoal } from '@/store/habits';
-import { heatmapWeeks } from '@/store/stats';
+import { heatmapWeeks, lastDays } from '@/store/stats';
 import { closeDetails, useUI } from '@/store/ui';
 import { GOALS } from './habitMenu';
 import { habitStatus } from './habitStatus';
+import { HabitWeek } from './HabitWeek';
 
 const fullDay = (day: DateKey) => format(fromDateKey(day), 'd MMM yyyy');
 
@@ -82,6 +83,7 @@ export function HabitDetails({ item, readOnly }: HabitDetailsProps) {
     [status, weekStartsOn],
   );
   const weeks = useMemo(() => heatmapWeeks(today, weekStartsOn), [today, weekStartsOn]);
+  const week = useMemo(() => lastDays(today, 7), [today]);
   const values = useMemo(() => habitDayValues(status.days), [status.days]);
   const inYear = useMemo(() => {
     const shown = new Set(weeks.flat());
@@ -135,6 +137,17 @@ export function HabitDetails({ item, readOnly }: HabitDetailsProps) {
           <Figure label="Best streak" value={best} unit={unit} />
           <Figure label="Check-ins" value={status.days.size} />
         </dl>
+
+        <section>
+          <h2 className="mb-1.5 text-xs font-medium text-fg-muted">Last 7 days</h2>
+          <HabitWeek
+            week={week}
+            days={status.days}
+            readOnly={readOnly}
+            className="flex"
+            onToggleDay={(day) => toggleCheckIn(item.id, day)}
+          />
+        </section>
 
         <section>
           <h2 className="mb-1.5 text-xs font-medium text-fg-muted">Past year</h2>
