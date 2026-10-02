@@ -978,8 +978,11 @@ day, createdAt }`, at most one per habit per day, removed with the habit
   lists. Not done: reminders for habits, habits in Today or any task view,
   amounts, specific weekdays, pausing or archiving one habit, an all-habits
   statistics screen, a starter habit list, Shift+A adding at the top, a
-  description line on the New list card, and the heatmap does not scroll to
-  today on a narrow panel.
+  description line on the New list card, the heatmap does not scroll to
+  today on a narrow panel, the seven day buttons are hidden at narrow
+  widths (so a missed day can't be filled in there), and an imported file
+  can carry check-ins dated after today (the app itself refuses to make
+  them).
 
 ### Accessibility and loading (M8)
 
