@@ -1,5 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
-import { addTasks, expectAccessible, openApp, openList, row, sidebarButton } from './helpers';
+import {
+  addTasks,
+  expectAccessible,
+  openApp,
+  openList,
+  row,
+  sidebar,
+  sidebarButton,
+} from './helpers';
 
 /** Fills the starter lists so every kind of row and badge is on screen. */
 async function addContent(page: Page) {
@@ -119,11 +127,16 @@ for (const palette of PALETTES)
         'Upcoming',
         'Calendar',
         'Eisenhower matrix',
+        'Completed',
+        'Statistics',
         'Reminders',
         'Archive',
         'Trash',
       ]) {
-        await page.getByRole('button', { name: new RegExp(`^${view}`) }).click();
+        // Completed is looked for in the sidebar: a list's own "Completed" toggle starts with the same word.
+        await (view === 'Completed' ? sidebar(page) : page)
+          .getByRole('button', { name: new RegExp(`^${view}`) })
+          .click();
         await expect(page.getByRole('heading', { level: 1, name: view })).toBeVisible();
         await expectAccessible(page);
         if (view === 'Calendar') {

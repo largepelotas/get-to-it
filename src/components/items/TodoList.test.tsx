@@ -88,7 +88,7 @@ describe('TodoList', () => {
     const completed = within(screen.getByRole('list', { name: 'Completed tasks' }));
     expect(completed.getByRole('checkbox', { name: 'A' })).toBeChecked();
 
-    await user.click(screen.getByRole('button', { name: /Completed/ }));
+    await user.click(within(screen.getByRole('main')).getByRole('button', { name: /Completed/ }));
     expect(screen.queryByRole('list', { name: 'Completed tasks' })).not.toBeInTheDocument();
 
     // Clicking the row outside its text selects it for keyboard actions.

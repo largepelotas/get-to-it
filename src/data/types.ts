@@ -252,6 +252,8 @@ export const BUILT_IN_VIEWS = [
   'upcoming',
   'calendar',
   'matrix',
+  'completed',
+  'stats',
   'reminders',
 ] as const;
 export type BuiltInView = (typeof BUILT_IN_VIEWS)[number];

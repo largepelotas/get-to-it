@@ -36,7 +36,10 @@ test('builds subtasks from the keyboard and completes a parent with them', async
   await expect(taskRows(page)).toHaveCount(0);
   const done = page.getByRole('list', { name: 'Completed tasks' }).getByRole('listitem');
   await expect(done).toHaveCount(3);
-  await page.getByRole('button', { name: /^Completed/ }).click();
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: /^Completed/ })
+    .click();
   await expect(done).toHaveCount(0);
 });
 

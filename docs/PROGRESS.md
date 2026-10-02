@@ -914,6 +914,36 @@ drop, from)` in `commands.ts`: a section column → `moveTasksToSection`
   columns, no keyboard path for moving a card (T, 1–4, L and the task
   menu cover it), and in Upcoming's board layout the week strip is not a
   drop target (the board's DndContext is nested inside Upcoming's).
+- History and statistics (after M8; step 12 of `docs/todoist-gap.md`).
+  Two new built-in views, Completed and Statistics (`'completed'` and
+  `'stats'` in `BUILT_IN_VIEWS` and the `View` union, the sidebar after
+  the Eisenhower matrix, "Go to Completed" and "Go to Statistics" in the
+  palette, and the Show checkboxes in Settings). Nothing new is stored, so
+  there is no migration and the export format is unchanged; an old
+  `hiddenViews` without them loads with both shown. `store/completed.ts`
+  is the pure side: `completedEntries(tables)` lists every finished task
+  (a checked item with a `completedAt` is `done`, or `wontDo`; every
+  `Completion` row whose item still exists is `repeat`) from to-do lists
+  that are not in the Trash, archived ones included, newest first, and
+  `groupByDay` groups them. `store/stats.ts` has `doneByDay` (won't-do is
+  not counted), `focusByDay` (by the day the session started),
+  `lastDays`, `summary`, `heatmapWeeks` (53 columns of 7, days after today
+  null) and `heatLevel`; weeks start on `settings.weekStartsOn`.
+  `CompletedView` shows the last 30 days with "Show earlier" adding 30
+  more; each row is a `<li>` named by the task text with the time and
+  list in its description; unticking calls `toggleItem(id, false)`,
+  clicking the text calls `revealItem`, the same as a search result. A
+  repeat row has the repeat icon and no checkbox. `StatsView` shows six
+  figures, two 14-day bar charts (the bars are `aria-hidden`; each day is
+  also a list item such as "Thu 1 Oct: 5 tasks") and the heatmap with a
+  Tasks / Focus time toggle that is not remembered.
+  `components/stats/Heatmap.tsx` is generic (`weeks`, `values`, `label`,
+  and a `name` for the screen reader, which reads it as one image); the
+  shades are the line colour and four mixes of `--accent`, so every
+  theme works. Not done: daily or weekly goals, streaks and Karma points,
+  filtering Completed by list or label, exporting statistics, and a task
+  that was un-ticked and ticked again counts on its latest day only (the
+  data keeps one `completedAt`).
 
 ### Accessibility and loading (M8)
 

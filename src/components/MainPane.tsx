@@ -7,6 +7,8 @@ import { isMac } from '@/platform';
 import { useData } from '@/store/data';
 import { navigate, useUI } from '@/store/ui';
 import { FocusBar } from './focus/FocusBar';
+import { CompletedView } from './views/CompletedView';
+import { StatsView } from './views/StatsView';
 import { FilterView } from './views/FilterView';
 import { LabelView } from './views/LabelView';
 import { ListView } from './views/ListView';
@@ -90,6 +92,10 @@ export function MainPane() {
         <UpcomingView />
       ) : view.kind === 'calendar' ? (
         <CalendarView />
+      ) : view.kind === 'completed' ? (
+        <CompletedView />
+      ) : view.kind === 'stats' ? (
+        <StatsView />
       ) : view.kind === 'reminders' ? (
         <RemindersView />
       ) : view.kind === 'archive' ? (
