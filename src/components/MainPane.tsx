@@ -12,6 +12,7 @@ import { LabelView } from './views/LabelView';
 import { ListView } from './views/ListView';
 import { MatrixView } from './views/MatrixView';
 import { RemindersView } from './views/RemindersView';
+import { CalendarView } from './views/CalendarView';
 import { Next7View, TodayView, TomorrowView, UpcomingView } from './views/SmartViews';
 import { ArchiveView, TrashView } from './views/StoredLists';
 import { IconButton } from './ui';
@@ -87,6 +88,8 @@ export function MainPane() {
         <Next7View />
       ) : view.kind === 'upcoming' ? (
         <UpcomingView />
+      ) : view.kind === 'calendar' ? (
+        <CalendarView />
       ) : view.kind === 'reminders' ? (
         <RemindersView />
       ) : view.kind === 'archive' ? (

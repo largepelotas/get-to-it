@@ -132,6 +132,17 @@ describe('snapshots', () => {
     expect(settings).toEqual({ weekStartsOn: 0, defaultListId: null });
   });
 
+  // Bug prevented: an import carrying an unknown calendar layout, or losing the chosen one.
+  it('round-trips the calendar layout and drops a bad one', () => {
+    sampleData();
+    setSetting('calendarLayout', 'days');
+    expect(parseSnapshot(exportNow()).settings.calendarLayout).toBe('days');
+    const data = JSON.parse(exportNow());
+    data.settings.calendarLayout = 'year';
+    const json = JSON.stringify(data);
+    expect('calendarLayout' in parseSnapshot(json).settings).toBe(false);
+  });
+
   // Bug prevented: importing an older export failing, or losing the new settings.
   it('reads a reminder without the constant field as ordinary, and keeps constant ones', () => {
     const base = { itemId: 'I', kind: 'relative', offsetMinutes: 0, createdAt: 1, updatedAt: 1 };

@@ -1,6 +1,7 @@
 import {
   Archive,
   Bell,
+  Calendar,
   CalendarDays,
   CalendarRange,
   Check,
@@ -179,6 +180,7 @@ export function paletteCommands({
     goTo('tomorrow', 'Tomorrow', Sunrise),
     goTo('next7', 'Next 7 days', CalendarRange),
     goTo('upcoming', 'Upcoming', CalendarDays, SHORTCUTS.upcoming),
+    goTo('calendar', 'Calendar', Calendar),
     goTo('matrix', 'Eisenhower matrix', LayoutGrid),
     goTo('reminders', 'Reminders', Bell, SHORTCUTS.reminders),
     goTo('archive', 'Archive', Archive),

@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import {
   Archive,
   Bell,
+  Calendar,
   CalendarDays,
   CalendarRange,
   Ellipsis,
@@ -149,6 +150,14 @@ export function Sidebar() {
             label="Upcoming"
             active={view.kind === 'upcoming'}
             onClick={() => navigate({ kind: 'upcoming' })}
+          />
+        )}
+        {shows('calendar') && (
+          <SidebarItem
+            icon={<Calendar className={navIcon} style={{ color: colorVar('blue') }} />}
+            label="Calendar"
+            active={view.kind === 'calendar'}
+            onClick={() => navigate({ kind: 'calendar' })}
           />
         )}
         {shows('matrix') && (

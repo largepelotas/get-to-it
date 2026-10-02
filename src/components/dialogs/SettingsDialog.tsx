@@ -170,6 +170,7 @@ const VIEW_NAME: Record<BuiltInView, string> = {
   tomorrow: 'Tomorrow',
   next7: 'Next 7 days',
   upcoming: 'Upcoming',
+  calendar: 'Calendar',
   matrix: 'Eisenhower matrix',
   reminders: 'Reminders',
 };

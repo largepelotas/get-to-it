@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addMinutes,
+  addMonthsKey,
   formatDateKey,
   formatDue,
   formatDuration,
@@ -114,5 +115,16 @@ describe('time ranges', () => {
     expect(isTimeAfter('14:30', '14:00')).toBe(true);
     expect(isTimeAfter('14:00', '14:00')).toBe(false);
     expect(isTimeAfter('09:00', '14:00')).toBe(false);
+  });
+
+  // Bug prevented: the calendar's Next jumping two months (Jan 31 + 1 month rolling into March)
+  // or landing on a day that doesn't exist.
+  it('adds months, clamping to the length of the month', () => {
+    expect(addMonthsKey('2026-10-02', 1)).toBe('2026-11-02');
+    expect(addMonthsKey('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addMonthsKey('2028-01-31', 1)).toBe('2028-02-29');
+    expect(addMonthsKey('2026-12-15', 1)).toBe('2027-01-15');
+    expect(addMonthsKey('2026-01-15', -1)).toBe('2025-12-15');
+    expect(addMonthsKey('2026-03-31', -1)).toBe('2026-02-28');
   });
 });

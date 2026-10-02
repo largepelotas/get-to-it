@@ -4,6 +4,7 @@ import { isTimeString } from '@/lib/dates';
 import { cleanMinutes } from '@/lib/focus';
 import {
   BUILT_IN_VIEWS,
+  CALENDAR_LAYOUTS,
   DEFAULT_BREAK_MINUTES,
   DEFAULT_FOCUS_MINUTES,
   DEFAULT_SETTINGS,
@@ -57,6 +58,9 @@ function normalizeSettings(stored: Partial<Settings>): Settings {
     : [];
   if (settings.dailyReviewTime !== null && !isTimeString(settings.dailyReviewTime)) {
     settings.dailyReviewTime = null;
+  }
+  if (!CALENDAR_LAYOUTS.includes(settings.calendarLayout)) {
+    settings.calendarLayout = DEFAULT_SETTINGS.calendarLayout;
   }
   settings.viewOptions = cleanViewOptions(settings.viewOptions);
   settings.matrix = cleanMatrix(settings.matrix) ?? DEFAULT_SETTINGS.matrix;

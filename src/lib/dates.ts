@@ -1,4 +1,12 @@
-import { addDays, differenceInCalendarDays, format, isValid, parse, startOfWeek } from 'date-fns';
+import {
+  addDays,
+  addMonths,
+  differenceInCalendarDays,
+  format,
+  isValid,
+  parse,
+  startOfWeek,
+} from 'date-fns';
 
 /** Local calendar date as YYYY-MM-DD. */
 export type DateKey = string;
@@ -31,6 +39,11 @@ export function todayKey(now: Date = new Date()): DateKey {
 
 export function addDaysKey(key: DateKey, days: number): DateKey {
   return toDateKey(addDays(fromDateKey(key), days));
+}
+
+/** The same day `months` months on (or back), clamped to the month's length: Jan 31 + 1 is Feb 28. */
+export function addMonthsKey(key: DateKey, months: number): DateKey {
+  return toDateKey(addMonths(fromDateKey(key), months));
 }
 
 export function daysBetween(from: DateKey, to: DateKey): number {

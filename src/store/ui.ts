@@ -7,6 +7,7 @@ export type View =
   | { kind: 'tomorrow' }
   | { kind: 'next7' }
   | { kind: 'upcoming' }
+  | { kind: 'calendar' }
   | { kind: 'reminders' }
   | { kind: 'matrix' }
   | { kind: 'list'; listId: string }

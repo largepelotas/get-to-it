@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react';
-import { rescheduleTasks } from '@/commands';
+import { moveTasksToDay, rescheduleTasks } from '@/commands';
 import { DetailsPanel } from '@/components/items/DetailsPanel';
 import { QuickAdd } from '@/components/items/QuickAdd';
 import { SelectionBar } from '@/components/items/SelectionBar';
@@ -542,7 +542,7 @@ export function UpcomingView() {
     const id = String(active.id);
     const selection = selectedIds();
     const ids = selection.length > 1 && selection.includes(id) ? selection : [id];
-    rescheduleTasks(ids, date);
+    moveTasksToDay(ids, date);
   };
 
   return (
