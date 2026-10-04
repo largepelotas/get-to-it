@@ -20,6 +20,7 @@ import {
   describeContents,
   ImportError,
   makeSnapshot,
+  LOCAL_SETTINGS,
   parseSnapshot,
   snapshotToJson,
 } from './store/snapshot';
@@ -94,7 +95,7 @@ export async function importJson(): Promise<void> {
 async function applyImport(data: ReturnType<typeof parseSnapshot>): Promise<void> {
   try {
     if (canBackUp) await backUp(writeBackup, new Date(), 'before-import');
-    await replaceData(data, ['lastBackupAt']);
+    await replaceData(data, LOCAL_SETTINGS);
   } catch (err) {
     failed('Import failed', err);
     return;

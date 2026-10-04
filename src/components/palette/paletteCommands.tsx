@@ -38,6 +38,8 @@ import {
   Trash2,
   Undo2,
   Upload,
+  ZoomIn,
+  ZoomOut,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -50,11 +52,14 @@ import {
   newLabel,
   pauseFocus,
   redoCommand,
+  resetZoom,
   resumeFocus,
   startBreak,
   stopFocus,
   toggleSidebar,
   undoCommand,
+  zoomIn,
+  zoomOut,
 } from '@/commands';
 import {
   backUpNow,
@@ -333,6 +338,33 @@ export function paletteCommands({
       keepsFocus: true,
       run: () => setSetting('palette', p.value),
     })),
+    {
+      id: 'zoom-in',
+      label: 'Zoom in',
+      keywords: 'bigger larger text size scale',
+      icon: ZoomIn,
+      shortcut: SHORTCUTS.zoomIn,
+      keepsFocus: true,
+      run: zoomIn,
+    },
+    {
+      id: 'zoom-out',
+      label: 'Zoom out',
+      keywords: 'smaller text size scale',
+      icon: ZoomOut,
+      shortcut: SHORTCUTS.zoomOut,
+      keepsFocus: true,
+      run: zoomOut,
+    },
+    {
+      id: 'zoom-reset',
+      label: 'Reset zoom to 100%',
+      keywords: 'text size scale actual',
+      icon: RotateCcw,
+      shortcut: SHORTCUTS.resetZoom,
+      keepsFocus: true,
+      run: resetZoom,
+    },
     {
       id: 'settings',
       label: 'Settings…',

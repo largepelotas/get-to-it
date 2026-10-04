@@ -28,8 +28,11 @@ import { cleanMatrix, cleanViewOptions } from './viewOptions';
  * turned away with a reason instead of being half loaded.
  */
 
-/** Settings that describe this computer rather than the data, so they aren't exported. */
-const LOCAL_SETTINGS: (keyof Settings)[] = ['lastBackupAt'];
+/**
+ * Settings that describe this computer rather than the data: left out of an
+ * export, ignored in an import, and kept when an import replaces the rest.
+ */
+export const LOCAL_SETTINGS: (keyof Settings)[] = ['lastBackupAt', 'zoom'];
 
 export function makeSnapshot(tables: Tables, settings: Settings, now = Date.now()): Snapshot {
   const exported: Partial<Settings> = { ...settings };

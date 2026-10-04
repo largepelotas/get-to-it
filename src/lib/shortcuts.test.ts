@@ -49,6 +49,37 @@ describe('the backslash shortcut', () => {
   });
 });
 
+describe('the zoom shortcuts', () => {
+  it('match = and - with Mod, and + as Mod+Shift+=', () => {
+    expect(matchesShortcut(key('=', { ctrl: true }, 'Equal'), 'Mod+=', false)).toBe(true);
+    expect(matchesShortcut(key('=', { meta: true }, 'Equal'), 'Mod+=', true)).toBe(true);
+    expect(matchesShortcut(key('-', { ctrl: true }, 'Minus'), 'Mod+-', false)).toBe(true);
+    expect(matchesShortcut(key('0', { ctrl: true }, 'Digit0'), 'Mod+0', false)).toBe(true);
+    // Shift+= is + on a US keyboard: a different shortcut, offered as an alias.
+    expect(matchesShortcut(key('+', { ctrl: true, shift: true }, 'Equal'), 'Mod+=', false)).toBe(
+      false,
+    );
+    expect(
+      matchesShortcut(key('+', { ctrl: true, shift: true }, 'Equal'), 'Mod+Shift+=', false),
+    ).toBe(true);
+    // Without Mod they're just typing.
+    expect(matchesShortcut(key('=', {}, 'Equal'), 'Mod+=', false)).toBe(false);
+  });
+
+  it('match = typed with Shift, as a German keyboard types it (Shift+0)', () => {
+    expect(matchesShortcut(key('=', { ctrl: true, shift: true }, 'Digit0'), 'Mod+=', false)).toBe(
+      true,
+    );
+    // The Equal position prints ´ there, which is not a zoom key.
+    expect(matchesShortcut(key('´', { ctrl: true }, 'Equal'), 'Mod+=', false)).toBe(true);
+  });
+
+  it('are shown as the plain characters', () => {
+    expect(formatShortcut('Mod+=', false)).toBe('Ctrl+=');
+    expect(formatShortcut('Mod+-', true)).toBe('⌘-');
+  });
+});
+
 // Bug prevented: shortcuts on digits and punctuation being unreachable on layouts that
 // print something else on those keys, or need Shift to type them.
 describe('layouts other than US', () => {

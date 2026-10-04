@@ -4,8 +4,11 @@ import { BUILT_IN_VIEWS, type BuiltInView, type Settings } from '@/data/types';
 import { backUpNow, exportJson, exportMarkdown, importJson, showBackups } from '@/dataCommands';
 import { formatTimestamp, isTimeString } from '@/lib/dates';
 import { cleanMinutes, MAX_BREAK_MINUTES, MAX_FOCUS_MINUTES } from '@/lib/focus';
+import { SHORTCUTS } from '@/lib/keymap';
+import { formatShortcut } from '@/lib/shortcuts';
 import { PALETTES } from '@/lib/theme';
-import { canBackUp, getLaunchAtLogin, isTauri, setLaunchAtLogin } from '@/platform';
+import { cleanZoom, formatZoom, ZOOM_LEVELS } from '@/lib/zoom';
+import { canBackUp, getLaunchAtLogin, isMac, isTauri, setLaunchAtLogin } from '@/platform';
 import { BACKUPS_KEPT } from '@/store/backup';
 import { setSetting, useData } from '@/store/data';
 import { liveTodoLists } from '@/store/sidebar';
@@ -288,6 +291,32 @@ function DataSection() {
   );
 }
 
+/** The window's zoom. Kept per computer, since it's about the screen rather than the data. */
+function ZoomField() {
+  const zoom = useData((s) => s.settings.zoom);
+  return (
+    <>
+      <Row label="Zoom" htmlFor="settings-zoom">
+        <Select
+          id="settings-zoom"
+          value={String(zoom)}
+          onChange={(e) => setSetting('zoom', cleanZoom(Number(e.target.value)))}
+        >
+          {ZOOM_LEVELS.map((level) => (
+            <option key={level} value={String(level)}>
+              {formatZoom(level)}
+            </option>
+          ))}
+        </Select>
+      </Row>
+      <p className="text-xs text-fg-subtle">
+        {formatShortcut(SHORTCUTS.zoomIn, isMac)} and {formatShortcut(SHORTCUTS.zoomOut, isMac)}{' '}
+        change it too. Set per computer, so a bigger screen can have its own.
+      </p>
+    </>
+  );
+}
+
 /** Which to-do list the app opens on, and where quick add files a task from Today and the other views. */
 function DefaultList() {
   const lists = useData((s) => s.tables.lists);
@@ -362,6 +391,7 @@ export function SettingsDialog() {
               ))}
             </Select>
           </Row>
+          <ZoomField />
           <Row label="Week starts on" htmlFor="settings-week-start">
             <Select
               id="settings-week-start"

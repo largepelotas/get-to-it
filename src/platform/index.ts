@@ -34,6 +34,19 @@ export async function setWindowTheme(theme: 'light' | 'dark' | null): Promise<vo
   await getCurrentWindow().setTheme(theme);
 }
 
+/**
+ * Scales everything in the window, 1 being 100%: the webview's own zoom in
+ * the desktop app, CSS zoom on the page in the browser preview.
+ */
+export async function setZoom(scale: number): Promise<void> {
+  if (isTauri) {
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+    await getCurrentWebview().setZoom(scale);
+  } else {
+    document.documentElement.style.zoom = String(scale);
+  }
+}
+
 /** Subscribes to a native event. Returns a function that unsubscribes, usable right away. */
 function listenNative<T>(event: string, handler: (payload: T) => void): () => void {
   let stopped = false;

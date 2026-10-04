@@ -355,6 +355,8 @@ export interface Settings {
   focusMinutes: number;
   /** Length of a break, in minutes. */
   breakMinutes: number;
+  /** The window's zoom, 1 being 100%. Per computer: not exported or imported. */
+  zoom: number;
 }
 
 export const DEFAULT_MATRIX: MatrixSettings = { urgent: 'overdue | today', important: 'p1 | p2' };
@@ -397,6 +399,7 @@ export const DEFAULT_SETTINGS: Settings = {
   matrix: DEFAULT_MATRIX,
   focusMinutes: DEFAULT_FOCUS_MINUTES,
   breakMinutes: DEFAULT_BREAK_MINUTES,
+  zoom: 1,
 };
 
 /** A complete copy of the data, used for export, import and backups. */

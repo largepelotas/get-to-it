@@ -112,7 +112,8 @@ there (`"version": "../package.json"`). Bump it before tagging.
   - `localStorage.ts`: browser preview.
   - `memory.ts`: tests.
 - `platform/index.ts`: `isTauri`, `isMac`, `createRepository()`, `appReady()`,
-  `setWindowTheme`, `setReminderSchedule`, `onReminderFired`,
+  `setWindowTheme`, `setZoom` (the webview's zoom in the app, CSS `zoom` on
+  `<html>` in the browser), `setReminderSchedule`, `onReminderFired`,
   `requestNotificationPermission`, `notify`, `setCloseToTray`,
   `getLaunchAtLogin` (null in the browser), `setLaunchAtLogin`,
   `onQuitRequested`, `quitApp` and `setTrayStatus`, and
@@ -299,7 +300,9 @@ notes }`, each sorted by score and capped. Case and accents are ignored
   in a subfolder per folder, archived lists under `Archive/`, clashes
   numbered, Trash left out).
 - `store/snapshot.ts`: `makeSnapshot` (every row, soft-deleted ones
-  included, and the settings except `lastBackupAt`), `snapshotToJson`,
+  included, and the settings except `LOCAL_SETTINGS`: `lastBackupAt` and
+  `zoom`, which describe this computer and are also kept through an
+  import), `snapshotToJson`,
   `parseSnapshot` (checks every field of every row against a table of
   checks and throws `ImportError` with a message such as "In item 3,
   dueDate should be a date (YYYY-MM-DD)."; missing optional fields get
@@ -358,7 +361,8 @@ history)`, which only returns categories that still exist.
   `SHORTCUT_HELP`, what the Keyboard shortcuts dialog lists. Menus show
   shortcuts from here too. `useAppShortcuts` handles them: the palette
   (⌘K or ⌘F) works everywhere, even in text fields, and closes the palette
-  when it's open; Settings (⌘,), the shortcuts dialog (⌘/), New list (⌘⇧N),
+  when it's open, and so does zoom (⌘= or ⌘⇧= for +, ⌘-, ⌘0 for 100%);
+  Settings (⌘,), the shortcuts dialog (⌘/), New list (⌘⇧N),
   New task (⌘N, focuses the view's `[data-quick-add]` field with
   `focusQuickAdd`) and the views (⌘1–3) work everywhere unless a dialog
   is open; undo, redo and Copy as Markdown (⌘⇧C) are ignored in text
@@ -369,7 +373,9 @@ history)`, which only returns categories that still exist.
 - Tokens are CSS variables in `styles/index.css`, light on `:root` and
   dark on `[data-theme='dark']`. `<html data-theme>` is set from
   `settings.theme` (following the OS for "system") before the first paint
-  and by `useApplyTheme`. The `dark:` variant follows `data-theme` too.
+  and by `useApplyTheme`, which also applies `settings.zoom` (`lib/zoom.ts`:
+  `ZOOM_LEVELS` 80–200%, `stepZoom`, `cleanZoom`, `formatZoom`; changed from
+  Settings, the palette or the shortcuts, with a "Zoom 125%" toast). The `dark:` variant follows `data-theme` too.
 - Colour schemes: five palettes shared with another project (Graphite,
   Paper, Moss, Plum, High contrast), each with a light
   and a dark theme, picked in Settings or the palette ("Use the … colour
@@ -565,7 +571,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   - `groceryMenu.tsx`: `categoryEntries` and `groceryMenuEntries`.
 - `components/dialogs/Dialogs.tsx`: New list (type, name, folder) and the
   confirmation dialog, driven by `useUI.dialog`. `SettingsDialog.tsx`:
-  theme, colour scheme, week start, reading dates in new tasks, the all-day reminder
+  theme, colour scheme, zoom, week start, reading dates in new tasks, the all-day reminder
   time, close to tray, open at login (read from and written to the
   autostart plugin, not stored in settings; disabled in the browser) and
   the grocery categories (`GroceryCategoriesEditor`: rename, reorder with

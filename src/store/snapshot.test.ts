@@ -149,6 +149,16 @@ describe('snapshots', () => {
     expect('palette' in parseSnapshot(JSON.stringify(data)).settings).toBe(false);
   });
 
+  // The zoom is about this computer's screen: it is neither exported nor imported.
+  it('leaves the zoom out of an export and ignores it in an import', () => {
+    sampleData();
+    setSetting('zoom', 1.5);
+    expect('zoom' in parseSnapshot(exportNow()).settings).toBe(false);
+    const data = JSON.parse(exportNow());
+    data.settings.zoom = 2;
+    expect('zoom' in parseSnapshot(JSON.stringify(data)).settings).toBe(false);
+  });
+
   // Bug prevented: an import carrying an unknown calendar layout, or losing the chosen one.
   it('round-trips the calendar layout and drops a bad one', () => {
     sampleData();

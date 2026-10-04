@@ -14,6 +14,9 @@ export const SHORTCUTS = {
   settings: 'Mod+,',
   help: 'Mod+/',
   toggleSidebar: 'Mod+\\',
+  zoomIn: 'Mod+=',
+  zoomOut: 'Mod+-',
+  resetZoom: 'Mod+0',
   /** Move between the sidebar, the open view and the details panel. */
   nextRegion: 'F6',
   previousRegion: 'Shift+F6',
@@ -51,6 +54,10 @@ export const SHORTCUT_HELP: { title: string; entries: ShortcutHelp[] }[] = [
       { keys: [SHORTCUTS.undo], label: 'Undo' },
       { keys: [SHORTCUTS.redo], label: 'Redo' },
       { keys: [SHORTCUTS.toggleSidebar], label: 'Hide or show the sidebar' },
+      {
+        keys: [SHORTCUTS.zoomIn, SHORTCUTS.zoomOut, SHORTCUTS.resetZoom],
+        label: 'Zoom in, zoom out, or back to 100%',
+      },
       { keys: [SHORTCUTS.settings], label: 'Settings' },
       { keys: [SHORTCUTS.help], label: 'Keyboard shortcuts' },
     ],

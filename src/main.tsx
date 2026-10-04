@@ -4,7 +4,7 @@ import { App } from './App';
 import { ErrorBoundary, Failure } from './components/Failure';
 import { homeView } from './commands';
 import { applyPalette, applyTheme, resolveTheme } from './lib/theme';
-import { appReady, createRepository } from './platform';
+import { appReady, createRepository, setZoom } from './platform';
 import { initData, useData } from './store/data';
 import { seedIfNeeded } from './store/seed';
 import { navigate } from './store/ui';
@@ -27,10 +27,11 @@ async function start() {
   if (import.meta.env.DEV) (await import('./store/sampleData')).seedSampleData();
   seedIfNeeded();
   navigate(homeView());
-  // Set the theme before the first paint so there's no flash of the wrong one.
-  const { theme, palette } = useData.getState().settings;
+  // Set the theme and zoom before the first paint so there's no flash of the wrong one.
+  const { theme, palette, zoom } = useData.getState().settings;
   applyTheme(resolveTheme(theme));
   applyPalette(palette);
+  void setZoom(zoom).catch(() => {});
   root.render(
     <StrictMode>
       <ErrorBoundary>

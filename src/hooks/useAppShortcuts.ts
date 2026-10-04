@@ -1,5 +1,13 @@
 import { useEffect } from 'react';
-import { copyAsMarkdown, redoCommand, toggleSidebar, undoCommand } from '@/commands';
+import {
+  copyAsMarkdown,
+  redoCommand,
+  resetZoom,
+  toggleSidebar,
+  undoCommand,
+  zoomIn,
+  zoomOut,
+} from '@/commands';
 import { SHORTCUTS } from '@/lib/keymap';
 import { isEditableTarget, matchesShortcut } from '@/lib/shortcuts';
 import { isMac } from '@/platform';
@@ -49,7 +57,8 @@ const VIEWS: [string, View][] = [
 /**
  * App-wide shortcuts. Navigation and dialogs work from anywhere, as in other
  * apps. Undo, redo and copying are ignored in text fields, which have their
- * own. While a dialog is open only the palette shortcut (to close it) works.
+ * own. While a dialog is open only the palette shortcut (to close it) and
+ * zoom work.
  */
 export function useAppShortcuts(): void {
   useEffect(() => {
@@ -67,6 +76,10 @@ export function useAppShortcuts(): void {
         if (!dialog) return run(() => openDialog({ kind: 'palette' }));
         return;
       }
+      // Zoom works everywhere, as in a browser. ⌘⇧= is the + key on a US keyboard.
+      if (is(SHORTCUTS.zoomIn) || is('Mod+Shift+=')) return run(zoomIn);
+      if (is(SHORTCUTS.zoomOut)) return run(zoomOut);
+      if (is(SHORTCUTS.resetZoom)) return run(resetZoom);
       if (dialog) return;
       if (is(SHORTCUTS.nextRegion)) return run(() => cycleRegion(1));
       if (is(SHORTCUTS.previousRegion)) return run(() => cycleRegion(-1));
