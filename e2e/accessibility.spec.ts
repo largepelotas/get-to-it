@@ -46,7 +46,7 @@ async function settled(page: Page) {
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
 }
 
-const PALETTES = ['Graphite and cobalt', 'Stone and moss', 'Sage study', 'Midnight ink', 'Dusk'];
+const PALETTES = ['Graphite', 'Paper', 'Moss', 'Plum', 'High contrast'];
 
 /** Picks a colour scheme in Settings. */
 async function useColourScheme(page: Page, name: string) {

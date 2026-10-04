@@ -18,7 +18,7 @@ import {
 import { cleanMinutes } from '@/lib/focus';
 import { sanitizeHabitGoal } from './habits';
 import { isDateKey, isTimeAfter, isTimeString, todayKey } from '@/lib/dates';
-import { isPaletteName } from '@/lib/theme';
+import { resolvePaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
 import { cleanMatrix, cleanViewOptions } from './viewOptions';
 
@@ -284,7 +284,8 @@ function checkSettings(raw: unknown): Partial<Settings> {
     } else if (key === 'theme') {
       if (['system', 'light', 'dark'].includes(value as string)) out[key] = value;
     } else if (key === 'palette') {
-      if (isPaletteName(value)) out[key] = value;
+      const palette = resolvePaletteName(value);
+      if (palette) out[key] = palette;
     } else if (key === 'calendarLayout') {
       if (CALENDAR_LAYOUTS.includes(value as CalendarLayout)) out[key] = value;
     } else if (key === 'weekStartsOn') {

@@ -370,11 +370,13 @@ history)`, which only returns categories that still exist.
   dark on `[data-theme='dark']`. `<html data-theme>` is set from
   `settings.theme` (following the OS for "system") before the first paint
   and by `useApplyTheme`. The `dark:` variant follows `data-theme` too.
-- Colour schemes: five palettes shared with another project (Graphite and
-  cobalt, Stone and moss, Sage study, Midnight ink, Dusk), each with a light
+- Colour schemes: five palettes shared with another project (Graphite,
+  Paper, Moss, Plum, High contrast), each with a light
   and a dark theme, picked in Settings or the palette ("Use the … colour
   scheme"). `settings.palette` (`PaletteName`, default `graphite`, the
-  closest to the original look) is exported and imported like `theme`.
+  closest to the original look) is exported and imported like `theme`. Names from earlier
+  versions map over (`LEGACY_PALETTES` in `lib/theme.ts`: stone and sage to
+  moss, dusk to plum, midnight to graphite) when settings load and on import.
   `applyPalette` sets `<html data-palette>`, left off for Graphite, whose
   values are the bare `:root` rules; each other palette has a
   `[data-palette='…']` rule and a `[data-palette='…'][data-theme='dark']`

@@ -49,7 +49,7 @@ function sampleData() {
   addReminder(item, { kind: 'relative', offsetMinutes: 15 });
   createList({ type: 'note', title: 'Ideas' });
   setSetting('weekStartsOn', 0);
-  setSetting('palette', 'dusk');
+  setSetting('palette', 'plum');
   setSetting('lastBackupAt', 5);
   return { list, item };
 }
@@ -62,7 +62,7 @@ describe('snapshots', () => {
     expect(parsed.tables).toEqual(tables);
     expect(parsed.exportedAt).toBe(1000);
     expect(parsed.settings.weekStartsOn).toBe(0);
-    expect(parsed.settings.palette).toBe('dusk');
+    expect(parsed.settings.palette).toBe('plum');
     expect('lastBackupAt' in parsed.settings).toBe(false);
   });
 
@@ -137,6 +137,16 @@ describe('snapshots', () => {
       dueTime: null,
     });
     expect(settings).toEqual({ weekStartsOn: 0, defaultListId: null });
+  });
+
+  it('maps a palette name from an older version to its replacement on import', () => {
+    // Without the mapping an imported `sage` was dropped and the user landed on Graphite.
+    sampleData();
+    const data = JSON.parse(exportNow());
+    data.settings.palette = 'sage';
+    expect(parseSnapshot(JSON.stringify(data)).settings.palette).toBe('moss');
+    data.settings.palette = 'nonsense';
+    expect('palette' in parseSnapshot(JSON.stringify(data)).settings).toBe(false);
   });
 
   // Bug prevented: an import carrying an unknown calendar layout, or losing the chosen one.

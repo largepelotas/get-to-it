@@ -23,15 +23,32 @@ export function applyTheme(theme: ResolvedTheme): void {
 
 /** The colour schemes in the order Settings offers them, with their names. */
 export const PALETTES: { value: PaletteName; label: string }[] = [
-  { value: 'graphite', label: 'Graphite and cobalt' },
-  { value: 'stone', label: 'Stone and moss' },
-  { value: 'sage', label: 'Sage study' },
-  { value: 'midnight', label: 'Midnight ink' },
-  { value: 'dusk', label: 'Dusk' },
+  { value: 'graphite', label: 'Graphite' },
+  { value: 'paper', label: 'Paper' },
+  { value: 'moss', label: 'Moss' },
+  { value: 'plum', label: 'Plum' },
+  { value: 'contrast', label: 'High contrast' },
 ];
 
 export function isPaletteName(value: unknown): value is PaletteName {
   return PALETTE_NAMES.includes(value as PaletteName);
+}
+
+/** Palettes that were renamed or removed, and the current one each became. */
+export const LEGACY_PALETTES: Record<string, PaletteName> = {
+  stone: 'moss',
+  sage: 'moss',
+  dusk: 'plum',
+  midnight: 'graphite',
+};
+
+/** A stored palette name as a current one: old names map over, anything else is undefined. */
+export function resolvePaletteName(value: unknown): PaletteName | undefined {
+  if (isPaletteName(value)) return value;
+  if (typeof value === 'string' && Object.hasOwn(LEGACY_PALETTES, value)) {
+    return LEGACY_PALETTES[value];
+  }
+  return undefined;
 }
 
 /** Sets `data-palette` on <html>, which picks the colour scheme. Graphite is the stylesheet's default. */

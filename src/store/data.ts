@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { opKey, type LoadResult, type Repository, type WriteOp } from '@/data/repository';
 import { isTimeString } from '@/lib/dates';
 import { cleanMinutes } from '@/lib/focus';
+import { resolvePaletteName } from '@/lib/theme';
 import {
   BUILT_IN_VIEWS,
   CALENDAR_LAYOUTS,
@@ -70,6 +71,8 @@ function normalizeSettings(stored: Partial<Settings>): Settings {
   }
   settings.viewOptions = cleanViewOptions(settings.viewOptions);
   settings.matrix = cleanMatrix(settings.matrix) ?? DEFAULT_SETTINGS.matrix;
+  // A palette saved under an old name becomes its replacement; unknown names fall back to the default.
+  settings.palette = resolvePaletteName(settings.palette) ?? DEFAULT_SETTINGS.palette;
   settings.focusMinutes = cleanMinutes(
     settings.focusMinutes,
     DEFAULT_FOCUS_MINUTES,

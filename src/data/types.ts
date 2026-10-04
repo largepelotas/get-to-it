@@ -15,7 +15,7 @@ export const COLOR_NAMES = [
 export type ColorName = (typeof COLOR_NAMES)[number];
 
 /** The colour schemes, shared with another project. Their colours are in styles/index.css. */
-export const PALETTE_NAMES = ['graphite', 'stone', 'sage', 'midnight', 'dusk'] as const;
+export const PALETTE_NAMES = ['graphite', 'paper', 'moss', 'plum', 'contrast'] as const;
 export type PaletteName = (typeof PALETTE_NAMES)[number];
 
 /** Priority 1 is the most urgent. 0 means no priority. */
