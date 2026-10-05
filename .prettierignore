@@ -5,6 +5,6 @@ src-tauri/gen
 package-lock.json
 playwright-report
 test-results
-# Copies synced from .agents-shared; formatted at the source
+# Per-machine Claude Code files
 .claude
 public/third-party-notices.txt
