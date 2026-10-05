@@ -42,7 +42,7 @@ export function useAppLifecycle(): void {
     }
     toast.error('Changes aren’t being saved', {
       id: SAVE_ERROR_TOAST,
-      description: 'Checklist will keep trying. Don’t quit until this goes away.',
+      description: 'Get To It will keep trying. Don’t quit until this goes away.',
       duration: Infinity,
     });
   }, [saveFailing]);

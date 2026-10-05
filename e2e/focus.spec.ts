@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addTasks, expectAccessible, openApp, row } from './helpers';
+import { addTasks, expectAccessible, openApp, row, settled } from './helpers';
 
 test('a Pomodoro runs from a task, is logged when stopped, and a stopwatch is accessible', async ({
   page,
@@ -28,5 +28,7 @@ test('a Pomodoro runs from a task, is logged when stopped, and a stopwatch is ac
 
   await panel.getByRole('button', { name: 'Start a stopwatch' }).click();
   await expect(bar.getByText('Stopwatch')).toBeVisible();
+  // The toast fades in; scanned mid-fade its text is part-transparent and reads as low contrast.
+  await settled(page);
   await expectAccessible(page);
 });

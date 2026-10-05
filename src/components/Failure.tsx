@@ -19,7 +19,7 @@ export function Failure({ title, error }: { title: string; error: unknown }) {
       <h1 className="text-xl font-semibold">{title}</h1>
       <p className="text-fg-muted">
         Nothing has been changed or deleted.
-        {canBackUp && ' Checklist also keeps daily backups, which can be imported once it opens.'}
+        {canBackUp && ' Get To It also keeps daily backups, which can be imported once it opens.'}
       </p>
       <pre className="max-h-40 overflow-auto rounded-md border border-line bg-elevated p-3 text-[13px] whitespace-pre-wrap select-text">
         {messageOf(error)}

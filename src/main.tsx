@@ -19,7 +19,7 @@ async function start() {
     // than leaving the window hidden, and touch nothing.
     console.error('Loading failed', err);
     applyTheme(resolveTheme('system'));
-    root.render(<Failure title="Checklist couldn’t open your data" error={err} />);
+    root.render(<Failure title="Get To It couldn’t open your data" error={err} />);
     requestAnimationFrame(() => void appReady());
     return;
   }

@@ -135,8 +135,8 @@ describe('reminderState', () => {
       expect(moved.state).toBe('fired');
       expect(entry(dismissed, allDay, '07:30').state).toBe('done');
     } finally {
-      if (zone === undefined) delete process.env.TZ;
-      else process.env.TZ = zone;
+      // Deleting TZ doesn't reset Node's zone on Windows; an empty value does.
+      process.env.TZ = zone ?? '';
     }
   });
 });

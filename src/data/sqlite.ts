@@ -14,7 +14,7 @@ export interface SqlExecutor {
 export class NewerDatabaseError extends Error {
   constructor() {
     super(
-      'Your data was saved by a newer version of Checklist. Install the latest version to open it.',
+      'Your data was saved by a newer version of Get To It. Install the latest version to open it.',
     );
   }
 }

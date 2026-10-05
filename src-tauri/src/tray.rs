@@ -7,14 +7,14 @@ use crate::{request_quit, show_main_window};
 const TRAY_ID: &str = "main";
 
 pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Show Checklist", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Checklist", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", "Show Get To It", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Get To It", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&show, &separator, &quit])?;
 
     let builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
-        .tooltip("Checklist")
+        .tooltip("Get To It")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
             "quit" => request_quit(app),

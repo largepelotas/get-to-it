@@ -13,7 +13,7 @@ test('exports everything to JSON and imports it back', async ({ page }) => {
   await settings.getByRole('button', { name: 'Export…' }).click();
   const file = await (await downloading).path();
   const snapshot = JSON.parse(await readFile(file, 'utf8'));
-  expect(snapshot.app).toBe('checklist');
+  expect(snapshot.app).toBe('get-to-it');
   expect(snapshot.tables.items.map((item: { text: string }) => item.text)).toContain(
     'Exported task',
   );

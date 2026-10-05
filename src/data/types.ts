@@ -404,7 +404,8 @@ export const DEFAULT_SETTINGS: Settings = {
 
 /** A complete copy of the data, used for export, import and backups. */
 export interface Snapshot {
-  app: 'checklist';
+  /** Written as 'get-to-it'; older files say 'checklist' and are still accepted on import. */
+  app: 'get-to-it' | 'checklist';
   version: 1;
   exportedAt: number;
   tables: { [T in TableName]: Row<T>[] };

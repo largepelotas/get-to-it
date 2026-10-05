@@ -24,8 +24,11 @@ test('a list shown as a board puts cards in priority columns, and dragging one c
   await page.keyboard.press('Escape');
   await expect(options).toBeHidden();
   // Focus returned to the trigger shows its tooltip, which sits outside the landmarks.
+  // Wait for that focus first, or it can land after the move below and undo it.
+  await expect(page.getByRole('button', { name: 'View options' })).toBeFocused();
   await page.getByRole('textbox', { name: 'Add a task' }).focus();
   await page.mouse.move(0, 0);
+  await expect(page.getByRole('tooltip')).toBeHidden();
   // Fades finish before axe reads the page.
   await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
 

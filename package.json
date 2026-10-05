@@ -1,7 +1,9 @@
 {
-  "name": "checklist",
+  "name": "get-to-it",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": "github:largepelotas/get-to-it",
   "type": "module",
   "scripts": {
     "dev": "vite",

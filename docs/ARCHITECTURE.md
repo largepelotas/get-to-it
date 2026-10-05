@@ -1,13 +1,13 @@
 # Architecture and working notes
 
-How Checklist is built, the decisions behind it, and what's known to be
+How Get To It is built, the decisions behind it, and what's known to be
 missing. Keep this file describing the app as it is: when something changes,
 change the paragraph that covers it instead of adding a note about the change.
 What to build next is in [todoist-gap.md](todoist-gap.md).
 
 ## Status
 
-Checklist is a desktop app for macOS and Windows (Tauri 2, React, TypeScript)
+Get To It is a desktop app for macOS and Windows (Tauri 2, React, TypeScript)
 with four kinds of list: to-do, grocery, habits and rich-text notes. It's for
 one person: data stays on the computer in SQLite, builds are unsigned, and
 there's no sync and no auto-update.
@@ -57,9 +57,13 @@ there (`"version": "../package.json"`). Bump it before tagging.
 - `db.rs`: SQLite via `rusqlite` (bundled). `db_select(sql, params)` and
   `db_batch(statements)`, which runs a batch in one transaction; the schema
   lives in TypeScript, not Rust. (`tauri-plugin-sql` was dropped because its
-  connection pool can't do multi-statement transactions.) `db_backup(label)`
-  copies the whole database to `backups/checklist-<label>.db` with
-  `VACUUM INTO`. The database is `checklist.db` in the data folder
+  connection pool can't do multi-statement transactions.) The webview can't
+  name a file through SQL: `db_select` refuses anything that isn't read-only,
+  the connection is in SQLite's defensive mode, and an authorizer denies
+  `ATTACH`/`DETACH`, every pragma but `user_version`, and transaction
+  statements other than the batch's own. `db_backup(label)` copies the whole
+  database to `backups/gettoit-<label>.db` with SQLite's backup API, into a
+  temporary file that is renamed over the old copy. The database is `gettoit.db` in the data folder
   (`data_dir` in `lib.rs`): the app data folder, or its `dev` subfolder in
   a debug build, so `npm run app:dev` never touches an installed copy's
   data. If the file can't be opened the app still starts: the commands
@@ -308,7 +312,7 @@ notes }`, each sorted by score and capped. Case and accents are ignored
   dueDate should be a date (YYYY-MM-DD)."; missing optional fields get
   defaults; unknown or mistyped settings are dropped) and
   `describeContents` ("3 lists and 12 items", Trash left out).
-- `store/backup.ts`: `backupName` (`checklist-2026-09-30-221500.json`,
+- `store/backup.ts`: `backupName` (`gettoit-2026-09-30-221500.json`,
   which sorts by age as `prune_backups` needs), `backupDue` (none yet
   today, or the clock went backwards), `backUp(write, now, note?)` (a noted
   backup such as `before-import` doesn't count as the daily one) and
@@ -354,7 +358,7 @@ history)`, which only returns categories that still exist.
   the minute, for render code: the React lint rejects `Date.now()` in
   render), `useReminderScheduler` and `useReminderEntries` (`{ all, inbox
 }`), `useAppLifecycle` (close to tray follows the setting, the quit
-  listener, and the tray tooltip: "Checklist · 3 due today, 1 reminder"),
+  listener, and the tray tooltip: "Get To It · 3 due today, 1 reminder"),
   `useAppShortcuts` and `useBackups` (the daily backup, checked 15 s
   after launch and then hourly, desktop only; one error toast if it fails).
 - `lib/keymap.ts`: `SHORTCUTS`, every app-wide shortcut by name, and
@@ -1196,7 +1200,7 @@ Data and safety:
 
 - Undo history doesn't know about settings, so removing a grocery category
   can't be undone.
-- The WAL isn't checkpointed on exit, so copying `checklist.db` alone can
+- The WAL isn't checkpointed on exit, so copying `gettoit.db` alone can
   miss recent changes. Backups and exports are written in place, not to a
   temporary file first.
 - Logging out or shutting down doesn't go through the quit request, so a

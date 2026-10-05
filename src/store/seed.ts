@@ -12,9 +12,9 @@ export function welcomeDoc(): RichNode {
   return {
     type: 'doc',
     content: [
-      { type: 'heading', attrs: { level: 1 }, content: [text('Welcome to Checklist')] },
+      { type: 'heading', attrs: { level: 1 }, content: [text('Welcome to Get To It')] },
       paragraph(
-        'Checklist keeps your to-do lists, grocery lists and notes in one place, saved on this computer.',
+        'Get To It keeps your to-do lists, grocery lists and notes in one place, saved on this computer.',
       ),
       {
         type: 'bulletList',

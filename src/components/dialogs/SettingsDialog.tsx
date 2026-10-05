@@ -142,7 +142,7 @@ function DailyReview() {
       <Toggle
         id="settings-daily-review"
         label="Daily review reminder"
-        hint="A “Plan your day” notification with what’s due. Skipped if Checklist isn’t running."
+        hint="A “Plan your day” notification with what’s due. Skipped if Get To It isn’t running."
         checked={stored !== null}
         onChange={(on) => {
           const time = isTimeString(draft) ? draft : '09:00';
@@ -428,7 +428,7 @@ export function SettingsDialog() {
           <Toggle
             id="settings-close-to-tray"
             label="Keep running in the tray when the window is closed"
-            hint="Reminders only go off while Checklist is running."
+            hint="Reminders only go off while Get To It is running."
             checked={settings.closeToTray}
             onChange={set('closeToTray')}
           />

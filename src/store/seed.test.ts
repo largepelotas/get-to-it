@@ -28,7 +28,7 @@ describe('seedIfNeeded', () => {
     expect(settings.defaultListId).toBe(inbox.id);
     expect(settings.seeded).toBe(true);
     expect(parseDoc(tables.notes[welcome.id].content)?.content?.[0].type).toBe('heading');
-    expect(tables.notes[welcome.id].plainText).toContain('Welcome to Checklist');
+    expect(tables.notes[welcome.id].plainText).toContain('Welcome to Get To It');
     expect(past).toHaveLength(0);
 
     await flushWrites();
