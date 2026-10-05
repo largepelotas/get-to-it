@@ -10,6 +10,9 @@ is no account, no sync service and no telemetry.
   and labels. Dates can be typed in plain words ("tomorrow 3pm").
 - **Views** for Today, Tomorrow, Next 7 days, Upcoming, a calendar, a priority
   matrix, saved filters, completed tasks and stats.
+- **Boards:** show a list or view as a board, with columns by date, priority,
+  list or label. Dragging a card to another priority column changes its
+  priority.
 - **Grocery lists** sorted by category, with quantities and a cart.
 - **Habit lists** and **rich-text notes** with headings, lists, checklists and
   links.
