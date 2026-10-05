@@ -17,6 +17,7 @@ import {
   Funnel,
   LayoutGrid,
   HardDriveDownload,
+  Info,
   Keyboard,
   List as ListIcon,
   Monitor,
@@ -371,6 +372,13 @@ export function paletteCommands({
       keywords: 'preferences options',
       icon: SettingsIcon,
       shortcut: SHORTCUTS.settings,
+      run: () => openDialog({ kind: 'settings' }),
+    },
+    {
+      id: 'about',
+      label: 'About Get To It',
+      keywords: 'version licence license notices source update',
+      icon: Info,
       run: () => openDialog({ kind: 'settings' }),
     },
     {

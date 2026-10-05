@@ -13,6 +13,7 @@ import { BACKUPS_KEPT } from '@/store/backup';
 import { setSetting, useData } from '@/store/data';
 import { liveTodoLists } from '@/store/sidebar';
 import { closeDialog } from '@/store/ui';
+import { AboutSection } from './AboutSection';
 import { GroceryCategoriesEditor } from './GroceryCategoriesEditor';
 import { MatrixSettingsFields } from './MatrixSettingsFields';
 
@@ -458,6 +459,10 @@ export function SettingsDialog() {
 
         <Section title="Data">
           <DataSection />
+        </Section>
+
+        <Section title="About">
+          <AboutSection />
         </Section>
       </div>
     </Dialog>

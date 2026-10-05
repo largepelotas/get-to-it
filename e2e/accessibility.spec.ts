@@ -197,6 +197,30 @@ for (const palette of PALETTES)
     });
   }
 
+test('Settings → About and the licences dialog pass axe', async ({ page }) => {
+  await openApp(page);
+  await page.keyboard.press('ControlOrMeta+,');
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('heading', { name: 'About' }).scrollIntoViewIfNeeded();
+  await expect(settings.getByText(/^Version [0-9]/)).toBeVisible();
+  await settled(page);
+  await expectAccessible(page);
+
+  await settings.getByRole('button', { name: 'Third-party licences' }).click();
+  const licences = page.getByRole('dialog', { name: 'Third-party licences' });
+  // In CI the preview build has no notices file (npm run notices makes it), so this is the fallback
+  // message; on a machine that has run it, it is the real text. Either way, wait for the load.
+  await expect(licences.getByLabel('Third-party licence notices')).not.toHaveText('Loading…');
+  await settled(page);
+  await expectAccessible(page);
+
+  // Closing it goes back to the button, not to nowhere, and leaves Settings open.
+  await page.keyboard.press('Escape');
+  await expect(licences).toBeHidden();
+  await expect(settings.getByRole('button', { name: 'Third-party licences' })).toBeFocused();
+  await expect(settings).toBeVisible();
+});
+
 test.describe('keyboard', () => {
   test.beforeEach(async ({ page }) => {
     await openApp(page);

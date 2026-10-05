@@ -8,7 +8,7 @@
  * text-fg-muted, border-line, ...), which point at these variables, so a
  * theme only has to redefine the variables.
  *
- * Colour comes from one of five palettes, the same ones another project uses,
+ * Colour comes from one of five palettes,
  * each in a light and a dark theme: <html data-palette> picks the palette
  * (settings.palette, Graphite when absent) and <html data-theme> the theme.
  * The values below are Graphite's; the other palettes override them further

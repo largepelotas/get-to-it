@@ -77,7 +77,10 @@ jobs:
           node-version: 22
           cache: npm
       # The Rust build embeds the built frontend, so it has to exist.
-      - run: npm ci && npm run build
+      - run: npm ci
+      # Exercised here, where cargo and the crates are present.
+      - run: npm run notices
+      - run: npm run build
       - run: cargo fmt --check
         working-directory: src-tauri
       - run: cargo clippy --all-targets -- -D warnings
