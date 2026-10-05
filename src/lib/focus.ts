@@ -94,7 +94,7 @@ export function trayStatus(
   taskName: string | undefined,
 ): { title: string | null; tooltip: string } {
   if (!timer) {
-    return { title: null, tooltip: parts.length ? `Checklist · ${parts.join(', ')}` : 'Checklist' };
+    return { title: null, tooltip: parts.length ? `Get To It · ${parts.join(', ')}` : 'Get To It' };
   }
   const clock = formatClock(clockSeconds(timer, now));
   const paused = timer.pausedAt !== null;
@@ -106,6 +106,6 @@ export function trayStatus(
         : `${clock} left on “${taskName ?? 'a task'}”`;
   return {
     title: paused ? `⏸ ${clock}` : clock,
-    tooltip: `Checklist · ${paused ? 'Paused · ' : ''}${what}`,
+    tooltip: `Get To It · ${paused ? 'Paused · ' : ''}${what}`,
   };
 }

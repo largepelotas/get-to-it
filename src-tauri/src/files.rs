@@ -10,7 +10,7 @@ use tauri::{AppHandle, Runtime};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
-/// The kind of file a dialog offers, e.g. "Checklist export" with `json`.
+/// The kind of file a dialog offers, e.g. "Get To It export" with `json`.
 #[derive(Debug, Deserialize)]
 pub struct FileFilter {
     pub name: String,
@@ -142,16 +142,29 @@ pub async fn save_files<R: Runtime>(
     Ok(true)
 }
 
+/// A plain `.json` file name: no separator, no colon (`C:x.json` is drive-relative
+/// on Windows), and nothing but one normal path component.
+fn is_backup_name(name: &str) -> bool {
+    if name.contains(['/', '\\', ':']) || !name.ends_with(".json") {
+        return false;
+    }
+    let mut parts = Path::new(name).components();
+    matches!(
+        (parts.next(), parts.next()),
+        (Some(Component::Normal(_)), None)
+    )
+}
+
 /// Writes a backup into the app's data folder and keeps the newest `keep`.
 /// Returns the full path of the new backup.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_backup<R: Runtime>(
     app: AppHandle<R>,
     name: String,
     contents: String,
     keep: usize,
 ) -> Result<String, String> {
-    if name.contains(['/', '\\']) || !name.ends_with(".json") {
+    if !is_backup_name(&name) {
         return Err(format!("invalid backup name: {name}"));
     }
     let dir = backups_dir(&app)?;
@@ -161,7 +174,7 @@ pub fn write_backup<R: Runtime>(
     Ok(target.to_string_lossy().into_owned())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_backups_folder<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     let dir = backups_dir(&app)?;
     app.opener()
@@ -192,7 +205,7 @@ mod tests {
 
     #[test]
     fn writes_files_into_folders_and_refuses_to_leave_the_base() {
-        let dir = std::env::temp_dir().join(format!("checklist-files-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("gettoit-files-{}", std::process::id()));
         let file = |path: &str| OutFile {
             path: path.into(),
             contents: "x".into(),
@@ -204,9 +217,29 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
     }
 
+    // `C:x.json` has no separator but resolves outside the backups folder on Windows.
+    #[test]
+    fn backup_names_must_be_plain_file_names() {
+        assert!(is_backup_name("backup-2026-01-01.json"));
+        // Backups written before the rename to Get To It must stay importable.
+        assert!(is_backup_name("checklist-2026-09-30-221500.json"));
+        assert!(is_backup_name("gettoit-2026-09-30-221500.json"));
+        for bad in [
+            "C:x.json",
+            "a/b.json",
+            "a\\b.json",
+            "..\\x.json",
+            "../x.json",
+            "x.txt",
+            ".json:stream.json",
+        ] {
+            assert!(!is_backup_name(bad), "{bad}");
+        }
+    }
+
     #[test]
     fn prune_keeps_newest() {
-        let dir = std::env::temp_dir().join(format!("checklist-prune-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("gettoit-prune-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         for name in [
             "b-2026-01-01.json",
@@ -226,6 +259,25 @@ mod tests {
             left,
             vec!["b-2026-01-02.json", "b-2026-01-03.json", "note.txt"]
         );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // Old `checklist-` backups must still be pruned, or they would pile up forever.
+    #[test]
+    fn prune_handles_old_prefix_backups() {
+        let dir = std::env::temp_dir().join(format!("gettoit-prune-old-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        for name in [
+            "checklist-2026-01-01-000000.json",
+            "checklist-2026-01-02-000000.json",
+            "gettoit-2026-01-03-000000.json",
+        ] {
+            fs::write(dir.join(name), "{}").unwrap();
+        }
+        prune_backups(&dir, 2).unwrap();
+        assert!(!dir.join("checklist-2026-01-01-000000.json").exists());
+        assert!(dir.join("checklist-2026-01-02-000000.json").exists());
+        assert!(dir.join("gettoit-2026-01-03-000000.json").exists());
         fs::remove_dir_all(&dir).unwrap();
     }
 }

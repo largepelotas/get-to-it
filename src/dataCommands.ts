@@ -20,6 +20,7 @@ import {
   describeContents,
   ImportError,
   makeSnapshot,
+  LOCAL_SETTINGS,
   parseSnapshot,
   snapshotToJson,
 } from './store/snapshot';
@@ -29,7 +30,7 @@ import { confirmAction, useUI } from './store/ui';
  * Export, import and backups, as run from Settings and the command palette.
  */
 
-const JSON_FILTER = { name: 'Checklist export', extensions: ['json'] };
+const JSON_FILTER = { name: 'Get To It export', extensions: ['json'] };
 
 const stamp = () => format(new Date(), 'yyyy-MM-dd');
 
@@ -42,7 +43,7 @@ export async function exportJson(): Promise<void> {
   const { tables, settings } = useData.getState();
   try {
     const json = snapshotToJson(makeSnapshot(tables, settings));
-    if (await saveTextFile(`Checklist ${stamp()}.json`, json, JSON_FILTER)) {
+    if (await saveTextFile(`gettoit-${stamp()}.json`, json, JSON_FILTER)) {
       toast(`Exported ${describeContents(tables)}`);
     }
   } catch (err) {
@@ -57,7 +58,7 @@ export async function exportMarkdown(): Promise<void> {
       { ...tables, weekStartsOn: settings.weekStartsOn },
       settings.groceryCategories,
     );
-    if (await saveFolder(`Checklist ${stamp()}`, files)) {
+    if (await saveFolder(`gettoit-${stamp()}`, files)) {
       toast(`Exported ${files.length === 1 ? '1 list' : `${files.length} lists`} as Markdown`);
     }
   } catch (err) {
@@ -80,7 +81,7 @@ export async function importJson(): Promise<void> {
   const from = data.exportedAt ? `, exported ${formatTimestamp(data.exportedAt)}` : '';
   confirmAction({
     title: 'Replace everything with this file?',
-    message: `The file has ${describeContents(data.tables)}${from}. Everything in Checklist now will be replaced. ${
+    message: `The file has ${describeContents(data.tables)}${from}. Everything in Get To It now will be replaced. ${
       canBackUp
         ? 'A backup of what’s here now is saved first.'
         : 'Export what’s here first if you might want it back.'
@@ -94,7 +95,7 @@ export async function importJson(): Promise<void> {
 async function applyImport(data: ReturnType<typeof parseSnapshot>): Promise<void> {
   try {
     if (canBackUp) await backUp(writeBackup, new Date(), 'before-import');
-    await replaceData(data, ['lastBackupAt']);
+    await replaceData(data, LOCAL_SETTINGS);
   } catch (err) {
     failed('Import failed', err);
     return;
@@ -124,7 +125,7 @@ function showImported(): void {
 export function resetSampleData(): void {
   confirmAction({
     title: 'Reset to the sample data?',
-    message: 'Everything in Checklist now will be replaced with a fresh set of sample data.',
+    message: 'Everything in Get To It now will be replaced with a fresh set of sample data.',
     confirmLabel: 'Reset',
     danger: true,
     onConfirm: () =>
@@ -151,7 +152,7 @@ export async function quitWhenSaved(): Promise<void> {
   const reason = useData.getState().saveError;
   confirmAction({
     title: 'Quit without saving?',
-    message: `Your latest changes couldn’t be saved${reason ? ` (${reason})` : ''}. Checklist keeps trying while it’s open. If you quit now, they’ll be lost.`,
+    message: `Your latest changes couldn’t be saved${reason ? ` (${reason})` : ''}. Get To It keeps trying while it’s open. If you quit now, they’ll be lost.`,
     confirmLabel: 'Quit anyway',
     danger: true,
     onConfirm: () => void quitApp(),

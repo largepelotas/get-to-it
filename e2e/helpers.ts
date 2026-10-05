@@ -66,3 +66,10 @@ export async function createList(page: Page, type: string, title: string): Promi
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('textbox', { name: 'List name' })).toHaveValue(title);
 }
+
+/** Waits for fades to finish, so axe does not read colours mid-transition. */
+export async function settled(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))),
+  );
+}

@@ -8,6 +8,20 @@ dist
 playwright-report
 test-results
 *.tsbuildinfo
+*.log
+coverage
+Thumbs.db
+
+# Secrets and signing material
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+.tauri/
+
+# Per-machine Claude Code settings
+.claude/settings.local.json
 
 # Agent scratch files
 .agents/scratch/

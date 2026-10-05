@@ -47,7 +47,7 @@ describe('data commands', () => {
     platform.saveTextFile.mockResolvedValue(true);
     await exportJson();
     const [name, json, filter] = platform.saveTextFile.mock.calls[0];
-    expect(name).toMatch(/^Checklist \d{4}-\d{2}-\d{2}\.json$/);
+    expect(name).toMatch(/^gettoit-\d{4}-\d{2}-\d{2}\.json$/);
     expect(filter.extensions).toEqual(['json']);
     expect(JSON.parse(json).tables.lists).toHaveLength(3);
     expect(toasts.message).toHaveBeenCalledWith('Exported 3 lists and 0 items');
@@ -63,7 +63,7 @@ describe('data commands', () => {
     platform.saveFolder.mockResolvedValue(true);
     await exportMarkdown();
     const [folder, files] = platform.saveFolder.mock.calls[0];
-    expect(folder).toMatch(/^Checklist \d{4}-\d{2}-\d{2}$/);
+    expect(folder).toMatch(/^gettoit-\d{4}-\d{2}-\d{2}$/);
     expect(files.map((f: { path: string }) => f.path).sort()).toEqual([
       'Groceries.md',
       'Inbox.md',
@@ -111,7 +111,7 @@ describe('data commands', () => {
     await importJson();
     expect(useUI.getState().dialog).toBeNull();
     expect(toasts.error).toHaveBeenCalledWith(
-      'Can’t import this file. The file isn’t a Checklist export.',
+      'Can’t import this file. The file isn’t a Get To It export.',
     );
     expect(useData.getState().tables).toBe(before);
   });

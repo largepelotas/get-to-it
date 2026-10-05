@@ -1,8 +1,9 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Checklist",
+  "productName": "Get To It",
+  "mainBinaryName": "get-to-it",
   "version": "../package.json",
-  "identifier": "com.largepelotas.checklist",
+  "identifier": "com.largepelotas.gettoit",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -13,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Checklist",
+        "title": "Get To It",
         "width": 1180,
         "height": 760,
         "minWidth": 760,
@@ -32,6 +33,9 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
+    "publisher": "largepelotas",
+    "copyright": "Copyright (c) 2026 largepelotas",
+    "license": "MIT",
     "shortDescription": "To-do lists, grocery lists and notes",
     "icon": [
       "icons/32x32.png",

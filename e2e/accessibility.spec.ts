@@ -6,14 +6,32 @@ import {
   openApp,
   openList,
   row,
+  settled,
   sidebar,
   sidebarButton,
 } from './helpers';
 
+/** A Wednesday morning: 3pm is still ahead, so 'today 3pm' is due but not overdue at any real hour. */
+const NOW = new Date(2026, 9, 7, 10);
+
 /** Fills the starter lists so every kind of row and badge is on screen. */
 async function addContent(page: Page) {
   await openList(page, 'Inbox');
-  await addTasks(page, 'Review deck tomorrow 3pm p1', 'Water plants every day', 'Plan offsite');
+  await addTasks(
+    page,
+    'Review deck today 3pm p1',
+    'Water plants every day',
+    'Plan offsite',
+    // Due before the pinned clock, so the overdue styling is scanned too.
+    'File expenses yesterday 9am',
+  );
+  // Both kinds of styling are on screen: due later today, and overdue (shown in the danger colour).
+  await expect(
+    row(page, 'Review deck').getByRole('button', { name: /^Due date: Today / }),
+  ).toBeVisible();
+  await expect(
+    row(page, 'File expenses').getByRole('button', { name: /^Due date: Yesterday / }),
+  ).toBeVisible();
   await row(page, 'Plan offsite').getByRole('textbox', { name: 'Task' }).click();
   await page.keyboard.press('Enter');
   await page.keyboard.press('Tab');
@@ -41,12 +59,7 @@ async function addContent(page: Page) {
   await row(page, 'milk').getByRole('checkbox').click();
 }
 
-/** Waits for fades to finish, so axe does not read colours mid-transition. */
-async function settled(page: Page) {
-  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
-}
-
-const PALETTES = ['Graphite and cobalt', 'Stone and moss', 'Sage study', 'Midnight ink', 'Dusk'];
+const PALETTES = ['Graphite', 'Paper', 'Moss', 'Plum', 'High contrast'];
 
 /** Picks a colour scheme in Settings. */
 async function useColourScheme(page: Page, name: string) {
@@ -62,6 +75,8 @@ for (const palette of PALETTES)
       // Fifteen axe scans don't fit in the default 30 seconds.
       test.slow();
       await page.emulateMedia({ colorScheme: theme });
+      // Pinned before the app loads, so what is overdue and what is today never depends on the hour.
+      await page.clock.setFixedTime(NOW);
       await openApp(page);
       await useColourScheme(page, palette);
       await addContent(page);

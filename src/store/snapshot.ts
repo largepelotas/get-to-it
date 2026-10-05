@@ -18,7 +18,7 @@ import {
 import { cleanMinutes } from '@/lib/focus';
 import { sanitizeHabitGoal } from './habits';
 import { isDateKey, isTimeAfter, isTimeString, todayKey } from '@/lib/dates';
-import { isPaletteName } from '@/lib/theme';
+import { resolvePaletteName } from '@/lib/theme';
 import { sanitizeRecurrence } from '@/lib/recurrence';
 import { cleanMatrix, cleanViewOptions } from './viewOptions';
 
@@ -28,14 +28,20 @@ import { cleanMatrix, cleanViewOptions } from './viewOptions';
  * turned away with a reason instead of being half loaded.
  */
 
-/** Settings that describe this computer rather than the data, so they aren't exported. */
-const LOCAL_SETTINGS: (keyof Settings)[] = ['lastBackupAt'];
+/** App values an import accepts: the current one and the pre-rename 'checklist' of older backups. */
+const ACCEPTED_APPS: string[] = ['get-to-it', 'checklist'];
+
+/**
+ * Settings that describe this computer rather than the data: left out of an
+ * export, ignored in an import, and kept when an import replaces the rest.
+ */
+export const LOCAL_SETTINGS: (keyof Settings)[] = ['lastBackupAt', 'zoom'];
 
 export function makeSnapshot(tables: Tables, settings: Settings, now = Date.now()): Snapshot {
   const exported: Partial<Settings> = { ...settings };
   for (const key of LOCAL_SETTINGS) delete exported[key];
   return {
-    app: 'checklist',
+    app: 'get-to-it',
     version: 1,
     exportedAt: now,
     tables: {
@@ -284,7 +290,8 @@ function checkSettings(raw: unknown): Partial<Settings> {
     } else if (key === 'theme') {
       if (['system', 'light', 'dark'].includes(value as string)) out[key] = value;
     } else if (key === 'palette') {
-      if (isPaletteName(value)) out[key] = value;
+      const palette = resolvePaletteName(value);
+      if (palette) out[key] = palette;
     } else if (key === 'calendarLayout') {
       if (CALENDAR_LAYOUTS.includes(value as CalendarLayout)) out[key] = value;
     } else if (key === 'weekStartsOn') {
@@ -352,7 +359,7 @@ function repairReferences(tables: Tables): void {
 
 /**
  * Reads an exported file. Throws an `ImportError` with a message for the
- * user if it isn't a Checklist export this version can read.
+ * user if it isn't a Get To It export this version can read.
  */
 export function parseSnapshot(json: string): LoadResult & { exportedAt: number | null } {
   let data: unknown;
@@ -362,11 +369,15 @@ export function parseSnapshot(json: string): LoadResult & { exportedAt: number |
     throw new ImportError('The file isn’t valid JSON.');
   }
   const snapshot = data as Partial<Snapshot> | null;
-  if (!snapshot || typeof snapshot !== 'object' || snapshot.app !== 'checklist') {
-    throw new ImportError('The file isn’t a Checklist export.');
+  if (
+    !snapshot ||
+    typeof snapshot !== 'object' ||
+    !ACCEPTED_APPS.includes(snapshot.app as string)
+  ) {
+    throw new ImportError('The file isn’t a Get To It export.');
   }
   if (snapshot.version !== 1) {
-    throw new ImportError('The file comes from a newer version of Checklist.');
+    throw new ImportError('The file comes from a newer version of Get To It.');
   }
   if (!snapshot.tables || typeof snapshot.tables !== 'object') {
     throw new ImportError('The file has no data in it.');

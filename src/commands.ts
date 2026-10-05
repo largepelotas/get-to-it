@@ -11,6 +11,7 @@ import {
 import type { FocusKind, Priority, ViewOptions } from './data/types';
 import { formatDateKey, formatDue, formatTimestamp } from './lib/dates';
 import { formatFocusTotal } from './lib/focus';
+import { DEFAULT_ZOOM, formatZoom, stepZoom } from './lib/zoom';
 import type { ReminderEntry, SnoozeChoice } from './lib/reminders';
 import { copyText, notify, requestNotificationPermission } from './platform';
 import { clearChecked, uncheckAll } from './store/actions/grocery';
@@ -700,6 +701,25 @@ export function toggleItem(id: string, checked: boolean, { announce = false } = 
  * Hides or shows the sidebar. If focus was on what's about to disappear (the
  * sidebar, or the Show sidebar button), it moves to the other one.
  */
+// Zoom
+
+function applyZoom(zoom: number): void {
+  setSetting('zoom', zoom);
+  toast(`Zoom ${formatZoom(zoom)}`, { id: 'zoom', duration: 1500 });
+}
+
+export function zoomIn(): void {
+  applyZoom(stepZoom(useData.getState().settings.zoom, 1));
+}
+
+export function zoomOut(): void {
+  applyZoom(stepZoom(useData.getState().settings.zoom, -1));
+}
+
+export function resetZoom(): void {
+  applyZoom(DEFAULT_ZOOM);
+}
+
 export function toggleSidebar(): void {
   const hide = !useData.getState().settings.sidebarHidden;
   const active = document.activeElement;

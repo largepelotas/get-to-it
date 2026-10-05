@@ -9,9 +9,9 @@ import { makeSnapshot, snapshotToJson } from './snapshot';
 
 export const BACKUPS_KEPT = 14;
 
-/** "checklist-2026-09-30-221500.json". Names sort by age, which pruning relies on. */
+/** "gettoit-2026-09-30-221500.json". Names sort by age, which pruning relies on. */
 export function backupName(now: Date, note?: string): string {
-  return `checklist-${format(now, 'yyyy-MM-dd-HHmmss')}${note ? `-${note}` : ''}.json`;
+  return `gettoit-${format(now, 'yyyy-MM-dd-HHmmss')}${note ? `-${note}` : ''}.json`;
 }
 
 /** A backup is due when there's been none yet on this calendar day. */

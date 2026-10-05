@@ -2,7 +2,7 @@ import { MemoryRepository } from './memory';
 import type { LoadResult, WriteOp } from './repository';
 import { emptyTables } from './types';
 
-const KEY = 'checklist:data:v1';
+const KEY = 'gettoit:data:v1';
 
 /** Browser preview storage: the whole data set as one JSON value. */
 export class LocalStorageRepository extends MemoryRepository {

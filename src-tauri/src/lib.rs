@@ -162,7 +162,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             // A database that won't open is reported by the commands, so the
             // window can say what's wrong instead of the app not starting.
-            let database = db::Database::open(&data_dir.join("checklist.db"))
+            let database = db::Database::open(&data_dir.join("gettoit.db"))
                 .map_err(|e| format!("The database couldn’t be opened: {e}"));
             app.manage(db::DbState(database));
 

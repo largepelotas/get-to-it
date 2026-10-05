@@ -216,7 +216,13 @@ export function TimeGrid({
           />
         ))}
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto">
+      <div
+        ref={scrollRef}
+        role="region"
+        aria-label="Hours"
+        tabIndex={0}
+        className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none focus-visible:ring-inset"
+      >
         <div className="grid" style={columns}>
           <div className="relative" style={{ height: 24 * HOUR_PX }}>
             {Array.from({ length: 23 }, (_, i) => (

@@ -41,6 +41,8 @@ const PHYSICAL_KEYS: Record<string, string> = {
   '/': 'Slash',
   '\\': 'Backslash',
   ',': 'Comma',
+  '=': 'Equal',
+  '-': 'Minus',
   ...Object.fromEntries(Array.from('0123456789', (d) => [d, `Digit${d}`])),
 };
 

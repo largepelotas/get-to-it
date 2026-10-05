@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRepository } from '@/data/memory';
 import { DEFAULT_SETTINGS } from '@/data/types';
 import { backupDue, backupName, backUp, backUpIfDue } from './backup';
-import { createItem, setItemNotes } from './actions/items';
+import { createItem, setChecked, setItemNotes } from './actions/items';
+import { createFolder } from './actions/folders';
+import { setNoteContent } from './actions/notes';
+import { startTimer, stopTimer } from './focus';
+import { emptyDoc } from '@/lib/richText';
 import { addReminder } from './actions/reminders';
 import { addHabit, setHabitGoal, toggleCheckIn } from './actions/habits';
 import { createList, deleteList } from './actions/lists';
@@ -49,7 +53,7 @@ function sampleData() {
   addReminder(item, { kind: 'relative', offsetMinutes: 15 });
   createList({ type: 'note', title: 'Ideas' });
   setSetting('weekStartsOn', 0);
-  setSetting('palette', 'dusk');
+  setSetting('palette', 'plum');
   setSetting('lastBackupAt', 5);
   return { list, item };
 }
@@ -62,11 +66,21 @@ describe('snapshots', () => {
     expect(parsed.tables).toEqual(tables);
     expect(parsed.exportedAt).toBe(1000);
     expect(parsed.settings.weekStartsOn).toBe(0);
-    expect(parsed.settings.palette).toBe('dusk');
+    expect(parsed.settings.palette).toBe('plum');
     expect('lastBackupAt' in parsed.settings).toBe(false);
   });
 
-  it('turns away files that aren’t Checklist exports, with a reason', () => {
+  // Prevents the rename from locking out backups written before it ('checklist'),
+  // and from writing the old app value into new exports.
+  it('writes app "get-to-it" but still imports files marked with the old "checklist"', () => {
+    sampleData();
+    expect(JSON.parse(exportNow()).app).toBe('get-to-it');
+    expect(() => parseSnapshot('{"app":"checklist","version":1,"tables":{}}')).not.toThrow();
+    expect(() => parseSnapshot('{"app":"get-to-it","version":1,"tables":{}}')).not.toThrow();
+    expect(() => parseSnapshot('{"app":"other","version":1,"tables":{}}')).toThrow(ImportError);
+  });
+
+  it('turns away files that aren’t Get To It exports, with a reason', () => {
     const reason = (json: string) => {
       try {
         parseSnapshot(json);
@@ -77,11 +91,86 @@ describe('snapshots', () => {
       }
     };
     expect(reason('not json')).toBe('The file isn’t valid JSON.');
-    expect(reason('{"app":"other"}')).toBe('The file isn’t a Checklist export.');
+    expect(reason('{"app":"other"}')).toBe('The file isn’t a Get To It export.');
     expect(reason('{"app":"checklist","version":2,"tables":{}}')).toBe(
-      'The file comes from a newer version of Checklist.',
+      'The file comes from a newer version of Get To It.',
     );
     expect(reason('{"app":"checklist","version":1}')).toBe('The file has no data in it.');
+  });
+
+  // Bug prevented: a field added to (or dropped from) the export without bumping `version`, so an
+  // older build imports the file, silently drops the new field, and the user loses data. Also an
+  // export and an import that disagree about a table's fields, so data is written but not read back.
+  // Changing the lists below means bumping `version` in snapshot.ts and reading the old one on import.
+  it('pins the export format for version 1, and the import reads the same fields', () => {
+    // One row of every kind, made by the same actions the app uses.
+    const folder = createFolder('F');
+    const list = createList({ type: 'todo', title: 'L', folderId: folder });
+    const section = createSection(list, 'S')!;
+    const label = createLabel('B')!;
+    const item = createItem(list, {
+      text: 'I',
+      sectionId: section,
+      labelIds: [label],
+      recurrence: { freq: 'daily', interval: 1, mode: 'schedule' },
+      dueDate: '2026-10-02',
+    })!;
+    createFilter({ name: 'Q', query: 'today' });
+    addReminder(item, { kind: 'relative', offsetMinutes: 5 });
+    setChecked(item, true); // a repeating task: this logs a completion
+    const note = createList({ type: 'note', title: 'N' });
+    setNoteContent(note, emptyDoc());
+    startTimer('stopwatch', item, null, 1000);
+    stopTimer(1000 + 90_000);
+    const habitList = createList({ type: 'habit', title: 'H' });
+    toggleCheckIn(addHabit(habitList, 'Run')!, '2020-01-02');
+
+    const exported = JSON.parse(exportNow());
+    expect(Object.keys(exported).sort()).toEqual([
+      'app',
+      'exportedAt',
+      'settings',
+      'tables',
+      'version',
+    ]);
+    expect(exported.version).toBe(1);
+    const fields = (tables: Record<string, Record<string, unknown>[]>) =>
+      Object.fromEntries(
+        Object.entries(tables).map(([table, rows]) => {
+          expect(rows.length, `${table} has no row to read the fields from`).toBeGreaterThan(0);
+          // Every row of a table must carry the same fields, whatever made it.
+          const sets = rows.map((r) => Object.keys(r).sort().join(' '));
+          expect(new Set(sets).size, `${table} rows differ in fields`).toBe(1);
+          return [table, sets[0]];
+        }),
+      );
+    const exportedFields = fields(exported.tables);
+    expect(exportedFields).toEqual({
+      folders: 'collapsed color createdAt deletedAt id name sortKey updatedAt',
+      lists:
+        'archivedAt color createdAt deletedAt folderId id pinned showCompleted sortKey title type updatedAt',
+      items:
+        'category checked collapsed completedAt createdAt deadline deletedAt details dueDate dueTime endTime habit id labelIds listId parentId priority quantity recurrence sectionId sortKey text updatedAt wontDo',
+      sections: 'collapsed createdAt id listId sortKey title updatedAt',
+      labels: 'color createdAt id name sortKey updatedAt',
+      filters: 'color createdAt id name query sortKey updatedAt',
+      reminders:
+        'at constant createdAt dismissedFor firedFor id itemId kind offsetMinutes snoozedUntil updatedAt',
+      completions: 'completedAt dueDate id itemId',
+      notes: 'content id plainText updatedAt',
+      focusSessions: 'endedAt id itemId kind seconds startedAt',
+      checkIns: 'createdAt day id itemId',
+    });
+
+    // The import rebuilds each row from its own list of fields (ROW_CHECKS), so the keys of a
+    // parsed row are that list. It must be the same as what the export writes.
+    const imported = parseSnapshot(JSON.stringify(exported)).tables;
+    const importedFields = fields(
+      Object.fromEntries(
+        Object.entries(imported).map(([table, rows]) => [table, Object.values(rows)]),
+      ) as Record<string, Record<string, unknown>[]>,
+    );
+    expect(importedFields).toEqual(exportedFields);
   });
 
   it('points at the row and field that is wrong', () => {
@@ -137,6 +226,26 @@ describe('snapshots', () => {
       dueTime: null,
     });
     expect(settings).toEqual({ weekStartsOn: 0, defaultListId: null });
+  });
+
+  it('maps a palette name from an older version to its replacement on import', () => {
+    // Without the mapping an imported `sage` was dropped and the user landed on Graphite.
+    sampleData();
+    const data = JSON.parse(exportNow());
+    data.settings.palette = 'sage';
+    expect(parseSnapshot(JSON.stringify(data)).settings.palette).toBe('moss');
+    data.settings.palette = 'nonsense';
+    expect('palette' in parseSnapshot(JSON.stringify(data)).settings).toBe(false);
+  });
+
+  // The zoom is about this computer's screen: it is neither exported nor imported.
+  it('leaves the zoom out of an export and ignores it in an import', () => {
+    sampleData();
+    setSetting('zoom', 1.5);
+    expect('zoom' in parseSnapshot(exportNow()).settings).toBe(false);
+    const data = JSON.parse(exportNow());
+    data.settings.zoom = 2;
+    expect('zoom' in parseSnapshot(JSON.stringify(data)).settings).toBe(false);
   });
 
   // Bug prevented: an import carrying an unknown calendar layout, or losing the chosen one.
@@ -220,9 +329,9 @@ describe('replaceData', () => {
 describe('backups', () => {
   it('names backups so they sort by age', () => {
     const name = backupName(new Date(2026, 8, 30, 22, 15, 7));
-    expect(name).toBe('checklist-2026-09-30-221507.json');
+    expect(name).toBe('gettoit-2026-09-30-221507.json');
     expect(backupName(new Date(2026, 8, 30, 22, 15, 7), 'before-import')).toBe(
-      'checklist-2026-09-30-221507-before-import.json',
+      'gettoit-2026-09-30-221507-before-import.json',
     );
   });
 
@@ -243,7 +352,7 @@ describe('backups', () => {
     expect(await backUpIfDue(write, now)).toBe(true);
     expect(write).toHaveBeenCalledTimes(1);
     const [name, contents, keep] = write.mock.calls[0] as unknown as [string, string, number];
-    expect(name).toBe('checklist-2026-09-30-090000.json');
+    expect(name).toBe('gettoit-2026-09-30-090000.json');
     expect(keep).toBe(14);
     expect(parseSnapshot(contents).tables).toEqual(useData.getState().tables);
     expect(useData.getState().settings.lastBackupAt).toBe(now.getTime());

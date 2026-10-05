@@ -1,13 +1,13 @@
 # Architecture and working notes
 
-How Checklist is built, the decisions behind it, and what's known to be
+How Get To It is built, the decisions behind it, and what's known to be
 missing. Keep this file describing the app as it is: when something changes,
 change the paragraph that covers it instead of adding a note about the change.
 What to build next is in [todoist-gap.md](todoist-gap.md).
 
 ## Status
 
-Checklist is a desktop app for macOS and Windows (Tauri 2, React, TypeScript)
+Get To It is a desktop app for macOS and Windows (Tauri 2, React, TypeScript)
 with four kinds of list: to-do, grocery, habits and rich-text notes. It's for
 one person: data stays on the computer in SQLite, builds are unsigned, and
 there's no sync and no auto-update.
@@ -57,9 +57,13 @@ there (`"version": "../package.json"`). Bump it before tagging.
 - `db.rs`: SQLite via `rusqlite` (bundled). `db_select(sql, params)` and
   `db_batch(statements)`, which runs a batch in one transaction; the schema
   lives in TypeScript, not Rust. (`tauri-plugin-sql` was dropped because its
-  connection pool can't do multi-statement transactions.) `db_backup(label)`
-  copies the whole database to `backups/checklist-<label>.db` with
-  `VACUUM INTO`. The database is `checklist.db` in the data folder
+  connection pool can't do multi-statement transactions.) The webview can't
+  name a file through SQL: `db_select` refuses anything that isn't read-only,
+  the connection is in SQLite's defensive mode, and an authorizer denies
+  `ATTACH`/`DETACH`, every pragma but `user_version`, and transaction
+  statements other than the batch's own. `db_backup(label)` copies the whole
+  database to `backups/gettoit-<label>.db` with SQLite's backup API, into a
+  temporary file that is renamed over the old copy. The database is `gettoit.db` in the data folder
   (`data_dir` in `lib.rs`): the app data folder, or its `dev` subfolder in
   a debug build, so `npm run app:dev` never touches an installed copy's
   data. If the file can't be opened the app still starts: the commands
@@ -112,7 +116,8 @@ there (`"version": "../package.json"`). Bump it before tagging.
   - `localStorage.ts`: browser preview.
   - `memory.ts`: tests.
 - `platform/index.ts`: `isTauri`, `isMac`, `createRepository()`, `appReady()`,
-  `setWindowTheme`, `setReminderSchedule`, `onReminderFired`,
+  `setWindowTheme`, `setZoom` (the webview's zoom in the app, CSS `zoom` on
+  `<html>` in the browser), `setReminderSchedule`, `onReminderFired`,
   `requestNotificationPermission`, `notify`, `setCloseToTray`,
   `getLaunchAtLogin` (null in the browser), `setLaunchAtLogin`,
   `onQuitRequested`, `quitApp` and `setTrayStatus`, and
@@ -299,13 +304,15 @@ notes }`, each sorted by score and capped. Case and accents are ignored
   in a subfolder per folder, archived lists under `Archive/`, clashes
   numbered, Trash left out).
 - `store/snapshot.ts`: `makeSnapshot` (every row, soft-deleted ones
-  included, and the settings except `lastBackupAt`), `snapshotToJson`,
+  included, and the settings except `LOCAL_SETTINGS`: `lastBackupAt` and
+  `zoom`, which describe this computer and are also kept through an
+  import), `snapshotToJson`,
   `parseSnapshot` (checks every field of every row against a table of
   checks and throws `ImportError` with a message such as "In item 3,
   dueDate should be a date (YYYY-MM-DD)."; missing optional fields get
   defaults; unknown or mistyped settings are dropped) and
   `describeContents` ("3 lists and 12 items", Trash left out).
-- `store/backup.ts`: `backupName` (`checklist-2026-09-30-221500.json`,
+- `store/backup.ts`: `backupName` (`gettoit-2026-09-30-221500.json`,
   which sorts by age as `prune_backups` needs), `backupDue` (none yet
   today, or the clock went backwards), `backUp(write, now, note?)` (a noted
   backup such as `before-import` doesn't count as the daily one) and
@@ -351,14 +358,15 @@ history)`, which only returns categories that still exist.
   the minute, for render code: the React lint rejects `Date.now()` in
   render), `useReminderScheduler` and `useReminderEntries` (`{ all, inbox
 }`), `useAppLifecycle` (close to tray follows the setting, the quit
-  listener, and the tray tooltip: "Checklist · 3 due today, 1 reminder"),
+  listener, and the tray tooltip: "Get To It · 3 due today, 1 reminder"),
   `useAppShortcuts` and `useBackups` (the daily backup, checked 15 s
   after launch and then hourly, desktop only; one error toast if it fails).
 - `lib/keymap.ts`: `SHORTCUTS`, every app-wide shortcut by name, and
   `SHORTCUT_HELP`, what the Keyboard shortcuts dialog lists. Menus show
   shortcuts from here too. `useAppShortcuts` handles them: the palette
   (⌘K or ⌘F) works everywhere, even in text fields, and closes the palette
-  when it's open; Settings (⌘,), the shortcuts dialog (⌘/), New list (⌘⇧N),
+  when it's open, and so does zoom (⌘= or ⌘⇧= for +, ⌘-, ⌘0 for 100%);
+  Settings (⌘,), the shortcuts dialog (⌘/), New list (⌘⇧N),
   New task (⌘N, focuses the view's `[data-quick-add]` field with
   `focusQuickAdd`) and the views (⌘1–3) work everywhere unless a dialog
   is open; undo, redo and Copy as Markdown (⌘⇧C) are ignored in text
@@ -369,12 +377,16 @@ history)`, which only returns categories that still exist.
 - Tokens are CSS variables in `styles/index.css`, light on `:root` and
   dark on `[data-theme='dark']`. `<html data-theme>` is set from
   `settings.theme` (following the OS for "system") before the first paint
-  and by `useApplyTheme`. The `dark:` variant follows `data-theme` too.
-- Colour schemes: five palettes shared with another project (Graphite and
-  cobalt, Stone and moss, Sage study, Midnight ink, Dusk), each with a light
+  and by `useApplyTheme`, which also applies `settings.zoom` (`lib/zoom.ts`:
+  `ZOOM_LEVELS` 80–200%, `stepZoom`, `cleanZoom`, `formatZoom`; changed from
+  Settings, the palette or the shortcuts, with a "Zoom 125%" toast). The `dark:` variant follows `data-theme` too.
+- Colour schemes: five palettes shared with another project (Graphite,
+  Paper, Moss, Plum, High contrast), each with a light
   and a dark theme, picked in Settings or the palette ("Use the … colour
   scheme"). `settings.palette` (`PaletteName`, default `graphite`, the
-  closest to the original look) is exported and imported like `theme`.
+  closest to the original look) is exported and imported like `theme`. Names from earlier
+  versions map over (`LEGACY_PALETTES` in `lib/theme.ts`: stone and sage to
+  moss, dusk to plum, midnight to graphite) when settings load and on import.
   `applyPalette` sets `<html data-palette>`, left off for Graphite, whose
   values are the bare `:root` rules; each other palette has a
   `[data-palette='…']` rule and a `[data-palette='…'][data-theme='dark']`
@@ -563,7 +575,7 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   - `groceryMenu.tsx`: `categoryEntries` and `groceryMenuEntries`.
 - `components/dialogs/Dialogs.tsx`: New list (type, name, folder) and the
   confirmation dialog, driven by `useUI.dialog`. `SettingsDialog.tsx`:
-  theme, colour scheme, week start, reading dates in new tasks, the all-day reminder
+  theme, colour scheme, zoom, week start, reading dates in new tasks, the all-day reminder
   time, close to tray, open at login (read from and written to the
   autostart plugin, not stored in settings; disabled in the browser) and
   the grocery categories (`GroceryCategoriesEditor`: rename, reorder with
@@ -1188,7 +1200,7 @@ Data and safety:
 
 - Undo history doesn't know about settings, so removing a grocery category
   can't be undone.
-- The WAL isn't checkpointed on exit, so copying `checklist.db` alone can
+- The WAL isn't checkpointed on exit, so copying `gettoit.db` alone can
   miss recent changes. Backups and exports are written in place, not to a
   temporary file first.
 - Logging out or shutting down doesn't go through the quit request, so a

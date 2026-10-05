@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    checklist_lib::run();
+    get_to_it_lib::run();
 }

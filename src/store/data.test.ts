@@ -271,6 +271,14 @@ describe('loading settings', () => {
     expect(useData.getState().settings.calendarLayout).toBe('month');
   });
 
+  // Bug prevented: a user with a removed palette saved (sage) opening the app on Graphite.
+  it('loads a palette saved under an old name as its replacement', async () => {
+    await initData(new MemoryRepository({ settings: { palette: 'sage' as never } }));
+    expect(useData.getState().settings.palette).toBe('moss');
+    await initData(new MemoryRepository({ settings: { palette: 'bogus' as never } }));
+    expect(useData.getState().settings.palette).toBe('graphite');
+  });
+
   // Bug prevented: data saved before these settings existed loading without defaults.
   it('uses defaults for missing settings and drops unknown view names', async () => {
     await initData(new MemoryRepository({ settings: { theme: 'dark' } }));

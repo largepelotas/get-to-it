@@ -108,9 +108,9 @@ describe('trayStatus', () => {
   it('has no title and the due summary when nothing runs', () => {
     expect(trayStatus(['3 due today', '1 reminder'], null, t0, undefined)).toEqual({
       title: null,
-      tooltip: 'Checklist · 3 due today, 1 reminder',
+      tooltip: 'Get To It · 3 due today, 1 reminder',
     });
-    expect(trayStatus([], null, t0, undefined)).toEqual({ title: null, tooltip: 'Checklist' });
+    expect(trayStatus([], null, t0, undefined)).toEqual({ title: null, tooltip: 'Get To It' });
   });
 
   it('shows a stopwatch and a countdown', () => {
@@ -118,11 +118,11 @@ describe('trayStatus', () => {
       trayStatus([], timer({ kind: 'stopwatch', minutes: null }), 1_000_000 + 754_000, name),
     ).toEqual({
       title: '12:34',
-      tooltip: 'Checklist · 12:34 on “Write plan”',
+      tooltip: 'Get To It · 12:34 on “Write plan”',
     });
     expect(trayStatus([], timer(), 1_000_000 + 1000, name)).toEqual({
       title: '24:59',
-      tooltip: 'Checklist · 24:59 left on “Write plan”',
+      tooltip: 'Get To It · 24:59 left on “Write plan”',
     });
   });
 
@@ -130,12 +130,12 @@ describe('trayStatus', () => {
     const br = timer({ kind: 'break', itemId: null, minutes: 5 });
     expect(trayStatus([], br, 1_000_000 + 1000, undefined)).toEqual({
       title: '4:59',
-      tooltip: 'Checklist · Break, 4:59 left',
+      tooltip: 'Get To It · Break, 4:59 left',
     });
     const paused = timer({ kind: 'stopwatch', minutes: null, pausedAt: 1_000_000 + 754_000 });
     expect(trayStatus([], paused, 1_000_000 + 900_000, name)).toEqual({
       title: '⏸ 12:34',
-      tooltip: 'Checklist · Paused · 12:34 on “Write plan”',
+      tooltip: 'Get To It · Paused · 12:34 on “Write plan”',
     });
   });
 });

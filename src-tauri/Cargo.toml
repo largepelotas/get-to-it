@@ -1,13 +1,15 @@
 [package]
-name = "checklist"
+name = "get-to-it"
 version = "0.1.0"
 description = "To-do lists, grocery lists and rich-text notes"
+license = "MIT"
+repository = "https://github.com/largepelotas/get-to-it"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.90"
 
 [lib]
 # The `_lib` suffix avoids a Windows name clash between the lib and bin targets.
-name = "checklist_lib"
+name = "get_to_it_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -21,7 +23,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled", "hooks", "backup"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
