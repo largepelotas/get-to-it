@@ -13,6 +13,8 @@ export interface DialogProps {
   className?: string;
   /** Focus something other than the first focusable element when opening. */
   onOpenAutoFocus?: (event: Event) => void;
+  /** Say where focus goes on closing. Radix only returns it to a trigger of its own, and this has none. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function Dialog({
@@ -24,6 +26,7 @@ export function Dialog({
   footer,
   className,
   onOpenAutoFocus,
+  onCloseAutoFocus,
 }: DialogProps) {
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
@@ -31,6 +34,7 @@ export function Dialog({
         <D.Overlay className="fixed inset-0 z-40 bg-overlay" />
         <D.Content
           onOpenAutoFocus={onOpenAutoFocus}
+          onCloseAutoFocus={onCloseAutoFocus}
           className={clsx(
             'fixed top-1/2 left-1/2 z-50 w-[min(420px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-elevated p-5 shadow-popover outline-none',
             className,

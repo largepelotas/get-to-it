@@ -4,6 +4,8 @@ A free, private to-do app for macOS and Windows: to-do lists, grocery lists,
 habit lists and rich-text notes. Everything is stored on your computer: there
 is no account, no sync service and no telemetry.
 
+![The Today view, with a task's details open](docs/screenshots/today.png)
+
 ## Features
 
 - **Tasks** with subtasks, sections, due dates, repeats, reminders, priorities
@@ -23,6 +25,44 @@ is no account, no sync service and no telemetry.
   window zoom from 80% to 200%.
 - **Your data stays yours:** daily automatic backups, export to JSON or
   Markdown, and import from a JSON export.
+
+## Screenshots
+
+A list with sections, subtasks, labels and priorities:
+
+![A list with sections, subtasks, labels and priorities](docs/screenshots/list.png)
+
+The same list as a board, grouped by priority:
+
+![A list shown as a board with a column per priority](docs/screenshots/board.png)
+
+The calendar week:
+
+![The calendar week with timed tasks](docs/screenshots/calendar.png)
+
+A grocery list, sorted by category, with a cart:
+
+![A grocery list by category, with items in the cart](docs/screenshots/grocery.png)
+
+A rich-text note:
+
+![A note with headings, bullets and a checklist](docs/screenshots/notes.png)
+
+The command palette:
+
+![The command palette searching tasks, notes and lists](docs/screenshots/palette.png)
+
+The five colour schemes: Graphite, Paper, Moss, Plum and High contrast.
+
+<p>
+  <img src="docs/screenshots/schemes-graphite.png" alt="Graphite colour scheme" width="49%">
+  <img src="docs/screenshots/schemes-paper.png" alt="Paper colour scheme" width="49%">
+  <img src="docs/screenshots/schemes-moss.png" alt="Moss colour scheme" width="49%">
+  <img src="docs/screenshots/schemes-plum.png" alt="Plum colour scheme" width="49%">
+  <img src="docs/screenshots/schemes-high-contrast.png" alt="High contrast colour scheme" width="49%">
+</p>
+
+To make these again, run `npm run screenshots`.
 
 ## Install
 
@@ -44,7 +84,8 @@ one extra step:
 - **Windows:** in the SmartScreen prompt, click **More info → Run anyway**.
 
 There is no automatic update. To update, download the newer installer and run
-it; your data is kept.
+it; your data is kept. **Settings → About** shows the version, links to check for
+a newer one, and the licences of the libraries Get To It is built with.
 
 ## Your data
 
@@ -96,6 +137,7 @@ npm ci
 npm run dev        # browser preview at http://localhost:1420
 npm run app:dev    # desktop app
 npm run app:build  # installer for this computer
+npm run notices    # third-party licence notices (app:build runs it for you)
 npm test           # unit tests
 npm run test:e2e   # end-to-end tests (first: npx playwright install chromium)
 ```

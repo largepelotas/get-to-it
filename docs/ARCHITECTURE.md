@@ -30,6 +30,7 @@ npm install
 npm run dev          # browser preview at http://localhost:1420 (data in localStorage)
 npm run app:dev      # desktop app (needs Rust; on Linux also the webkit2gtk libraries)
 npm test             # Vitest unit tests
+npm run notices      # writes public/third-party-notices.txt (needs cargo; app:build runs it)
 npm run test:e2e     # Playwright end-to-end tests (builds, then serves on :4173)
 npm run lint && npm run typecheck && npm run format:check
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
@@ -46,6 +47,17 @@ builds an unsigned macOS universal `.dmg` and a Windows `.exe` installer
 for a `v*` tag, or when it's run by hand, and uploads them as workflow
 artifacts. A tag also attaches them to a **draft** GitHub release; publish
 it by hand.
+
+Third-party notices: `scripts/third-party-notices.mjs` (`npm run notices`, run by
+`tauri build` through `beforeBuildCommand`; plain `npm run build` and CI's web and
+e2e jobs don't need it) lists every production npm package (from
+`package-lock.json`) and Rust crate (`cargo metadata`) with its licence text, each
+distinct text once in a numbered appendix, into `public/third-party-notices.txt`
+(generated, gitignored). It exits non-zero rather than write a partial file. The
+About dialog fetches `/third-party-notices.txt` and checks its first line
+(`NOTICES_MARKER`), since Vite's dev server answers unknown paths with
+`index.html`; without it, it says this is a development build. `connect-src` in the
+CSP includes `'self'` for this fetch; no test covers it under the real CSP.
 
 The version lives in `package.json` only: `tauri.conf.json` reads it from
 there (`"version": "../package.json"`). Bump it before tagging.
@@ -580,7 +592,10 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
   autostart plugin, not stored in settings; disabled in the browser) and
   the grocery categories (`GroceryCategoriesEditor`: rename, reorder with
   arrow buttons, remove (not the last one), add, and Restore defaults).
-  The dialog body scrolls.
+  The dialog body scrolls. Its About section (`AboutSection.tsx`): the
+  version (`__APP_VERSION__`, defined from `package.json` in `vite.config.ts`,
+  typed in `src/env.d.ts`), links opened with `openUrl` (URLs in `lib/about.ts`)
+  and a Third-party licences dialog. The palette's "About Get To It" just opens Settings.
 - `MainPane` switches on the view and goes to `homeView()` if the open list
   stops existing.
 - `components/palette/`: `CommandPalette`, a Radix dialog around

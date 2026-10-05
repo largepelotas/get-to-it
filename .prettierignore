@@ -7,3 +7,4 @@ playwright-report
 test-results
 # Copies synced from .agents-shared; formatted at the source
 .claude
+public/third-party-notices.txt
