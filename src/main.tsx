@@ -4,13 +4,14 @@ import { App } from './App';
 import { ErrorBoundary, Failure } from './components/Failure';
 import { homeView } from './commands';
 import { applyPalette, applyTheme, resolveTheme } from './lib/theme';
-import { appReady, createRepository, setZoom } from './platform';
+import { appReady, blockBrowserExtras, createRepository, setZoom } from './platform';
 import { initData, useData } from './store/data';
 import { seedIfNeeded } from './store/seed';
 import { navigate } from './store/ui';
 import './styles/index.css';
 
 async function start() {
+  blockBrowserExtras();
   const root = createRoot(document.getElementById('root')!);
   try {
     await initData(createRepository());

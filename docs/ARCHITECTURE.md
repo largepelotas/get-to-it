@@ -1172,6 +1172,10 @@ or TickTick do.
 - Due dates in Markdown are `YYYY-MM-DD HH:mm`, which don't go stale the
   way "Tomorrow" would.
 - ⌘F opens the palette too (the desktop webview has no find bar).
+- The installed app turns off the webview's own right-click menu (Back,
+  Refresh, Print) outside text fields, and its reload, print and find-next
+  shortcuts (`blockBrowserExtras` in `platform/index.ts`). Development and
+  the browser preview keep them, for reloading and Inspect.
 - Search results ignore the Completed/cart state for filtering (finished
   items show, ranked lower) rather than hiding them.
 

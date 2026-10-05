@@ -111,6 +111,29 @@ export function formatShortcut(shortcut: Shortcut, mac: boolean): string {
   return shortcutParts(shortcut, mac).join(mac ? '' : '+');
 }
 
+/**
+ * Shortcuts the web view would act on itself: reload, print, downloads, find
+ * next and caret browsing. None of them means anything in the app.
+ */
+const BROWSER_SHORTCUTS: Shortcut[] = [
+  'F5',
+  'Ctrl+F5',
+  'Shift+F5',
+  'Mod+R',
+  'Mod+Shift+R',
+  'Mod+P',
+  'Mod+J',
+  'Mod+G',
+  'Mod+Shift+G',
+  'F3',
+  'Shift+F3',
+  'F7',
+];
+
+export function isBrowserShortcut(event: KeyLike, mac: boolean): boolean {
+  return BROWSER_SHORTCUTS.some((shortcut) => matchesShortcut(event, shortcut, mac));
+}
+
 /** True when keys typed here belong to a text field rather than to app shortcuts. */
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
