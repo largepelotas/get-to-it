@@ -1,10 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect x="80" y="80" width="864" height="864" rx="150" fill="#fdf8ec" stroke="#111111" stroke-width="40"/>
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="190" y="250" width="250" height="230" rx="52" stroke="#111111" stroke-width="40"/>
-    <rect x="190" y="544" width="250" height="230" rx="52" stroke="#111111" stroke-width="40"/>
-    <polyline points="250,368 298,416 388,322" stroke="#1f6b2c" stroke-width="46"/>
-    <line x1="567" y1="365" x2="818" y2="365" stroke="#111111" stroke-width="64"/>
-    <line x1="567" y1="659" x2="818" y2="659" stroke="#111111" stroke-width="64"/>
-  </g>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5b532"/><stop offset="1" stop-color="#d98a0b"/></linearGradient></defs>
+  <rect x="80" y="80" width="864" height="864" rx="200" fill="url(#g)"/>
+  <polyline points="282,528 442,688 742,352" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="124" stroke="#2a1d05"/>
 </svg>
