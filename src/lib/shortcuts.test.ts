@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatShortcut, isEditableTarget, matchesShortcut } from './shortcuts';
+import { formatShortcut, isBrowserShortcut, isEditableTarget, matchesShortcut } from './shortcuts';
 
 const key = (
   key: string,
@@ -145,6 +145,24 @@ describe('formatShortcut', () => {
     expect(formatShortcut('Mod+Shift+Z', true)).toBe('⌘⇧Z');
     expect(formatShortcut('Mod+Shift+Z', false)).toBe('Ctrl+Shift+Z');
     expect(formatShortcut('Alt+ArrowUp', true)).toBe('⌥↑');
+  });
+});
+
+describe('isBrowserShortcut', () => {
+  it('catches reload, print and find next', () => {
+    expect(isBrowserShortcut(key('F5'), false)).toBe(true);
+    expect(isBrowserShortcut(key('r', { ctrl: true }), false)).toBe(true);
+    expect(isBrowserShortcut(key('R', { ctrl: true, shift: true }), false)).toBe(true);
+    expect(isBrowserShortcut(key('p', { meta: true }), true)).toBe(true);
+    expect(isBrowserShortcut(key('F3'), false)).toBe(true);
+  });
+
+  it('leaves typing and the app’s own shortcuts alone', () => {
+    expect(isBrowserShortcut(key('r'), false)).toBe(false);
+    expect(isBrowserShortcut(key('p'), false)).toBe(false);
+    expect(isBrowserShortcut(key('f', { ctrl: true }), false)).toBe(false);
+    expect(isBrowserShortcut(key('u', { ctrl: true }), false)).toBe(false);
+    expect(isBrowserShortcut(key('F6'), false)).toBe(false);
   });
 });
 

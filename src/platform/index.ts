@@ -3,6 +3,7 @@ import { LocalStorageRepository } from '@/data/localStorage';
 import type { Repository } from '@/data/repository';
 import { SqliteRepository, type SqlExecutor } from '@/data/sqlite';
 import { isSafeUrl } from '@/lib/links';
+import { isBrowserShortcut, isEditableTarget } from '@/lib/shortcuts';
 import { BrowserScheduler, type ScheduledReminder } from './browserScheduler';
 
 export type { ScheduledReminder };
@@ -143,6 +144,22 @@ export async function setLaunchAtLogin(enabled: boolean): Promise<void> {
   if (!isTauri) return;
   const { enable, disable } = await import('@tauri-apps/plugin-autostart');
   await (enabled ? enable() : disable());
+}
+
+/**
+ * Turns off what the web view offers as if the window were a web page: its
+ * right-click menu (Back, Refresh, Print) and its own shortcuts. Text fields
+ * keep the menu, for copy, paste and spelling. Left alone in the browser
+ * preview and in development, where reloading and Inspect are wanted.
+ */
+export function blockBrowserExtras(): void {
+  if (!isTauri || import.meta.env.DEV) return;
+  window.addEventListener('contextmenu', (event) => {
+    if (!isEditableTarget(event.target)) event.preventDefault();
+  });
+  window.addEventListener('keydown', (event) => {
+    if (isBrowserShortcut(event, isMac)) event.preventDefault();
+  });
 }
 
 /** Called when the user quits (tray, Cmd+Q) so pending saves can finish first. */
