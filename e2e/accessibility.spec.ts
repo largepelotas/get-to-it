@@ -59,6 +59,50 @@ async function addContent(page: Page) {
   await row(page, 'milk').getByRole('checkbox').click();
 }
 
+const FEED_URL = 'https://example.test/cal.ics';
+
+/** An invented calendar for NOW's day: two timed events and an all-day one. */
+function inventedCalendar(): string {
+  const day = '20261007';
+  const event = (uid: string, summary: string, when: string[]) => [
+    'BEGIN:VEVENT',
+    `UID:${uid}@example.test`,
+    ...when,
+    `SUMMARY:${summary}`,
+    'END:VEVENT',
+  ];
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Invented//EN',
+    ...event('a11y-1', 'Invented planning meeting', [
+      `DTSTART:${day}T100000`,
+      `DTEND:${day}T110000`,
+    ]),
+    ...event('a11y-2', 'Invented review', [`DTSTART:${day}T130000`, `DTEND:${day}T133000`]),
+    ...event('a11y-3', 'Invented offsite', [
+      `DTSTART;VALUE=DATE:${day}`,
+      'DTEND;VALUE=DATE:20261008',
+    ]),
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
+/** Adds the invented calendar link in Settings. */
+async function addInventedCalendar(page: Page) {
+  await page.keyboard.press('ControlOrMeta+,');
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  const form = settings.getByRole('form', { name: 'Add a calendar' });
+  await form.scrollIntoViewIfNeeded();
+  await form.getByRole('textbox', { name: 'Name', exact: true }).fill('Invented');
+  await form.getByRole('textbox', { name: 'Link', exact: true }).fill(FEED_URL);
+  await form.getByRole('button', { name: 'Add calendar' }).click();
+  await expect(settings.getByText(/^Updated /)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+}
+
 const PALETTES = ['Graphite', 'Paper', 'Moss', 'Plum', 'High contrast'];
 
 /** Picks a colour scheme in Settings. */
@@ -77,9 +121,18 @@ for (const palette of PALETTES)
       await page.emulateMedia({ colorScheme: theme });
       // Pinned before the app loads, so what is overdue and what is today never depends on the hour.
       await page.clock.setFixedTime(NOW);
+      await page.route(FEED_URL, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'text/calendar',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          body: inventedCalendar(),
+        }),
+      );
       await openApp(page);
       await useColourScheme(page, palette);
       await addContent(page);
+      await addInventedCalendar(page);
 
       await expectAccessible(page);
       await openList(page, 'Inbox');
@@ -178,9 +231,40 @@ for (const palette of PALETTES)
           await expectAccessible(page);
           await page.getByRole('button', { name: 'Tasks' }).click();
           await expect(page.getByRole('complementary', { name: 'Unscheduled tasks' })).toBeHidden();
-          // The week layout too, then back to Month so the setting does not carry on.
+          // Month chips on a busy day: a selected task, the "+N more" pop-up, an event's pop-up.
+          const today = page.getByRole('region', { name: /^Wednesday, October 7, / });
+          await today.getByRole('button', { name: 'Water plants' }).click();
+          await settled(page);
+          await expectAccessible(page);
+          await today.getByRole('button', { name: /more on / }).click();
+          await expect(page.getByRole('dialog', { name: 'Wednesday, October 7' })).toBeVisible();
+          await settled(page);
+          await expectAccessible(page);
+          await page.keyboard.press('Escape');
+          await expect(page.getByRole('dialog', { name: 'Wednesday, October 7' })).toBeHidden();
+          await today.getByRole('button', { name: /^Invented planning meeting, / }).click();
+          await expect(
+            page.getByRole('dialog', { name: 'Invented planning meeting' }),
+          ).toBeVisible();
+          await settled(page);
+          await expectAccessible(page);
+          await page.keyboard.press('Escape');
+          await expect(
+            page.getByRole('dialog', { name: 'Invented planning meeting' }),
+          ).toBeHidden();
+          // The week layout too (an event block and an all-day entry), then back to Month so the setting does not carry on.
           await page.getByRole('button', { name: 'Week', exact: true }).click();
-          await expect(page.getByRole('region', { name: /^Friday, / })).toBeVisible();
+          await expect(page.getByRole('region', { name: /^Wednesday, October 7$/ })).toBeVisible();
+          await expect(
+            page
+              .getByRole('region', { name: /^Wednesday, October 7$/ })
+              .getByRole('button', { name: /^Invented planning meeting, / }),
+          ).toBeVisible();
+          await expect(
+            page
+              .getByRole('group', { name: /^All day, Wednesday, October 7$/ })
+              .getByRole('button', { name: /^Invented offsite, / }),
+          ).toBeVisible();
           await settled(page);
           await expectAccessible(page);
           await page.getByRole('button', { name: 'Month', exact: true }).click();

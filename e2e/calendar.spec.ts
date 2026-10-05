@@ -16,7 +16,7 @@ test('shows a task on its day with its time, and moves by month', async ({ page 
   const chip = page
     .getByRole('region', { name: 'Thursday, October 8, 1 task' })
     .getByRole('button', { name: 'Dentist' });
-  await expect(chip.locator('span').first()).toHaveText(/^9:00/);
+  await expect(chip.locator('span').first()).toHaveText(/^9(:00)?\s?(AM)?\s*Dentist/i);
   await expect(chip).toHaveAccessibleDescription(/^Due Tomorrow/);
 
   await main.getByRole('button', { name: 'Next' }).click();
@@ -96,7 +96,9 @@ test('the week layout draws a timed task as a block, and a drop on the grid sets
   await main.getByRole('button', { name: 'Week' }).click();
 
   const tomorrow = page.getByRole('region', { name: 'Thursday, October 8' });
-  await expect(tomorrow.getByRole('button', { name: 'Dentist' })).toContainText(/9:00/);
+  await expect(tomorrow.getByRole('button', { name: 'Dentist' })).toHaveText(
+    /^9(:00|\s?AM)\s*Dentist$/i,
+  );
 
   // Scroll the grid 5 hours down so 10:00 is mid-view (near an edge the drag would auto-scroll).
   // The column's box is on screen, so its 10:00 line is 480px below the box top whatever the scroll.

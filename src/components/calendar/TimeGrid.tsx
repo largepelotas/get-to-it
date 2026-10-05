@@ -5,7 +5,12 @@ import { useLayoutEffect, useRef } from 'react';
 import { alldayDropId, slotDropId } from '@/components/views/dayDrop';
 import { useNow } from '@/hooks/useNow';
 import { formatLongDate, formatTime, fromDateKey, timeOfMinutes, type DateKey } from '@/lib/dates';
-import { allDayEntries, timedEntryBlocks, type CalendarEntry } from '@/store/calendar';
+import {
+  allDayEntries,
+  MIN_BLOCK_MINUTES,
+  timedEntryBlocks,
+  type CalendarEntry,
+} from '@/store/calendar';
 import { EventChip } from './EventChip';
 import { TaskChip } from './TaskChip';
 
@@ -60,6 +65,7 @@ function AllDayCell({
               <EventChip
                 key={`event:${entry.event.feedId}:${entry.event.id}`}
                 event={entry.event}
+                placement="allDay"
               />
             ) : (
               <TaskChip
@@ -68,6 +74,7 @@ function AllDayCell({
                 selected={entry.row.item.id === state.selectedId}
                 hasReminder={state.reminded.has(entry.row.item.id)}
                 focusing={entry.row.item.id === state.focusedId}
+                placement="allDay"
               />
             ),
           )}
@@ -107,10 +114,12 @@ function DayColumn({
       {blocks.length > 0 && (
         <ul role="list" className="absolute inset-0">
           {blocks.map((block) => {
+            // A block that would run past midnight (a 23:45 task with no end) stops at the bottom,
+            // moving up if that leaves it shorter than the least a block is drawn.
+            const minutes = Math.max(Math.min(block.end, 24 * 60) - block.start, MIN_BLOCK_MINUTES);
             const place = {
-              top: (block.start / 60) * HOUR_PX,
-              // A block that would run past midnight (a 23:45 task with no end) stops at the bottom.
-              height: (Math.max(Math.min(block.end, 24 * 60) - block.start, 15) / 60) * HOUR_PX,
+              top: (Math.min(block.start, 24 * 60 - minutes) / 60) * HOUR_PX,
+              height: (minutes / 60) * HOUR_PX,
               left: `${(block.lane / block.lanes) * 100}%`,
               width: `calc(${100 / block.lanes}% - 2px)`,
             };
@@ -119,6 +128,7 @@ function DayColumn({
               <EventChip
                 key={`event:${entry.event.feedId}:${entry.event.id}`}
                 event={entry.event}
+                placement="block"
                 block={place}
               />
             ) : (
@@ -128,6 +138,7 @@ function DayColumn({
                 selected={entry.row.item.id === state.selectedId}
                 hasReminder={state.reminded.has(entry.row.item.id)}
                 focusing={entry.row.item.id === state.focusedId}
+                placement="block"
                 block={place}
               />
             );
