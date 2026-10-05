@@ -35,7 +35,7 @@ const ACCEPTED_APPS: string[] = ['get-to-it', 'checklist'];
  * Settings that describe this computer rather than the data: left out of an
  * export, ignored in an import, and kept when an import replaces the rest.
  */
-export const LOCAL_SETTINGS: (keyof Settings)[] = ['lastBackupAt', 'zoom'];
+export const LOCAL_SETTINGS: (keyof Settings)[] = ['lastBackupAt', 'zoom', 'calendarFeeds'];
 
 export function makeSnapshot(tables: Tables, settings: Settings, now = Date.now()): Snapshot {
   const exported: Partial<Settings> = { ...settings };

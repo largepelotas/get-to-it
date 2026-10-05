@@ -1,4 +1,5 @@
 mod db;
+mod feeds;
 mod files;
 mod reminders;
 mod tray;
@@ -145,6 +146,7 @@ pub fn run() {
             db::db_batch,
             db::db_backup,
             reminders::set_reminder_schedule,
+            feeds::fetch_calendar_feed,
             files::save_text_file,
             files::open_text_file,
             files::save_files,

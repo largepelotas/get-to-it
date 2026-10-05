@@ -3,8 +3,8 @@ import clsx from 'clsx';
 import { format } from 'date-fns';
 import { formatLongDate, fromDateKey, type DateKey } from '@/lib/dates';
 import { dayDropId } from '@/components/views/dayDrop';
-import { monthGrid } from '@/store/calendar';
-import type { DueRow } from '@/store/smart';
+import { monthGrid, type CalendarEntry } from '@/store/calendar';
+import { EventChip } from './EventChip';
 import { TaskChip } from './TaskChip';
 
 /** One day of the month grid: its number and task chips; a drop target for dragged tasks. */
@@ -12,7 +12,7 @@ function DayCell({
   date,
   today,
   inMonth,
-  rows,
+  entries,
   selectedId,
   reminded,
   focusedId,
@@ -20,7 +20,7 @@ function DayCell({
   date: DateKey;
   today: DateKey;
   inMonth: boolean;
-  rows: DueRow[];
+  entries: CalendarEntry[];
   selectedId: string | null;
   reminded: Set<string>;
   focusedId: string | null;
@@ -28,9 +28,13 @@ function DayCell({
   const { setNodeRef, isOver } = useDroppable({ id: dayDropId(date) });
   const day = fromDateKey(date);
   const long = formatLongDate(date);
-  const name = rows.length
-    ? `${long}, ${rows.length === 1 ? '1 task' : `${rows.length} tasks`}`
-    : long;
+  const tasks = entries.filter((e) => e.kind === 'task').length;
+  const events = entries.length - tasks;
+  const counts = [
+    tasks && (tasks === 1 ? '1 task' : `${tasks} tasks`),
+    events && (events === 1 ? '1 event' : `${events} events`),
+  ].filter(Boolean);
+  const name = counts.length ? `${long}, ${counts.join(', ')}` : long;
   const isToday = date === today;
   return (
     <section
@@ -56,17 +60,24 @@ function DayCell({
           {day.getDate() === 1 ? format(day, 'MMM d') : day.getDate()}
         </span>
       </div>
-      {rows.length > 0 && (
+      {entries.length > 0 && (
         <ul role="list" className="flex flex-col gap-0.5">
-          {rows.map((row) => (
-            <TaskChip
-              key={row.item.id}
-              row={row}
-              selected={row.item.id === selectedId}
-              hasReminder={reminded.has(row.item.id)}
-              focusing={row.item.id === focusedId}
-            />
-          ))}
+          {entries.map((entry) =>
+            entry.kind === 'event' ? (
+              <EventChip
+                key={`event:${entry.event.feedId}:${entry.event.id}`}
+                event={entry.event}
+              />
+            ) : (
+              <TaskChip
+                key={entry.row.item.id}
+                row={entry.row}
+                selected={entry.row.item.id === selectedId}
+                hasReminder={reminded.has(entry.row.item.id)}
+                focusing={entry.row.item.id === focusedId}
+              />
+            ),
+          )}
         </ul>
       )}
     </section>
@@ -86,7 +97,7 @@ export function MonthGrid({
   anchor: DateKey;
   today: DateKey;
   weekStartsOn: 0 | 1;
-  byDay: Map<DateKey, DueRow[]>;
+  byDay: Map<DateKey, CalendarEntry[]>;
   selectedId: string | null;
   reminded: Set<string>;
   focusedId: string | null;
@@ -111,7 +122,7 @@ export function MonthGrid({
                 date={date}
                 today={today}
                 inMonth={date.startsWith(month)}
-                rows={byDay.get(date) ?? []}
+                entries={byDay.get(date) ?? []}
                 selectedId={selectedId}
                 reminded={reminded}
                 focusedId={focusedId}

@@ -5,6 +5,7 @@ import { Toaster, TooltipProvider } from './components/ui';
 import { useAppLifecycle } from './hooks/useAppLifecycle';
 import { useAppShortcuts } from './hooks/useAppShortcuts';
 import { useBackups } from './hooks/useBackups';
+import { useCalendarFeeds } from './hooks/useCalendarFeeds';
 import { useFocusTimer } from './hooks/useFocusTimer';
 import { useReminderScheduler } from './hooks/useReminders';
 import { useApplyTheme } from './hooks/useTheme';
@@ -19,6 +20,7 @@ export function App() {
   useAppLifecycle();
   useFocusTimer();
   useBackups();
+  useCalendarFeeds();
   const sidebarHidden = useData((s) => s.settings.sidebarHidden);
   const renaming = useUI((s) => s.renaming);
   const creatingList = useUI((s) => s.dialog?.kind === 'newList');

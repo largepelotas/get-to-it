@@ -318,6 +318,13 @@ export interface MatrixSettings {
   important: string;
 }
 
+/** A calendar link whose events show read-only beside tasks. The link is a secret. */
+export interface CalendarFeed {
+  id: string;
+  name: string;
+  url: string;
+}
+
 export interface Settings {
   theme: 'system' | 'light' | 'dark';
   /** The colour scheme, independent of the light/dark theme. */
@@ -357,6 +364,8 @@ export interface Settings {
   breakMinutes: number;
   /** The window's zoom, 1 being 100%. Per computer: not exported or imported. */
   zoom: number;
+  /** Calendar links to show events from. Per computer: the links are secrets, so never exported. */
+  calendarFeeds: CalendarFeed[];
 }
 
 export const DEFAULT_MATRIX: MatrixSettings = { urgent: 'overdue | today', important: 'p1 | p2' };
@@ -400,6 +409,7 @@ export const DEFAULT_SETTINGS: Settings = {
   focusMinutes: DEFAULT_FOCUS_MINUTES,
   breakMinutes: DEFAULT_BREAK_MINUTES,
   zoom: 1,
+  calendarFeeds: [],
 };
 
 /** A complete copy of the data, used for export, import and backups. */

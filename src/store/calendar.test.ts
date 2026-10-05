@@ -3,18 +3,22 @@ import { MemoryRepository } from '@/data/memory';
 import { createItem } from './actions/items';
 import { createList } from './actions/lists';
 import {
+  allDayEntries,
   allDayRows,
+  entriesByDay,
   monthGrid,
   monthTitle,
   rangeTitle,
   rowsByDay,
   slotFromOffset,
   timedBlocks,
+  timedEntryBlocks,
   unscheduledRows,
   unscheduledSections,
 } from './calendar';
 import { resetForTests, useData } from './data';
 import { dueRows } from './smart';
+import type { FeedEvent } from './feeds';
 
 describe('monthGrid', () => {
   // Bug prevented: the grid starting on the wrong weekday, or missing the month's last days.
@@ -180,5 +184,50 @@ describe('slotFromOffset', () => {
   it('clamps to 00:00 through 23:45', () => {
     expect(slotFromOffset(-30, 48)).toBe(0);
     expect(slotFromOffset(5000, 48)).toBe(1425);
+  });
+});
+
+describe('events on the calendar', () => {
+  const event = (title: string, startTime: string | null, endTime: string | null): FeedEvent => ({
+    id: title,
+    title,
+    date: '2026-10-02',
+    startTime,
+    endTime,
+    location: null,
+    feedId: 'F',
+    feedName: 'Feed',
+  });
+  const setup = (events: FeedEvent[]) => {
+    resetForTests(new MemoryRepository());
+    const list = createList({ type: 'todo', title: 'Tasks' });
+    createItem(list, { text: 'Task', dueDate: '2026-10-02', dueTime: '09:00', endTime: '10:00' });
+    createItem(list, { text: 'Plain', dueDate: '2026-10-02' });
+    const rows = dueRows(useData.getState().tables.items, useData.getState().tables.lists);
+    return entriesByDay(rows, new Map([['2026-10-02', events]])).get('2026-10-02')!;
+  };
+  const name = (e: ReturnType<typeof setup>[number]) =>
+    e.kind === 'task' ? e.row.item.text : e.event.title;
+
+  // Bug prevented: an event drawn on top of a task that runs at the same time.
+  it('shares lanes between a timed event and an overlapping task', () => {
+    const blocks = timedEntryBlocks(setup([event('Meeting', '09:30', '10:30')]));
+    expect(blocks.map((b) => `${name(b.value)}:${b.start}-${b.end}:${b.lane}/${b.lanes}`)).toEqual([
+      'Task:540-600:0/2',
+      'Meeting:570-630:1/2',
+    ]);
+  });
+
+  // Bug prevented: an event with no end getting no height, or a different default from a task.
+  it('gives an event with no end 30 minutes', () => {
+    const blocks = timedEntryBlocks(setup([event('Call', '14:00', null)]));
+    expect(blocks.find((b) => name(b.value) === 'Call')).toMatchObject({ start: 840, end: 870 });
+  });
+
+  // Bug prevented: all-day events in the time grid, or timed ones in the all-day row.
+  it('puts all-day events in the all-day row, and lists events before tasks', () => {
+    const entries = setup([event('Holiday', null, null), event('Meeting', '09:30', '10:30')]);
+    expect(entries.map(name)).toEqual(['Holiday', 'Meeting', 'Task', 'Plain']);
+    expect(allDayEntries(entries).map(name)).toEqual(['Holiday', 'Plain']);
   });
 });

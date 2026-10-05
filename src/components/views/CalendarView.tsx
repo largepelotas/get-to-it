@@ -25,11 +25,12 @@ import { colorVar } from '@/lib/theme';
 import {
   monthTitle,
   rangeTitle,
-  rowsByDay,
+  entriesByDay,
   slotFromOffset,
   unscheduledRows,
 } from '@/store/calendar';
 import { setSetting, useData } from '@/store/data';
+import { useEventsByDay } from '@/store/feeds';
 import { useFocus } from '@/store/focus';
 import { dueRows, type DueRow } from '@/store/smart';
 import { selectedIds, selectItem, useUI } from '@/store/ui';
@@ -73,7 +74,8 @@ export function CalendarView() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const rows = useMemo(() => dueRows(items, lists), [items, lists]);
-  const byDay = useMemo(() => rowsByDay(rows), [rows]);
+  const events = useEventsByDay();
+  const byDay = useMemo(() => entriesByDay(rows, events), [rows, events]);
   const undated = useMemo(
     () => (panelOpen ? unscheduledRows(items, lists) : []),
     [panelOpen, items, lists],
