@@ -155,7 +155,6 @@ the installers attached.
 More about the code:
 
 - [Architecture](docs/ARCHITECTURE.md): how it's built, the decisions behind it and known gaps
-- [Todoist and TickTick comparison](docs/todoist-gap.md): what's there, what's missing and what to build next
 
 ## License
 

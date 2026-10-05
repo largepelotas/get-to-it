@@ -3,7 +3,6 @@
 How Get To It is built, the decisions behind it, and what's known to be
 missing. Keep this file describing the app as it is: when something changes,
 change the paragraph that covers it instead of adding a note about the change.
-What to build next is in [todoist-gap.md](todoist-gap.md).
 
 ## Status
 
@@ -12,11 +11,10 @@ with four kinds of list: to-do, grocery, habits and rich-text notes. It's for
 one person: data stays on the computer in SQLite, builds are unsigned, and
 there's no sync and no auto-update.
 
-Built and working: everything in the "Have" rows of
-[todoist-gap.md](todoist-gap.md) (quick add, subtasks, sections, labels,
+Built and working: quick add, subtasks, sections, labels,
 filters, repeats, reminders, deadlines and time ranges, the focus timer,
 Today/Tomorrow/Next 7 days/Upcoming, the calendar, boards, the Eisenhower
-matrix, Completed and Statistics), plus grocery lists, habits, notes, the
+matrix, Completed and Statistics, plus grocery lists, habits, notes, the
 command palette, undo, export, import and daily backups. The desktop build
 has been checked by hand on macOS and Windows.
 
@@ -392,7 +390,7 @@ history)`, which only returns categories that still exist.
   and by `useApplyTheme`, which also applies `settings.zoom` (`lib/zoom.ts`:
   `ZOOM_LEVELS` 80–200%, `stepZoom`, `cleanZoom`, `formatZoom`; changed from
   Settings, the palette or the shortcuts, with a "Zoom 125%" toast). The `dark:` variant follows `data-theme` too.
-- Colour schemes: five palettes shared with another project (Graphite,
+- Colour schemes: five palettes (Graphite,
   Paper, Moss, Plum, High contrast), each with a light
   and a dark theme, picked in Settings or the palette ("Use the … colour
   scheme"). `settings.palette` (`PaletteName`, default `graphite`, the
@@ -402,7 +400,7 @@ history)`, which only returns categories that still exist.
   `applyPalette` sets `<html data-palette>`, left off for Graphite, whose
   values are the bare `:root` rules; each other palette has a
   `[data-palette='…']` rule and a `[data-palette='…'][data-theme='dark']`
-  one. Values come from another project's DESIGN.md: `surface` is its `bg`,
+  one. Values come from a design system kept outside this repo: `surface` is its `bg`,
   `sidebar` its rail, `elevated` its raised surface, `fg`/`fg-muted`/
   `fg-subtle` its three inks, `hover` its ink wash, `danger` its fail
   colour; `selected` and `accent-soft` are the accent at 0.12 and
@@ -987,7 +985,7 @@ drop, from)` in `commands.ts`: a section column → `moveTasksToSection`
   filtering Completed by list or label, exporting statistics, and a task
   that was un-ticked and ticked again counts on its latest day only (the
   data keeps one `completedAt`).
-- Habits (after step 12; step 13 of `docs/todoist-gap.md`). A fourth list
+- Habits. A fourth list
   type, `'habit'`. A habit is an `Item` in a habit list with `Item.habit`
   (`{ period: 'day' }` or `{ period: 'week', times }`, null elsewhere), so
   ordering, renaming, Trash, undo and search come free; `Item.checked` is
