@@ -62,8 +62,6 @@ The five colour schemes: Graphite, Paper, Moss, Plum and High contrast.
   <img src="docs/screenshots/schemes-high-contrast.png" alt="High contrast colour scheme" width="49%">
 </p>
 
-To make these again, run `npm run screenshots`.
-
 ## Install
 
 Download the latest installer from the
