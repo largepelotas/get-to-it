@@ -5,8 +5,8 @@ import { useLayoutEffect, useRef } from 'react';
 import { alldayDropId, slotDropId } from '@/components/views/dayDrop';
 import { useNow } from '@/hooks/useNow';
 import { formatLongDate, formatTime, fromDateKey, timeOfMinutes, type DateKey } from '@/lib/dates';
-import { allDayRows, timedBlocks } from '@/store/calendar';
-import type { DueRow } from '@/store/smart';
+import { allDayEntries, timedEntryBlocks, type CalendarEntry } from '@/store/calendar';
+import { EventChip } from './EventChip';
 import { TaskChip } from './TaskChip';
 
 /** How tall one hour is on the time grid, in pixels. */
@@ -33,7 +33,15 @@ const GRID_COLUMNS = (days: number) => ({
 });
 
 /** A day's all-day cell: its untimed tasks, and a drop target that clears a task's time. */
-function AllDayCell({ date, rows, state }: { date: DateKey; rows: DueRow[]; state: ChipState }) {
+function AllDayCell({
+  date,
+  entries,
+  state,
+}: {
+  date: DateKey;
+  entries: CalendarEntry[];
+  state: ChipState;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: alldayDropId(date) });
   return (
     <div
@@ -45,17 +53,24 @@ function AllDayCell({ date, rows, state }: { date: DateKey; rows: DueRow[]; stat
         isOver && 'bg-hover ring-1 ring-accent',
       )}
     >
-      {rows.length > 0 && (
+      {entries.length > 0 && (
         <ul role="list" className="flex flex-col gap-0.5">
-          {rows.map((row) => (
-            <TaskChip
-              key={row.item.id}
-              row={row}
-              selected={row.item.id === state.selectedId}
-              hasReminder={state.reminded.has(row.item.id)}
-              focusing={row.item.id === state.focusedId}
-            />
-          ))}
+          {entries.map((entry) =>
+            entry.kind === 'event' ? (
+              <EventChip
+                key={`event:${entry.event.feedId}:${entry.event.id}`}
+                event={entry.event}
+              />
+            ) : (
+              <TaskChip
+                key={entry.row.item.id}
+                row={entry.row}
+                selected={entry.row.item.id === state.selectedId}
+                hasReminder={state.reminded.has(entry.row.item.id)}
+                focusing={entry.row.item.id === state.focusedId}
+              />
+            ),
+          )}
         </ul>
       )}
     </div>
@@ -65,20 +80,20 @@ function AllDayCell({ date, rows, state }: { date: DateKey; rows: DueRow[]; stat
 /** A day's column of the time grid: hour lines, its timed tasks as blocks, and a drop target for times. */
 function DayColumn({
   date,
-  rows,
+  entries,
   state,
   nowMinutes,
   ghost,
 }: {
   date: DateKey;
-  rows: DueRow[];
+  entries: CalendarEntry[];
   state: ChipState;
   /** Minutes from midnight now, when this column is today's; otherwise null. */
   nowMinutes: number | null;
   ghost: SlotGhost | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: slotDropId(date) });
-  const blocks = timedBlocks(rows);
+  const blocks = timedEntryBlocks(entries);
   return (
     <section
       ref={setNodeRef}
@@ -91,22 +106,32 @@ function DayColumn({
       ))}
       {blocks.length > 0 && (
         <ul role="list" className="absolute inset-0">
-          {blocks.map((block) => (
-            <TaskChip
-              key={block.row.item.id}
-              row={block.row}
-              selected={block.row.item.id === state.selectedId}
-              hasReminder={state.reminded.has(block.row.item.id)}
-              focusing={block.row.item.id === state.focusedId}
-              block={{
-                top: (block.start / 60) * HOUR_PX,
-                // A block that would run past midnight (a 23:45 task with no end) stops at the bottom.
-                height: (Math.max(Math.min(block.end, 24 * 60) - block.start, 15) / 60) * HOUR_PX,
-                left: `${(block.lane / block.lanes) * 100}%`,
-                width: `calc(${100 / block.lanes}% - 2px)`,
-              }}
-            />
-          ))}
+          {blocks.map((block) => {
+            const place = {
+              top: (block.start / 60) * HOUR_PX,
+              // A block that would run past midnight (a 23:45 task with no end) stops at the bottom.
+              height: (Math.max(Math.min(block.end, 24 * 60) - block.start, 15) / 60) * HOUR_PX,
+              left: `${(block.lane / block.lanes) * 100}%`,
+              width: `calc(${100 / block.lanes}% - 2px)`,
+            };
+            const entry = block.value;
+            return entry.kind === 'event' ? (
+              <EventChip
+                key={`event:${entry.event.feedId}:${entry.event.id}`}
+                event={entry.event}
+                block={place}
+              />
+            ) : (
+              <TaskChip
+                key={entry.row.item.id}
+                row={entry.row}
+                selected={entry.row.item.id === state.selectedId}
+                hasReminder={state.reminded.has(entry.row.item.id)}
+                focusing={entry.row.item.id === state.focusedId}
+                block={place}
+              />
+            );
+          })}
         </ul>
       )}
       {ghost && ghost.date === date && (
@@ -146,7 +171,7 @@ export function TimeGrid({
 }: {
   days: DateKey[];
   today: DateKey;
-  byDay: Map<DateKey, DueRow[]>;
+  byDay: Map<DateKey, CalendarEntry[]>;
   selectedId: string | null;
   reminded: Set<string>;
   focusedId: string | null;
@@ -166,7 +191,7 @@ export function TimeGrid({
     scrolledFor.current = key;
     let earliest = Infinity;
     for (const date of days) {
-      for (const block of timedBlocks(byDay.get(date) ?? []))
+      for (const block of timedEntryBlocks(byDay.get(date) ?? []))
         earliest = Math.min(earliest, block.start);
     }
     const top = Math.max(0, Math.min(DEFAULT_TOP_HOUR * 60, earliest - 60));
@@ -211,7 +236,7 @@ export function TimeGrid({
           <AllDayCell
             key={date}
             date={date}
-            rows={allDayRows(byDay.get(date) ?? [])}
+            entries={allDayEntries(byDay.get(date) ?? [])}
             state={state}
           />
         ))}
@@ -240,7 +265,7 @@ export function TimeGrid({
             <DayColumn
               key={date}
               date={date}
-              rows={byDay.get(date) ?? []}
+              entries={byDay.get(date) ?? []}
               state={state}
               nowMinutes={date === today ? nowMinutes : null}
               ghost={ghost}

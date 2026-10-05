@@ -8,6 +8,7 @@ import { createItem } from '@/store/actions/items';
 import { formatTime } from '@/lib/dates';
 import { createList } from '@/store/actions/lists';
 import { resetForTests, setSetting, useData } from '@/store/data';
+import { resetFeedsForTests, useFeeds } from '@/store/feeds';
 import { navigate, openDialog, useUI } from '@/store/ui';
 
 let work: string;
@@ -23,6 +24,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 9, 2, 12));
   resetForTests(new MemoryRepository());
+  resetFeedsForTests();
   useUI.setState({
     view: { kind: 'calendar' },
     dialog: null,
@@ -219,5 +221,38 @@ describe('Calendar week and 3-day layouts', () => {
     expect(screen.getByRole('region', { name: 'Friday, October 2' })).toContainElement(lines[0]);
     // 12:00 is 12 * 48 px down, less half the 2px line.
     expect(lines[0]).toHaveStyle({ top: '575px' });
+  });
+
+  // Bug prevented: events missing from their day, or drawn like tasks (with a checkbox or a drag handle).
+  it('shows an event from a calendar link on its day with no task controls', () => {
+    setSetting('calendarFeeds', [{ id: 'F', name: 'Team', url: 'https://example.test/c.ics' }]);
+    useFeeds.setState({
+      feeds: {
+        F: {
+          status: 'ok',
+          error: null,
+          fetchedAt: 1,
+          events: [
+            {
+              id: 'e1',
+              title: 'Planning',
+              date: '2026-10-02',
+              startTime: '10:00',
+              endTime: '11:00',
+              location: 'Room 4',
+            },
+          ],
+        },
+      },
+    });
+    render(<App />);
+    const friday = day('Friday, October 2, 1 task, 1 event');
+    const chip = friday.getByRole('group', { name: /^Planning, .*, Team$/ });
+    expect(chip).toHaveAttribute('title', 'Room 4');
+    expect(chip.querySelector('button, input')).toBeNull();
+    expect(chip).not.toHaveAttribute('aria-roledescription');
+    // Only the task is a button.
+    expect(friday.getAllByRole('button')).toHaveLength(1);
+    expect(day('Saturday, October 3').queryByRole('group', { name: /Planning/ })).toBeNull();
   });
 });

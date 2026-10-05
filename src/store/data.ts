@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { opKey, type LoadResult, type Repository, type WriteOp } from '@/data/repository';
 import { isTimeString } from '@/lib/dates';
+import { cleanFeeds } from '@/lib/feedLinks';
 import { cleanMinutes } from '@/lib/focus';
 import { resolvePaletteName } from '@/lib/theme';
 import { cleanZoom } from '@/lib/zoom';
@@ -75,6 +76,7 @@ function normalizeSettings(stored: Partial<Settings>): Settings {
   // A palette saved under an old name becomes its replacement; unknown names fall back to the default.
   settings.palette = resolvePaletteName(settings.palette) ?? DEFAULT_SETTINGS.palette;
   settings.zoom = cleanZoom(settings.zoom);
+  settings.calendarFeeds = cleanFeeds(settings.calendarFeeds);
   settings.focusMinutes = cleanMinutes(
     settings.focusMinutes,
     DEFAULT_FOCUS_MINUTES,

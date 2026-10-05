@@ -11,6 +11,7 @@ import { createList } from '@/store/actions/lists';
 import { resetForTests, setSetting, useData } from '@/store/data';
 import { fireTime } from '@/lib/reminders';
 import { addReminder, markFired } from '@/store/actions/reminders';
+import { resetFeedsForTests, useFeeds } from '@/store/feeds';
 import { navigate, openDialog, openList, useUI } from '@/store/ui';
 
 let work: string;
@@ -23,6 +24,7 @@ beforeEach(() => {
   // A toast from an earlier test would give a second Undo button.
   toast.dismiss();
   resetForTests(new MemoryRepository());
+  resetFeedsForTests();
   useUI.setState({
     view: { kind: 'today' },
     dialog: null,
@@ -518,5 +520,62 @@ describe('Daily review setting', () => {
     expect(useData.getState().settings.dailyReviewTime).toBe('07:30');
     await user.click(box);
     expect(useData.getState().settings.dailyReviewTime).toBeNull();
+  });
+});
+
+describe('events from calendar links', () => {
+  const withEvents = (events: { date: string; title: string; startTime: string | null }[]) => {
+    setSetting('calendarFeeds', [{ id: 'F', name: 'Team', url: 'https://example.test/c.ics' }]);
+    useFeeds.setState({
+      feeds: {
+        F: {
+          status: 'ok',
+          error: null,
+          fetchedAt: 1,
+          events: events.map((e, i) => ({ id: `e${i}`, endTime: null, location: null, ...e })),
+        },
+      },
+    });
+  };
+
+  // Bug prevented: events missing from Today, or counted and selectable as tasks.
+  it('lists the events of today above its tasks without making them tasks', () => {
+    withEvents([
+      { date: today, title: 'Team sync', startTime: '09:00' },
+      { date: today, title: 'Bank holiday', startTime: null },
+    ]);
+    createItem(work, { text: 'Write report', dueDate: today });
+    render(<App />);
+    const events = section('Today').getByRole('list', { name: 'Events' });
+    expect(
+      within(events)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([expect.stringContaining('Bank holiday'), expect.stringContaining('Team sync')]);
+    expect(within(events).getByText('All day')).toBeInTheDocument();
+    expect(within(events).getAllByText('Team')).toHaveLength(2);
+    expect(within(events).queryByRole('checkbox')).toBeNull();
+    // Tasks keep their own list, and the sidebar count is tasks only.
+    expect(section('Today').getByRole('listitem', { name: 'Write report' })).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /^Today/ })).getByText('1')).toBeVisible();
+  });
+
+  // Bug prevented: a day with only events disappearing, or events landing on the wrong day.
+  it('shows a section for a day with events but no tasks, in Tomorrow and Next 7 days', async () => {
+    withEvents([{ date: tomorrow, title: 'Dentist', startTime: '15:00' }]);
+    navigate({ kind: 'tomorrow' });
+    const user = userEvent.setup();
+    render(<App />);
+    expect(section('Tomorrow').getByText('Dentist')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Next 7 days/ }));
+    expect(screen.getAllByText('Dentist')).toHaveLength(1);
+  });
+
+  // Bug prevented: events turning up under Overdue.
+  it('never puts events under Overdue', () => {
+    withEvents([{ date: yesterday, title: 'Old meeting', startTime: '09:00' }]);
+    createItem(work, { text: 'Late report', dueDate: yesterday });
+    render(<App />);
+    expect(screen.queryByText('Old meeting')).toBeNull();
   });
 });

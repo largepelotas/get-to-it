@@ -42,6 +42,7 @@ import {
 } from '@/lib/dates';
 import { colorVar } from '@/lib/theme';
 import { useData } from '@/store/data';
+import { useEventsByDay } from '@/store/feeds';
 import { groupRows, sortRows, type GroupContext } from '@/store/arrange';
 import type { BoardColumn } from '@/store/board';
 import { selectedIds, setUpcomingFrom, useUI, type View } from '@/store/ui';
@@ -242,6 +243,7 @@ export function TodayView() {
   const shown = useMemo(() => [...overdue, ...dueToday], [overdue, dueToday]);
   const { sorted, sections: grouped } = useArrangement(TODAY_VIEW, shown);
   const board = useBoard(TODAY_VIEW, shown);
+  const todayEvents = useEventsByDay().get(today);
 
   const sections: SmartSection[] = [];
   if (grouped) sections.push(...grouped);
@@ -255,8 +257,14 @@ export function TodayView() {
         actions: <RescheduleOverdue ids={overdue.map((r) => r.item.id)} />,
       });
     }
-    if (dueToday.length) {
-      sections.push({ key: 'Today', title: 'Today', rows: sorted(dueToday), timeOnly: true });
+    if (dueToday.length || todayEvents?.length) {
+      sections.push({
+        key: 'Today',
+        title: 'Today',
+        rows: sorted(dueToday),
+        events: todayEvents,
+        timeOnly: true,
+      });
     }
   }
 
@@ -312,10 +320,19 @@ export function TomorrowView() {
   const dueTomorrow = useMemo(() => tomorrowModel(rows, today), [rows, today]);
   const { sorted, sections: grouped } = useArrangement(TOMORROW_VIEW, dueTomorrow);
   const board = useBoard(TOMORROW_VIEW, dueTomorrow);
+  const tomorrowEvents = useEventsByDay().get(tomorrow);
   const sections: SmartSection[] =
     grouped ??
-    (dueTomorrow.length
-      ? [{ key: 'Tomorrow', title: 'Tomorrow', rows: sorted(dueTomorrow), timeOnly: true }]
+    (dueTomorrow.length || tomorrowEvents?.length
+      ? [
+          {
+            key: 'Tomorrow',
+            title: 'Tomorrow',
+            rows: sorted(dueTomorrow),
+            events: tomorrowEvents,
+            timeOnly: true,
+          },
+        ]
       : []);
   const count = dueTomorrow.length;
 
@@ -362,6 +379,7 @@ export function Next7View() {
   const shown = useMemo(() => [...overdue, ...days.flatMap((d) => d.rows)], [overdue, days]);
   const { sorted, sections: grouped } = useArrangement(NEXT7_VIEW, shown);
   const board = useBoard(NEXT7_VIEW, shown);
+  const events = useEventsByDay();
 
   const sections: SmartSection[] = [];
   if (grouped) sections.push(...grouped);
@@ -388,6 +406,7 @@ export function Next7View() {
               ? `Tomorrow · ${long}`
               : long,
         rows: sorted(day.rows),
+        events: events.get(day.date),
         emptyText: 'Nothing due',
         timeOnly: true,
       });
@@ -518,6 +537,7 @@ export function UpcomingView() {
   const shown = useMemo(() => [...overdue, ...days.flatMap((d) => d.rows)], [overdue, days]);
   const { sorted, sections: grouped } = useArrangement(UPCOMING_VIEW, shown);
   const board = useBoard(UPCOMING_VIEW, shown);
+  const events = useEventsByDay();
   const group = useViewOptions(UPCOMING_VIEW).group;
   const [dragged, setDragged] = useState<DueRow | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -546,6 +566,7 @@ export function UpcomingView() {
               ? `Tomorrow · ${long}`
               : long,
         rows: sorted(day.rows),
+        events: events.get(day.date),
         emptyText: 'Nothing due',
         timeOnly: true,
         dropId: dayDropId(day.date),

@@ -2,7 +2,8 @@
 
 A free, private to-do app for macOS and Windows: to-do lists, grocery lists,
 habit lists and rich-text notes. Everything is stored on your computer: there
-is no account, no sync service and no telemetry.
+is no account, no sync service and no telemetry. The app goes online only to
+fetch calendar links you add.
 
 ![The Today view, with a task's details open](docs/screenshots/today.png)
 
@@ -12,6 +13,8 @@ is no account, no sync service and no telemetry.
   and labels. Dates can be typed in plain words ("tomorrow 3pm").
 - **Views** for Today, Tomorrow, Next 7 days, Upcoming, a calendar, a priority
   matrix, saved filters, completed tasks and stats.
+- **Calendar links:** paste an ICS link (for example Outlook's "Publish a
+  calendar") and its events show, read-only, beside your tasks.
 - **Boards:** show a list or view as a board, with columns by date, priority,
   list or label. Dragging a card to another priority column changes its
   priority.
@@ -87,7 +90,8 @@ a newer one, and the licences of the libraries Get To It is built with.
 
 ## Your data
 
-Get To It never connects to the internet. The only thing that leaves the app
+Get To It goes online only to fetch the calendar links you add in Settings,
+and only to read them. Apart from that, the only thing that leaves the app
 is a link you click, which opens in your browser or mail app. (On Windows, the
 installer downloads Microsoft's WebView2 runtime if the PC doesn't have it.)
 

@@ -3,6 +3,7 @@ import type { Item, List } from '@/data/types';
 import { addDaysKey, fromDateKey, minutesOf, startOfWeekKey, type DateKey } from '@/lib/dates';
 import { bySortKey } from '@/lib/order';
 import { openRows, type DueRow } from './smart';
+import type { FeedEvent } from './feeds';
 
 /** The weeks of the month that holds `anchor`: from the week with the 1st to the week with the last day. */
 export function monthGrid(anchor: DateKey, weekStartsOn: 0 | 1): DateKey[][] {
@@ -83,9 +84,37 @@ export function unscheduledSections(
 /** How tall a task with no end time is drawn, in minutes. */
 const DEFAULT_BLOCK_MINUTES = 30;
 
-/** A timed task placed on a day's time grid. */
-export interface TimedBlock {
-  row: DueRow;
+/** What a calendar day holds: a task, or a read-only event from a calendar link. */
+export type CalendarEntry = { kind: 'task'; row: DueRow } | { kind: 'event'; event: FeedEvent };
+
+/**
+ * Everything on each day: that day's events first, then its tasks in the
+ * rows' own order. Days with neither have no entry.
+ */
+export function entriesByDay(
+  rows: DueRow[],
+  events: Map<DateKey, FeedEvent[]>,
+): Map<DateKey, CalendarEntry[]> {
+  const byDay = new Map<DateKey, CalendarEntry[]>();
+  for (const [date, list] of events) {
+    if (list.length)
+      byDay.set(
+        date,
+        list.map((event) => ({ kind: 'event', event })),
+      );
+  }
+  for (const [date, list] of rowsByDay(rows)) {
+    const tasks = list.map((row): CalendarEntry => ({ kind: 'task', row }));
+    const bucket = byDay.get(date);
+    if (bucket) bucket.push(...tasks);
+    else byDay.set(date, tasks);
+  }
+  return byDay;
+}
+
+/** A timed entry placed on a day's time grid. */
+export interface PlacedBlock<T> {
+  value: T;
   /** Minutes from midnight. */
   start: number;
   end: number;
@@ -95,23 +124,27 @@ export interface TimedBlock {
   lanes: number;
 }
 
+/** A timed task placed on a day's time grid. */
+export interface TimedBlock {
+  row: DueRow;
+  start: number;
+  end: number;
+  lane: number;
+  lanes: number;
+}
+
 /**
- * The rows with a due time as blocks on a time grid. A task with no end is 30
- * minutes long. Blocks that overlap share the width: each takes the first lane
- * whose last block has ended, and `lanes` counts the lanes of its cluster
- * (blocks that overlap one another, directly or through others).
+ * Lays out blocks that may overlap. Blocks that overlap share the width: each
+ * takes the first lane whose last block has ended, and `lanes` counts the
+ * lanes of its cluster (blocks that overlap one another, directly or through
+ * others).
  */
-export function timedBlocks(rows: DueRow[]): TimedBlock[] {
-  const blocks = rows
-    .filter((row) => row.item.dueTime)
-    .map((row, order) => {
-      const start = minutesOf(row.item.dueTime!);
-      const end = row.item.endTime ? minutesOf(row.item.endTime) : start + DEFAULT_BLOCK_MINUTES;
-      return { row, start, end, order };
-    })
+function layoutBlocks<T>(inputs: { value: T; start: number; end: number }[]): PlacedBlock<T>[] {
+  const blocks = inputs
+    .map((input, order) => ({ ...input, order }))
     .sort((a, b) => a.start - b.start || a.end - b.end || a.order - b.order);
-  const placed: TimedBlock[] = [];
-  let cluster: TimedBlock[] = [];
+  const placed: PlacedBlock<T>[] = [];
+  let cluster: PlacedBlock<T>[] = [];
   let laneEnds: number[] = [];
   let clusterEnd = 0;
   const closeCluster = () => {
@@ -119,13 +152,13 @@ export function timedBlocks(rows: DueRow[]): TimedBlock[] {
     cluster = [];
     laneEnds = [];
   };
-  for (const { row, start, end } of blocks) {
+  for (const { value, start, end } of blocks) {
     if (cluster.length && start >= clusterEnd) closeCluster();
     let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
     if (lane < 0) lane = laneEnds.length;
     laneEnds[lane] = end;
     clusterEnd = cluster.length ? Math.max(clusterEnd, end) : end;
-    const block: TimedBlock = { row, start, end, lane, lanes: 1 };
+    const block: PlacedBlock<T> = { value, start, end, lane, lanes: 1 };
     cluster.push(block);
     placed.push(block);
   }
@@ -133,9 +166,50 @@ export function timedBlocks(rows: DueRow[]): TimedBlock[] {
   return placed;
 }
 
+/** The start and end, in minutes, of an entry with a time; null for an all-day one. */
+function entrySpan(entry: CalendarEntry): { start: number; end: number } | null {
+  const [startTime, endTime] =
+    entry.kind === 'task'
+      ? [entry.row.item.dueTime, entry.row.item.endTime]
+      : [entry.event.startTime, entry.event.endTime];
+  if (!startTime) return null;
+  const start = minutesOf(startTime);
+  return { start, end: endTime ? minutesOf(endTime) : start + DEFAULT_BLOCK_MINUTES };
+}
+
+/**
+ * The tasks with a due time as blocks on a time grid. A task with no end is 30
+ * minutes long.
+ */
+export function timedBlocks(rows: DueRow[]): TimedBlock[] {
+  const inputs = rows.flatMap((row) => {
+    const span = entrySpan({ kind: 'task', row });
+    return span ? [{ value: row, ...span }] : [];
+  });
+  return layoutBlocks(inputs).map(({ value, ...rest }) => ({ row: value, ...rest }));
+}
+
+/**
+ * Tasks and events with a time as blocks, sharing lanes so none sits on top
+ * of another. An event with no end is 30 minutes long, like a task.
+ */
+export function timedEntryBlocks(entries: CalendarEntry[]): PlacedBlock<CalendarEntry>[] {
+  return layoutBlocks(
+    entries.flatMap((entry) => {
+      const span = entrySpan(entry);
+      return span ? [{ value: entry, ...span }] : [];
+    }),
+  );
+}
+
 /** The rows without a due time, for a day's all-day row. */
 export function allDayRows(rows: DueRow[]): DueRow[] {
   return rows.filter((row) => !row.item.dueTime);
+}
+
+/** The entries without a time, for a day's all-day row. */
+export function allDayEntries(entries: CalendarEntry[]): CalendarEntry[] {
+  return entries.filter((entry) => entrySpan(entry) === null);
 }
 
 /**

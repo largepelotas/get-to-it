@@ -9,7 +9,8 @@ change the paragraph that covers it instead of adding a note about the change.
 Get To It is a desktop app for macOS and Windows (Tauri 2, React, TypeScript)
 with four kinds of list: to-do, grocery, habits and rich-text notes. It's for
 one person: data stays on the computer in SQLite, builds are unsigned, and
-there's no sync and no auto-update.
+there's no sync and no auto-update. The only network use is fetching the
+calendar links you add (read-only; see Calendar under Screens).
 
 Built and working: quick add, subtasks, sections, labels,
 filters, repeats, reminders, deadlines and time ranges, the focus timer,
@@ -92,6 +93,12 @@ there (`"version": "../package.json"`). Bump it before tagging.
   `capabilities/default.json`). `save_files` takes relative paths only.
   `write_backup(name, contents, keep)` (into
   `<app data>/backups`, keeps the newest `keep`), `open_backups_folder`.
+- `feeds.rs`: `fetch_calendar_feed(url)` fetches a calendar link in Rust, so
+  the CSP can stay closed to outside connections. https only (`webcal://`
+  becomes `https://`; a redirect to anything else is refused), GET, 20 s, 5 redirects, 10 MB,
+  and only a body that starts with `BEGIN:VCALENDAR` counts, so it can't
+  be used to fetch anything else. Errors never contain the link, which is
+  a secret.
 - `tray.rs`: tray icon with Show/Quit; `set_tray_status(tooltip, title)`.
 - `lib.rs`: app lifecycle.
   - The window starts **hidden** and is shown when the frontend calls
@@ -370,7 +377,23 @@ history)`, which only returns categories that still exist.
 }`), `useAppLifecycle` (close to tray follows the setting, the quit
   listener, and the tray tooltip: "Get To It · 3 due today, 1 reminder"),
   `useAppShortcuts` and `useBackups` (the daily backup, checked 15 s
-  after launch and then hourly, desktop only; one error toast if it fails).
+  after launch and then hourly, desktop only; one error toast if it fails)
+  and `useCalendarFeeds` (refreshes the calendar links 3 s after launch,
+  every 30 minutes, when the list of links changes and when the day
+  rolls over; no timers without links; failures don't toast).
+- Calendar links: `settings.calendarFeeds` (`{ id, name, url }`, never
+  exported or imported: it is in `LOCAL_SETTINGS`). `platform`'s
+  `fetchCalendarFeed` calls the Rust command, or `fetch` in the browser
+  preview (which real links usually fail on cross-origin rules).
+  `lib/ics.ts` `parseFeed(text, from, to)` (async: `ical.js` is loaded
+  with `import()`) turns a file into one entry per event per day in the
+  computer's time zone: VTIMEZONEs registered first, repeats expanded
+  inside the window, exceptions and cancellations honoured, multi-day
+  events split. `store/feeds.ts` is a separate store (nothing is saved or
+  undoable): per link its events, status and error. `refreshFeeds` reads
+  60 days back and 365 ahead; one link failing doesn't affect the others
+  and keeps its last good events. `useEventsByDay()` groups events by day,
+  all day first.
 - `lib/keymap.ts`: `SHORTCUTS`, every app-wide shortcut by name, and
   `SHORTCUT_HELP`, what the Keyboard shortcuts dialog lists. Menus show
   shortcuts from here too. `useAppShortcuts` handles them: the palette
@@ -908,6 +931,19 @@ filter`, `Go to Eisenhower matrix`). Sorting and grouping: `store/arrange.ts`
   block to change its end, no agenda layout, dragging has no keyboard
   path (the due picker covers it), the calendar shows open tasks only,
   and Today/Upcoming still don't list a task on its deadline day.
+  **Events** from calendar links (Settings, Calendars: `CalendarsSection`)
+  show beside tasks, read-only. In the calendar, `entriesByDay`
+  makes a `CalendarEntry` (a task row or a `FeedEvent`) per day, events first; `timedEntryBlocks` lays tasks and events out in shared
+  lanes (an event with no end is 30 minutes, like a task) and
+  `allDayEntries` fills the all-day row. `EventChip` is a dashed-outline
+  chip with a calendar icon, named "title, time range or all day, calendar
+  name", with the location as a tooltip; it isn't a button, can't be
+  dragged, dropped on or selected. In Today, Tomorrow, Next 7 days and
+  Upcoming, `SmartSection.events` lists a day's events (`EventList`:
+  time or "All day", title, calendar) above its tasks. They aren't rows:
+  no selection, drag, keyboard navigation or task count. Overdue never
+  has events, and a day with events but no tasks still shows its section.
+  Upcoming shows events only on days it already lists.
 - Boards. Every view that
   can be sorted and grouped (a to-do list, Today, Tomorrow, Next 7 days,
   Upcoming, a label, a filter) can be shown as a board: a column per
@@ -1240,6 +1276,10 @@ Features and behaviour:
 
 - The calendar is drag-only: no adding a task on a day, completing one or
   moving one from the keyboard; month cells have no "+N more".
+- Calendar events aren't kept between launches (none show offline until the
+  first refresh), have no reminders, and don't appear on boards, when a
+  view is grouped, or in search. Outlook itself can take hours to update a
+  published link.
 - Grocery and habit lists have no multi-select or one-key actions.
 - A title being edited when a shortcut switches the view may not be saved
   (it commits on blur). Not confirmed.

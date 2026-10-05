@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { LocalStorageRepository } from '@/data/localStorage';
 import type { Repository } from '@/data/repository';
 import { SqliteRepository, type SqlExecutor } from '@/data/sqlite';
+import { looksLikeCalendar, normalizeFeedUrl } from '@/lib/feedLinks';
 import { isSafeUrl } from '@/lib/links';
 import { isBrowserShortcut, isEditableTarget } from '@/lib/shortcuts';
 import { BrowserScheduler, type ScheduledReminder } from './browserScheduler';
@@ -228,6 +229,32 @@ export async function saveTextFile(
   }
   // The dialog is shown by the native side, so a path never passes through here.
   return invoke<boolean>('save_text_file', { defaultName, contents, filter });
+}
+
+/**
+ * Fetches a calendar link (an .ics file) and returns its text. Only https and
+ * webcal links are accepted, and only a calendar comes back. The desktop app
+ * fetches in Rust, as its CSP lets the page connect nowhere; the browser
+ * preview uses `fetch`, which real Outlook links will usually fail on (CORS).
+ * Errors never include the link, which is a secret.
+ */
+export async function fetchCalendarFeed(url: string): Promise<string> {
+  const https = normalizeFeedUrl(url);
+  if (!https) throw new Error('The calendar link must start with https:// or webcal://.');
+  if (isTauri) return invoke<string>('fetch_calendar_feed', { url: https });
+  const response = await fetch(https, { method: 'GET', credentials: 'omit' }).catch(
+    (err: unknown) => {
+      throw new Error('Couldn’t reach the calendar. Check your connection and the link.', {
+        cause: err,
+      });
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`The calendar server answered with an error (${response.status}).`);
+  }
+  const text = await response.text();
+  if (!looksLikeCalendar(text)) throw new Error('That link didn’t return a calendar.');
+  return text;
 }
 
 /** Asks for a file and reads it. Returns null if the user cancelled. */

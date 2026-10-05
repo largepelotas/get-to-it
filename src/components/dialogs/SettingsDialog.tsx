@@ -14,6 +14,7 @@ import { setSetting, useData } from '@/store/data';
 import { liveTodoLists } from '@/store/sidebar';
 import { closeDialog } from '@/store/ui';
 import { AboutSection } from './AboutSection';
+import { CalendarsSection } from './CalendarsSection';
 import { GroceryCategoriesEditor } from './GroceryCategoriesEditor';
 import { MatrixSettingsFields } from './MatrixSettingsFields';
 
@@ -434,6 +435,10 @@ export function SettingsDialog() {
             onChange={set('closeToTray')}
           />
           <LaunchAtLogin />
+        </Section>
+
+        <Section title="Calendars">
+          <CalendarsSection />
         </Section>
 
         <Section title="Focus timer">

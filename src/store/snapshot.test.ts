@@ -802,3 +802,32 @@ describe('snapshots with broken references', () => {
     expect(Object.keys(checkIns)).toEqual(['C1', 'C3']);
   });
 });
+
+describe('calendar feeds', () => {
+  const feed = { id: 'F1', name: 'Work', url: 'https://example.test/secret.ics' };
+
+  // Bug prevented: a calendar link, which is a secret, leaks into an export or backup.
+  it('never writes the links to an export', () => {
+    setSetting('calendarFeeds', [feed]);
+    const json = exportNow();
+    expect(json).not.toContain('example.test');
+    expect('calendarFeeds' in parseSnapshot(json).settings).toBe(false);
+  });
+
+  // Bug prevented: importing a file from someone else adds feeds, or removes yours.
+  it('ignores feeds in an imported file and keeps this computer’s', async () => {
+    const hostile = JSON.stringify({
+      app: 'get-to-it',
+      version: 1,
+      tables: {},
+      settings: { calendarFeeds: [{ id: 'X', name: 'Theirs', url: 'https://evil.test/x.ics' }] },
+    });
+    const imported = parseSnapshot(hostile);
+    expect('calendarFeeds' in imported.settings).toBe(false);
+
+    setSetting('calendarFeeds', [feed]);
+    await replaceData(imported, ['calendarFeeds']);
+    expect(useData.getState().settings.calendarFeeds).toEqual([feed]);
+    expect((await repo.load()).settings.calendarFeeds).toEqual([feed]);
+  });
+});

@@ -6,6 +6,7 @@ import { SHORTCUTS } from '@/lib/keymap';
 import { matchesShortcut } from '@/lib/shortcuts';
 import { useItemsWithReminders } from '@/hooks/useReminders';
 import { isMac } from '@/platform';
+import type { FeedEvent } from '@/store/feeds';
 import type { DueRow } from '@/store/smart';
 import {
   clearReveal,
@@ -20,6 +21,7 @@ import {
   useUI,
 } from '@/store/ui';
 import { useFocus } from '@/store/focus';
+import { EventList } from './EventList';
 import { itemMenuEntries } from './itemMenu';
 import { ItemRow, type DragBits, type RowClickKind, type RowKeyMode } from './ItemRow';
 import { handleSelectionKey } from './selection';
@@ -33,6 +35,12 @@ export interface SmartSection {
   actions?: ReactNode;
   tone?: 'danger';
   rows: DueRow[];
+  /**
+   * Events from calendar links on this section's day, listed read-only above
+   * the rows. Not rows: they are no part of selection, dragging, keyboard
+   * navigation or the task count.
+   */
+  events?: FeedEvent[];
   /** Shown under the heading when there are no rows (otherwise an empty section is just a heading). */
   emptyText?: string;
   /** No heading: the view's own header already says what the rows are. */
@@ -290,7 +298,8 @@ export function SmartList({
                 {section.actions}
               </h2>
             )}
-            {!section.rows.length && section.emptyText && (
+            {section.events?.length ? <EventList events={section.events} /> : null}
+            {!section.rows.length && !section.events?.length && section.emptyText && (
               <p className="px-2 py-2 text-sm text-fg-muted">{section.emptyText}</p>
             )}
             <div role="list" className="pt-1">
