@@ -84,12 +84,17 @@ export function unscheduledSections(
 /** How tall a task with no end time is drawn, in minutes. */
 const DEFAULT_BLOCK_MINUTES = 30;
 
+/** No block is drawn shorter than this (20px at 48px an hour: a line of small text and its border). */
+export const MIN_BLOCK_MINUTES = 25;
+
 /** What a calendar day holds: a task, or a read-only event from a calendar link. */
 export type CalendarEntry = { kind: 'task'; row: DueRow } | { kind: 'event'; event: FeedEvent };
 
 /**
- * Everything on each day: that day's events first, then its tasks in the
- * rows' own order. Days with neither have no entry.
+ * Everything on each day, in one list: all-day entries first (events, then
+ * tasks, each in arrival order), then timed entries by start time with events
+ * and tasks mixed. On the same start time an event comes before a task;
+ * otherwise arrival order holds. Days with neither have no entry.
  */
 export function entriesByDay(
   rows: DueRow[],
@@ -108,6 +113,26 @@ export function entriesByDay(
     const bucket = byDay.get(date);
     if (bucket) bucket.push(...tasks);
     else byDay.set(date, tasks);
+  }
+  for (const [date, list] of byDay) {
+    const keyed = list.map((entry, order) => ({
+      entry,
+      order,
+      start: entrySpan(entry)?.start ?? null,
+    }));
+    const allDay = keyed.filter((k) => k.start === null);
+    const timed = keyed
+      .filter((k) => k.start !== null)
+      .sort(
+        (a, b) =>
+          a.start! - b.start! ||
+          Number(a.entry.kind === 'task') - Number(b.entry.kind === 'task') ||
+          a.order - b.order,
+      );
+    byDay.set(
+      date,
+      [...allDay, ...timed].map((k) => k.entry),
+    );
   }
   return byDay;
 }
@@ -153,11 +178,13 @@ function layoutBlocks<T>(inputs: { value: T; start: number; end: number }[]): Pl
     laneEnds = [];
   };
   for (const { value, start, end } of blocks) {
+    // A block is drawn at least MIN_BLOCK_MINUTES tall, so lanes are given out as if it ran that long.
+    const drawnEnd = Math.max(end, start + MIN_BLOCK_MINUTES);
     if (cluster.length && start >= clusterEnd) closeCluster();
     let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
     if (lane < 0) lane = laneEnds.length;
-    laneEnds[lane] = end;
-    clusterEnd = cluster.length ? Math.max(clusterEnd, end) : end;
+    laneEnds[lane] = drawnEnd;
+    clusterEnd = cluster.length ? Math.max(clusterEnd, drawnEnd) : drawnEnd;
     const block: PlacedBlock<T> = { value, start, end, lane, lanes: 1 };
     cluster.push(block);
     placed.push(block);

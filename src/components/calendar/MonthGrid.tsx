@@ -1,11 +1,16 @@
 import { useDroppable } from '@dnd-kit/core';
 import clsx from 'clsx';
 import { format } from 'date-fns';
+import { useState } from 'react';
+import { Popover } from '@/components/ui/Popover';
 import { formatLongDate, fromDateKey, type DateKey } from '@/lib/dates';
 import { dayDropId } from '@/components/views/dayDrop';
 import { monthGrid, type CalendarEntry } from '@/store/calendar';
 import { EventChip } from './EventChip';
 import { TaskChip } from './TaskChip';
+
+/** A day shows at most this many entries; any more go behind a "+N more" button after them. */
+export const MAX_DAY_ENTRIES = 3;
 
 /** One day of the month grid: its number and task chips; a drop target for dragged tasks. */
 function DayCell({
@@ -36,6 +41,24 @@ function DayCell({
   ].filter(Boolean);
   const name = counts.length ? `${long}, ${counts.join(', ')}` : long;
   const isToday = date === today;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const overflow = entries.length > MAX_DAY_ENTRIES;
+  const shownEntries = overflow ? entries.slice(0, MAX_DAY_ENTRIES) : entries;
+  const hidden = entries.length - shownEntries.length;
+  const renderEntry = (entry: CalendarEntry, inPopover: boolean) =>
+    entry.kind === 'event' ? (
+      <EventChip key={`event:${entry.event.feedId}:${entry.event.id}`} event={entry.event} />
+    ) : (
+      <TaskChip
+        key={entry.row.item.id}
+        row={entry.row}
+        selected={entry.row.item.id === selectedId}
+        hasReminder={reminded.has(entry.row.item.id)}
+        focusing={entry.row.item.id === focusedId}
+        inPopover={inPopover}
+        onOpen={inPopover ? () => setMoreOpen(false) : undefined}
+      />
+    );
   return (
     <section
       ref={setNodeRef}
@@ -62,21 +85,30 @@ function DayCell({
       </div>
       {entries.length > 0 && (
         <ul role="list" className="flex flex-col gap-0.5">
-          {entries.map((entry) =>
-            entry.kind === 'event' ? (
-              <EventChip
-                key={`event:${entry.event.feedId}:${entry.event.id}`}
-                event={entry.event}
-              />
-            ) : (
-              <TaskChip
-                key={entry.row.item.id}
-                row={entry.row}
-                selected={entry.row.item.id === selectedId}
-                hasReminder={reminded.has(entry.row.item.id)}
-                focusing={entry.row.item.id === focusedId}
-              />
-            ),
+          {shownEntries.map((entry) => renderEntry(entry, false))}
+          {overflow && (
+            <li>
+              <Popover
+                open={moreOpen}
+                onOpenChange={setMoreOpen}
+                label={long}
+                className="w-64"
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={`${hidden} more on ${long}`}
+                    className="w-full cursor-pointer rounded-sm px-1.5 py-0.5 text-left text-xs text-fg-muted transition-colors hover:bg-hover"
+                  >
+                    +{hidden} more
+                  </button>
+                }
+              >
+                <h2 className="mb-2 font-semibold text-fg">{long}</h2>
+                <ul role="list" className="flex flex-col gap-0.5">
+                  {entries.map((entry) => renderEntry(entry, true))}
+                </ul>
+              </Popover>
+            </li>
           )}
         </ul>
       )}

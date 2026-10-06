@@ -6,6 +6,7 @@ import {
   allDayEntries,
   allDayRows,
   entriesByDay,
+  MIN_BLOCK_MINUTES,
   monthGrid,
   monthTitle,
   rangeTitle,
@@ -157,6 +158,26 @@ describe('timedBlocks', () => {
     ]);
     expect(shape(b)).toEqual(['A:540-570:0/1', 'B:570-600:0/1']);
   });
+
+  // Bug prevented: two 15-minute entries back to back drawn on top of each other, because each
+  // is drawn at least MIN_BLOCK_MINUTES tall and so really overlaps the next.
+  it('gives short back-to-back blocks their own lanes, keeping their real times', () => {
+    const b = blocksOf([
+      { text: 'A', dueTime: '10:00', endTime: '10:15' },
+      { text: 'B', dueTime: '10:15', endTime: '10:30' },
+    ]);
+    expect(MIN_BLOCK_MINUTES).toBe(25);
+    expect(shape(b)).toEqual(['A:600-615:0/2', 'B:615-630:1/2']);
+  });
+
+  // Bug prevented: the minimum height making 30-minute back-to-back blocks share space they do not need.
+  it('keeps 30-minute back-to-back blocks in one lane', () => {
+    const b = blocksOf([
+      { text: 'A', dueTime: '10:00', endTime: '10:30' },
+      { text: 'B', dueTime: '10:30', endTime: '11:00' },
+    ]);
+    expect(shape(b)).toEqual(['A:600-630:0/1', 'B:630-660:0/1']);
+  });
 });
 
 describe('allDayRows', () => {
@@ -225,9 +246,34 @@ describe('events on the calendar', () => {
   });
 
   // Bug prevented: all-day events in the time grid, or timed ones in the all-day row.
-  it('puts all-day events in the all-day row, and lists events before tasks', () => {
+  it('puts all-day events in the all-day row, and lists all-day entries before timed ones', () => {
     const entries = setup([event('Holiday', null, null), event('Meeting', '09:30', '10:30')]);
-    expect(entries.map(name)).toEqual(['Holiday', 'Meeting', 'Task', 'Plain']);
+    expect(entries.map(name)).toEqual(['Holiday', 'Plain', 'Task', 'Meeting']);
     expect(allDayEntries(entries).map(name)).toEqual(['Holiday', 'Plain']);
+  });
+
+  // Bug prevented: a day's events all listed before its tasks, whatever their times.
+  it('mixes timed events and tasks by start time', () => {
+    const entries = setup([event('Late', '15:00', null), event('Early', '08:00', null)]);
+    expect(entries.map(name)).toEqual(['Plain', 'Early', 'Task', 'Late']);
+  });
+
+  // Bug prevented: a task listed ahead of an event starting at the same time.
+  it('puts an event before a task on the same start time, and keeps arrival order otherwise', () => {
+    const entries = setup([event('Same', '09:00', null), event('Same2', '09:00', null)]);
+    expect(entries.map(name)).toEqual(['Plain', 'Same', 'Same2', 'Task']);
+  });
+
+  // Bug prevented: sorting scrambling a day whose entries have no time.
+  it('keeps the rows order on a day with only untimed tasks', () => {
+    resetForTests(new MemoryRepository());
+    const list = createList({ type: 'todo', title: 'Tasks' });
+    createItem(list, { text: 'One', dueDate: '2026-10-02' });
+    createItem(list, { text: 'Two', dueDate: '2026-10-02' });
+    createItem(list, { text: 'Three', dueDate: '2026-10-02' });
+    const rows = dueRows(useData.getState().tables.items, useData.getState().tables.lists);
+    const expected = rows.map((r) => r.item.text);
+    const entries = entriesByDay(rows, new Map()).get('2026-10-02')!;
+    expect(entries.map(name)).toEqual(expected);
   });
 });

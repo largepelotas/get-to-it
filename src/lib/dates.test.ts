@@ -5,6 +5,7 @@ import {
   formatDateKey,
   formatDue,
   formatDuration,
+  formatShortTime,
   formatTime,
   formatTimeRange,
   isOverdue,
@@ -74,6 +75,35 @@ describe('dates', () => {
 
   it('counts down to midnight', () => {
     expect(msUntilTomorrow(new Date(2026, 8, 30, 23, 59))).toBe(60_000);
+  });
+});
+
+describe('formatShortTime', () => {
+  const twelveHour = formatTime('14:00') !== '14:00';
+
+  // Bug prevented: "2:00 PM" crowding a month chip, or "2 PM" losing its minutes when not on the hour.
+  it('drops minutes on the hour only on a 12-hour clock', () => {
+    if (twelveHour) {
+      expect(formatShortTime('14:00')).toMatch(/^2\s?PM$/i);
+      expect(formatShortTime('14:15')).toBe(formatTime('14:15'));
+      expect(formatShortTime('14:15')).toMatch(/^2:15/);
+    } else {
+      expect(formatShortTime('14:00')).toBe('14:00');
+      expect(formatShortTime('14:15')).toBe('14:15');
+    }
+  });
+
+  // Bug prevented: the 24-hour branch (or midnight/noon) being untested when the machine is 12-hour.
+  it('keeps the 24-hour clock unchanged and handles midnight', () => {
+    expect(formatShortTime('14:15')).toBe(formatTime('14:15'));
+    if (twelveHour) expect(formatShortTime('00:00')).toMatch(/^12\s?AM$/i);
+    else expect(formatShortTime('00:00')).toBe(formatTime('00:00'));
+  });
+
+  // Bug prevented: noon reading "0 PM" or "12:00 PM" crowding a chip, when it should read "12 PM".
+  it('reads noon as 12 PM on a 12-hour clock', () => {
+    if (twelveHour) expect(formatShortTime('12:00')).toMatch(/^12\s?PM$/i);
+    else expect(formatShortTime('12:00')).toBe('12:00');
   });
 });
 

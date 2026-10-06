@@ -58,9 +58,24 @@ test('a calendar link shows its events in Today and the Calendar until it is rem
   // So does the calendar, in the month grid and in the week.
   await sidebarButton(page, 'Calendar').click();
   const main = page.getByRole('main');
-  const chip = main.getByRole('group', { name: /^Invented planning meeting, .*, Invented$/ });
+  const chip = main.getByRole('button', { name: /^Invented planning meeting, .*, Invented$/ });
   await expect(chip).toBeVisible();
   await expectAccessible(page);
+  // Clicking it opens a read-only pop-up; Escape closes it and focus returns to the chip.
+  await chip.click();
+  const details = page.getByRole('dialog', { name: 'Invented planning meeting' });
+  await expect(details).toBeVisible();
+  await expect(details.getByText('Invented', { exact: true })).toBeVisible();
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  await expectAccessible(page);
+  await page.keyboard.press('Escape');
+  await expect(details).toBeHidden();
+  await expect(chip).toBeFocused();
+  // Clicking away closes it too.
+  await chip.click();
+  await expect(details).toBeVisible();
+  await main.getByRole('heading', { level: 1 }).click();
+  await expect(details).toBeHidden();
   await main.getByRole('button', { name: 'Week' }).click();
   await expect(chip).toBeVisible();
   await expectAccessible(page);

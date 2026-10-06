@@ -71,6 +71,18 @@ export function formatTime(time: string): string {
   return timeFormatter.format(d);
 }
 
+const hourFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric' });
+const usesDayPeriod = timeFormatter
+  .formatToParts(new Date(2000, 0, 1, 14))
+  .some((part) => part.type === 'dayPeriod');
+
+/** Like formatTime, but on a 12-hour clock a time on the hour drops its minutes: "2 PM". */
+export function formatShortTime(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  if (usesDayPeriod && m === 0) return hourFormatter.format(new Date(2000, 0, 1, h, m));
+  return formatTime(time);
+}
+
 /**
  * A short, relative label for a date: Today, Tomorrow, Yesterday, a weekday
  * within the next week, otherwise "Mon, Oct 6" (with the year if it differs).
