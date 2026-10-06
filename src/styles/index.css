@@ -471,7 +471,7 @@
 .rich-text ul,
 .rich-text ol {
   margin: 0.35em 0;
-  padding-left: 1.5em;
+  padding-left: 1.8em;
 }
 .rich-text ul {
   list-style: disc;
@@ -479,8 +479,35 @@
 .rich-text ul ul {
   list-style: circle;
 }
+.rich-text ul ul ul {
+  list-style: square;
+}
+.rich-text ul ul ul ul {
+  list-style: disc;
+}
+.rich-text ul ul ul ul ul {
+  list-style: circle;
+}
+.rich-text ul ul ul ul ul ul {
+  list-style: square;
+}
 .rich-text ol {
   list-style: decimal;
+}
+.rich-text ol ol {
+  list-style: lower-alpha;
+}
+.rich-text ol ol ol {
+  list-style: lower-roman;
+}
+.rich-text ol ol ol ol {
+  list-style: decimal;
+}
+.rich-text ol ol ol ol ol {
+  list-style: lower-alpha;
+}
+.rich-text ol ol ol ol ol ol {
+  list-style: lower-roman;
 }
 .rich-text li::marker {
   color: var(--fg-muted);

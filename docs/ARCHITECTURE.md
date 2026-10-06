@@ -584,7 +584,10 @@ somewhere other than the trigger), `Tooltip` (+ `TooltipProvider` in
     from the text. The link button opens a popover: address field (Enter
     applies, blank removes, anything `normalizeUrl` rejects shows an
     error), Open and Remove. With no selection it inserts the address as
-    linked text. Closing it puts focus back in the editor.
+    linked text. Closing it puts focus back in the editor. Indent and
+    Outdent (Tab, Shift+Tab) sit after the list buttons; nested numbered
+    lists read 1. a. i. and bullets disc, circle, square, repeating every
+    three levels (CSS in `.rich-text`).
 - `RichTextPreview` renders a doc read-only with the same elements TipTap
   does. Links in it open with a plain click.
 - `components/grocery/` (grocery lists, no details panel):

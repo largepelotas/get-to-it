@@ -69,6 +69,21 @@ describe('note editor', () => {
     expect(markdown()).toBe('**Loud**');
   });
 
+  it('indents and outdents list items from the toolbar', async () => {
+    // Without these buttons Tab and Shift-Tab are the only way to nest a list item.
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await editor());
+    await user.keyboard('- one{Enter}two');
+    await user.click(toolbar().getByRole('button', { name: 'Indent' }));
+    const ed = await editor();
+    expect(ed.querySelector('li > ul > li')).toHaveTextContent('two');
+    expect(ed.querySelectorAll('ul ul')).toHaveLength(1);
+    await user.click(toolbar().getByRole('button', { name: 'Outdent' }));
+    expect(ed.querySelector('ul ul')).toBeNull();
+    expect(ed.querySelectorAll('li')).toHaveLength(2);
+  });
+
   it('adds links that open in the browser only when Mod-clicked', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     const user = userEvent.setup();

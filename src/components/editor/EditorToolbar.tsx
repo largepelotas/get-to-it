@@ -8,6 +8,8 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  IndentDecrease,
+  IndentIncrease,
   Italic,
   Link,
   List,
@@ -31,7 +33,7 @@ interface Tool {
   icon: ReactNode;
   shortcut?: string;
   active?: (editor: Editor) => boolean;
-  run: (chain: ChainedCommands) => ChainedCommands;
+  run: (chain: ChainedCommands, editor: Editor) => ChainedCommands;
 }
 
 const icon = 'size-4';
@@ -125,6 +127,20 @@ const TOOLS: Record<string, Tool> = {
     active: (e) => e.isActive('taskList'),
     run: (c) => c.toggleTaskList(),
   },
+  outdent: {
+    id: 'outdent',
+    label: 'Outdent',
+    icon: <IndentDecrease className={icon} />,
+    shortcut: 'Shift+Tab',
+    run: (c, e) => c.liftListItem(e.isActive('taskItem') ? 'taskItem' : 'listItem'),
+  },
+  indent: {
+    id: 'indent',
+    label: 'Indent',
+    icon: <IndentIncrease className={icon} />,
+    shortcut: 'Tab',
+    run: (c, e) => c.sinkListItem(e.isActive('taskItem') ? 'taskItem' : 'listItem'),
+  },
   quote: {
     id: 'quote',
     label: 'Quote',
@@ -154,7 +170,7 @@ const LAYOUTS = {
   full: [
     ['h1', 'h2', 'h3'],
     ['bold', 'italic', 'underline', 'strike', 'code'],
-    ['bullets', 'numbers', 'tasks'],
+    ['bullets', 'numbers', 'tasks', 'outdent', 'indent'],
     ['quote', 'codeBlock', 'divider', 'link'],
   ],
   compact: [['bold', 'italic', 'bullets', 'tasks', 'link']],
@@ -351,7 +367,7 @@ export function EditorToolbar({ editor, variant, className }: EditorToolbarProps
                 data-tool={id}
                 onMouseDown={(e) => e.preventDefault()}
                 onFocus={() => setFocusIndex(ids.indexOf(id))}
-                onClick={() => tool.run(editor.chain().focus()).run()}
+                onClick={() => tool.run(editor.chain().focus(), editor).run()}
                 className={clsx(pressed && 'bg-selected text-fg')}
               />
             );
