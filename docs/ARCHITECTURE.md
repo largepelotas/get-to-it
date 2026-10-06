@@ -19,7 +19,7 @@ matrix, Completed and Statistics, plus grocery lists, habits, notes, the
 command palette, undo, export, import and daily backups. The desktop build
 has been checked by hand on macOS and Windows.
 
-The version is still 0.1.0 and nothing has been tagged. What stands between
+The current release is 0.2.0 (tagged `v0.2.0`). What stands between
 this and a 1.0 is under [Known gaps](#known-gaps).
 
 ## How to run
